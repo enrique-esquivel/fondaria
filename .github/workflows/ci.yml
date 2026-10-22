@@ -143,6 +143,9 @@ jobs:
         run: mvn install -DskipTests -Dspotless.check.skip=true
 
       - name: Run every test, including integration-tagged (make verify-all)
+        env:
+          # 200,000 rows took ~10 minutes on a shared runner; the 5-minute default fits a dev machine.
+          ALLOTMENT_TARGET_WINDOW_MINUTES: '30'
         run: make verify-all
 
       - name: Upload test reports on failure

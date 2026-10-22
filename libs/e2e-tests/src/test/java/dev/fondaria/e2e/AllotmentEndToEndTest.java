@@ -61,9 +61,12 @@ class AllotmentEndToEndTest {
 
   /**
    * Target window for allotting a 200,000-row batch across 49 parts. Demo Beat 6 completes in ~1m
-   * 42s live; 5 minutes provides a generous bound in shared test environments.
+   * 42s live. The default of 5 minutes holds on a developer machine; shared CI runners are several
+   * times slower, so the window can be widened with {@code ALLOTMENT_TARGET_WINDOW_MINUTES}.
    */
-  private static final Duration TARGET_WINDOW = Duration.ofMinutes(5);
+  private static final Duration TARGET_WINDOW =
+      Duration.ofMinutes(
+          Long.parseLong(System.getenv().getOrDefault("ALLOTMENT_TARGET_WINDOW_MINUTES", "5")));
 
   /** MXN 3,000.00 employee and MXN 1,500.00 employer — the plan's own 1:2 matching ratio. */
   private static final long EMPLOYEE_CENTS = 300_000L;
