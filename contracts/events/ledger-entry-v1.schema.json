@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fondaria.mx/contracts/events/ledger-entry-v1.schema.json",
+  "title": "ledger.entries.v1",
+  "description": "One of the two messages on the Redpanda topic ledger.entries.v1 that services/amqp-redpanda-bridge produces for one TigerBeetle CDC change event — the debit leg and the credit leg — each keyed by accountId so every event touching an account lands in one partition, in commit order. Every field is derived, unchanged, from the `tigerbeetle amqp` 0.17.4 change-event payload. See contracts/events/README.md for provenance and the versioning rule. The consumer-side decoder is dev.fondaria.ledger.event.LedgerEventDecoder in libs/ledger-client.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventType",
+    "ledger",
+    "timestamp",
+    "transferId",
+    "transferCode",
+    "transferTimestamp",
+    "amount",
+    "direction",
+    "accountId",
+    "accountCode",
+    "accountFlags",
+    "debitsPending",
+    "debitsPosted",
+    "creditsPending",
+    "creditsPosted",
+    "accountUserData128",
+    "accountUserData64",
+    "accountUserData32",
+    "pendingId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "v1",
+      "description": "The event schema version. A consumer that does not recognise this value must route the message to its dead-letter topic, never attempt a best-effort parse. A backwards-incompatible change is a new version (v2) on a new topic, not an edit here."
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "single_phase",
+        "two_phase_pending",
+        "two_phase_posted",
+        "two_phase_voided",
+        "two_phase_expired"
+      ],
+      "description": "The TigerBeetle change-event type, lower snake_case."
+    },
+    "ledger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "The TigerBeetle ledger id (u32). 484 is the single MXN cash ledger; a value >= 1001 is a per-fund unit ledger. The decoder routes on this: 484 -> Money, >= 1001 -> Units; any other value is a hard decode error. Every quantity on this event (amount and the four balance counters) is denominated the same way."
+    },
+    "timestamp": { "$ref": "#/$defs/uint128", "description": "The change event's ledger commit timestamp, u64 nanoseconds since the Unix epoch." },
+    "transferId": { "$ref": "#/$defs/uint128", "description": "The transfer id (u128) that produced this entry. Not the partition key for this topic." },
+    "transferCode": { "$ref": "#/$defs/uint16", "description": "The transfer's user-defined code (u16); maps to LedgerCodes.TransferCode." },
+    "transferTimestamp": { "$ref": "#/$defs/uint128", "description": "The transfer's own commit timestamp, u64 nanoseconds since the Unix epoch." },
+    "amount": {
+      "$ref": "#/$defs/uint128",
+      "description": "The transfer amount (u128). MXN cents on the cash ledger; units scaled by 1e8 on a unit ledger. A fractional value in any form is rejected by the decoder, never coerced."
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["DEBIT", "CREDIT"],
+      "description": "Which leg of the transfer this entry is. The debit leg carries the debited account; the credit leg the credited account."
+    },
+    "accountId": { "$ref": "#/$defs/uint128", "description": "This entry's account id (u128). The Redpanda partition key for this topic." },
+    "accountCode": { "$ref": "#/$defs/uint16", "description": "This account's code (u16); maps to LedgerCodes.AccountCode." },
+    "accountFlags": { "$ref": "#/$defs/uint16", "description": "This account's TigerBeetle flags bitfield (u16)." },
+    "debitsPending": { "$ref": "#/$defs/uint128", "description": "This account's debits_pending counter after the event (u128), same denomination as amount." },
+    "debitsPosted": { "$ref": "#/$defs/uint128", "description": "This account's debits_posted counter after the event (u128), same denomination as amount." },
+    "creditsPending": { "$ref": "#/$defs/uint128", "description": "This account's credits_pending counter after the event (u128), same denomination as amount." },
+    "creditsPosted": { "$ref": "#/$defs/uint128", "description": "This account's credits_posted counter after the event (u128), same denomination as amount." },
+    "accountUserData128": { "$ref": "#/$defs/uint128", "description": "This account's user_data_128 (u128), verbatim." },
+    "accountUserData64": { "$ref": "#/$defs/uint128", "description": "This account's user_data_64 (u64), verbatim." },
+    "accountUserData32": { "$ref": "#/$defs/uint32", "description": "This account's user_data_32 (u32), verbatim." },
+    "pendingId": { "$ref": "#/$defs/uint128", "description": "The originating pending transfer id on a two-phase post/void; \"0\" otherwise." }
+  },
+  "$defs": {
+    "uint128": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "An unsigned integer of up to 128 bits, carried as a canonical base-10 string (no leading zeros, no sign, no decimal point)."
+    },
+    "uint32": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "uint16": { "type": "integer", "minimum": 0, "maximum": 65535 }
+  }
+}

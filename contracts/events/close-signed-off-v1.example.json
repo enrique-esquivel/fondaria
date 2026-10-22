@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "v1",
+  "businessDate": "2026-08-31",
+  "signedOffAt": "2026-09-01T02:15:30.123456Z",
+  "reconciliationRunId": "7c1d9f2a-4b6e-4a0c-8f13-2d9a5c73b184",
+  "custodianRunId": "a3e5b7c9-1d2f-4e6a-9b0c-5f7a1c3e9d2b",
+  "snapshotRunId": "f0a1b2c3-d4e5-4678-9abc-def012345678",
+  "snapshotObjectKey": "snapshots/dt=2026-08-31/positions.ndjson.gz",
+  "snapshotManifestKey": "snapshots/dt=2026-08-31/manifest.json",
+  "snapshotPositionCount": 248917,
+  "lastBusinessDayOfMonth": true
+}

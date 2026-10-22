@@ -1,0 +1,322 @@
+# ADR-0029's storage amendment: RabbitMQ, Valkey, the object store and (Task 29.11)
+# Postgres are all meshed now that the real meshed-to-meshed blocker
+# (networkpolicies/allow-mesh-proxy.yaml) is fixed. TigerBeetle stays the one
+# deliberate exception (Direct IO, io_uring, raw-TCP replication; "cannot be
+# reset" per AGENTS.md), unchanged from the original decision, and
+# tigerbeetle-cdc stays unmeshed alongside it (no inbound HTTP surface to
+# protect either way). Postgres was attempted once before without its own
+# fix and reverted -- every service's JDBC connection hit `Connection reset`
+# inside Postgres's own SSL-negotiation preamble once wrapped in Linkerd's
+# opaque TCP proxying, crash-looping the whole app tier. Task 29.11 is that
+# fix: every service's JDBC URL (and Keycloak's KC_DB_URL_PROPERTIES) now
+# carries `sslmode=disable`, so Postgres never attempts its own redundant SSL
+# layer on top of the mesh's own mTLS. See postgres/cluster.yaml's own
+# comment and TASK-LOG.md step 86 for the original live evidence.
+#
+# One MeshTLSAuthentication per datastore, listing exactly the ServiceAccounts
+# ../networkpolicies/services-network-policies.yaml already authorizes for
+# that datastore -- the mesh layer matches NetworkPolicy's own granularity
+# rather than a single blanket "any app-tier service" grant, the same
+# least-privilege shape as every other policy in this directory.
+#
+# Two real callers this tree cannot give a mesh identity to keep exactly
+# the access they had before meshing, via one shared cluster-CIDR
+# NetworkAuthentication fallback (not an additional restriction -- the same
+# breadth NetworkPolicy already allowed): envoy-ratelimit (Task 10.3,
+# envoy-gateway-system, calls Valkey) and tigerbeetle-cdc (deliberately
+# unmeshed, calls RabbitMQ). The one-shot object-store-buckets Job is a third --
+# still unmeshed, still on the CIDR fallback. Postgres's own WAL/backup
+# uploads to the object store are NOT on this fallback anymore (Task 29.11): Postgres is
+# meshed now, so that traffic carries a real mesh identity and is granted via
+# object-store-callers below instead, the same as every other object-store caller.
+apiVersion: policy.linkerd.io/v1alpha1
+kind: NetworkAuthentication
+metadata:
+  name: unmeshed-cluster-callers
+  labels:
+    app.kubernetes.io/name: unmeshed-cluster-callers
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  networks:
+    - cidr: 192.168.0.0/16 # Calico's default pool (bootstrap/kind-config.yaml) -- the whole cluster
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: rabbitmq-callers
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  identities:
+    - eod-job.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - projection-worker.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - statement-worker.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - amqp-fanout.fondaria.serviceaccount.identity.linkerd.cluster.local
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: rabbitmq-tcp
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  port: 5672
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: rabbitmq-allow-callers
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: rabbitmq-tcp
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: rabbitmq-callers
+---
+# A second, separate AuthorizationPolicy targeting the same Server -- multiple
+# AuthorizationPolicy objects on one Server are OR'd (a request is allowed if
+# ANY of them authorizes it); a single policy's requiredAuthenticationRefs
+# list is AND'd instead (Linkerd's own reference docs: "In the case of
+# multiple entries, all authentications must match"), which would make the
+# CIDR fallback below meaningless if it were merged into the policy above.
+# tigerbeetle-cdc is deliberately unmeshed (ADR-0029) -- this is what still
+# lets it reach RabbitMQ, exactly as before meshing.
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: rabbitmq-allow-unmeshed-cluster-callers
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: rabbitmq-tcp
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: NetworkAuthentication
+      name: unmeshed-cluster-callers
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: valkey-callers
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  identities:
+    - contribution-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - balance-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - valuation-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - statement-worker.fondaria.serviceaccount.identity.linkerd.cluster.local
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: valkey-tcp
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  port: 6379
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: valkey-allow-callers
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: valkey-tcp
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: valkey-callers
+---
+# Separate AuthorizationPolicy, same Server -- see rabbitmq-allow-unmeshed-
+# cluster-callers' own comment for why this must not be merged into the
+# policy above. envoy-ratelimit (Task 10.3, envoy-gateway-system) is a real,
+# necessary caller this tree cannot give a mesh identity to -- this is what
+# keeps it working exactly as it did before meshing.
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: valkey-allow-unmeshed-cluster-callers
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: valkey-tcp
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: NetworkAuthentication
+      name: unmeshed-cluster-callers
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: object-store-callers
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  identities:
+    - contribution-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - valuation-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - statement-worker.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - eod-job.fondaria.serviceaccount.identity.linkerd.cluster.local
+    # Postgres's own WAL/backup uploads (Task 29.11: Postgres is meshed now).
+    - postgres.fondaria.serviceaccount.identity.linkerd.cluster.local
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: object-store-http
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: object-store
+  port: 8333
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: object-store-allow-callers
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: object-store-http
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: object-store-callers
+---
+# Separate AuthorizationPolicy, same Server -- see rabbitmq-allow-unmeshed-
+# cluster-callers' own comment for why this must not be merged into the
+# policy above. object-store-buckets (the one-shot bucket-provisioning Job) is
+# deliberately unmeshed -- this is what keeps it working exactly as it did
+# before meshing.
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: object-store-allow-unmeshed-cluster-callers
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: object-store-http
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: NetworkAuthentication
+      name: unmeshed-cluster-callers
+---
+# Task 29.11. Unlike the other three datastores, Postgres has no real caller
+# left without a mesh identity: every JDBC client (services-network-
+# policies.yaml's own postgres-policy ingress list) and Keycloak are meshed,
+# and inter-instance streaming replication is Postgres calling Postgres, also
+# meshed -- so postgres-callers includes the postgres identity itself. No
+# unmeshed-cluster-callers fallback AuthorizationPolicy is needed here:
+# Prometheus (9187) and the CloudNativePG operator's own status/probe calls
+# (8000) never reach this Server in the first place, because both ports are
+# in postgres/cluster.yaml's own skip-inbound-ports and bypass the proxy
+# entirely rather than needing an authorization grant.
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: postgres-callers
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  identities:
+    - contribution-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - balance-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - valuation-api.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - allotment-job.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - projection-worker.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - statement-worker.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - eod-job.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - keycloak.fondaria.serviceaccount.identity.linkerd.cluster.local
+    - postgres.fondaria.serviceaccount.identity.linkerd.cluster.local
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: postgres-tcp
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  port: 5432
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: postgres-allow-callers
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: postgres-tcp
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: postgres-callers

@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: amqp-fanout
+  labels:
+    app.kubernetes.io/name: amqp-fanout
+    app.kubernetes.io/component: transport
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: amqp-fanout
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: amqp-fanout
+        app.kubernetes.io/component: transport
+        app.kubernetes.io/part-of: fondaria
+      annotations:
+        # Task 10.4 (ADR-0029): meshed for uniform default-deny -- nothing
+        # calls amqp-fanout over HTTP, so no Server/AuthorizationPolicy names
+        # a caller; mesh policy denies every non-probe inbound connection by
+        # default. automountServiceAccountToken: false below does not block
+        # injection -- verified live.
+        linkerd.io/inject: enabled
+    spec:
+      priorityClassName: fondaria-stateless-default
+      serviceAccountName: amqp-fanout
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: amqp-fanout
+      containers:
+        - name: amqp-fanout
+          image: fondaria/amqp-fanout:0.1.0-SNAPSHOT
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http-mgmt
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: amqp-fanout-config
+          # Credentials come from the Secrets the operators generate (CloudNativePG's
+          # <cluster>-app, the RabbitMQ operator's <cluster>-default-user) and from the
+          # platform-level object-store-credentials -- never a per-service secret store entry.
+          env:
+            - name: BRIDGE_AMQP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: username
+            - name: BRIDGE_AMQP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          # Startup probe: Spring Boot 3.5 initializes AMQP connection and listener container.
+          # Allows up to 60s (30 * 2s) before failing.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http-mgmt
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            failureThreshold: 30
+            timeoutSeconds: 2
+          # Liveness probe: Actuator liveness state verifies JVM and message dispatcher health.
+          # 3 consecutive failures restart the pod.
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http-mgmt
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          # Readiness probe: Actuator readiness state verifies RabbitMQ connection and exchange topologies.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http-mgmt
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

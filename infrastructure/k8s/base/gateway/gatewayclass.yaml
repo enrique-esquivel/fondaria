@@ -1,0 +1,17 @@
+# GatewayClass is cluster-scoped, unlike everything else in this directory.
+# It is still declared here (not in bootstrap/) because it names this
+# platform's own Gateway rather than installing the controller -- the same
+# split bootstrap/up.sh already draws for CloudNativePG's `Cluster` and
+# RabbitMQ's `RabbitmqCluster` (operator installed by up.sh, instance
+# declared in base).
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # The only controller Envoy Gateway's own install manifest registers
+  # (bootstrap/versions.env ENVOY_GATEWAY_MANIFEST); not configurable.
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller

@@ -1,0 +1,54 @@
+# Task 11.1. Retention is a startup flag (--storage.tsdb.retention.time), set
+# in docker-compose.yml's PROMETHEUS_RETENTION (.env.example), not here --
+# this file is scrape targets and rule files only.
+#
+# Adopts infrastructure/observability/alerts/*.rules.yml as its rule files
+# rather than re-deriving them: eod-close.rules.yml (Task 7.6) was written and
+# promtool-checked ahead of this stack existing, on the understanding that
+# Phase 11 would add the scrape config and routing around it (see that file's
+# own header comment). It is still not scrapable end to end -- the metrics it
+# reads are registered on eod-job's MeterRegistry, but eod-job has no
+# micrometer-registry-prometheus dependency or /actuator/prometheus endpoint,
+# and instrumenting services is Task 11.2's, not this task's.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # *.rules.yml only -- infrastructure/observability/alerts/ also holds
+  # *.tests.yml files (promtool unit tests, e.g. eod-close.tests.yml), which
+  # are not rule files and fail to parse as one.
+  - /etc/prometheus/rules/*.rules.yml
+
+# Scrape jobs that exist in only one environment -- Kubernetes service
+# discovery for the CloudNativePG instances, for example -- live in files here
+# rather than in this shared config, which compose and the k8s ConfigMap carry
+# byte-for-byte (KustomizeBaseValidationTest). Empty under compose.
+scrape_config_files:
+  - /etc/prometheus/scrape.d/*.yml
+
+scrape_configs:
+  # The Collector's own health: spans/metrics/logs received and exported,
+  # queue depth, refused points. Independent of every pipeline in
+  # otel-collector/config.yaml -- has data before any service is instrumented.
+  - job_name: otel-collector-self
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  # Application metrics fanned out through the Collector's `prometheus`
+  # exporter (otel-collector/config.yaml). Empty until Task 11.2 instruments a
+  # service to export OTLP metrics -- the target is up and scraped either way.
+  - job_name: otel-collector-app
+    honor_labels: true
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  # Task F.2: RabbitMQ Prometheus metrics endpoint (port 15692).
+  # Scrapes queue coarse metrics (total queue messages, ready, unacked)
+  # used by the `dlq_depth` recording rule.
+  - job_name: rabbitmq
+    metrics_path: /metrics/detailed
+    params:
+      family: ["queue_coarse_metrics"]
+    static_configs:
+      - targets: ["rabbitmq:15692"]

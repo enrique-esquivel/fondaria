@@ -1,0 +1,13 @@
+# Production storage for every stateful workload. TigerBeetle requires Direct
+# I/O on a local NVMe device -- never a network volume (docs/RUNBOOKS.md
+# tigerbeetle-upgrades.md) -- so the class is backed by pre-provisioned local
+# PersistentVolumes on the `stateful` node pool, one per device. Those PVs are
+# node-specific and are created by the environment (a local-static-provisioner
+# or by hand), not by these manifests.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: tigerbeetle-nvme
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

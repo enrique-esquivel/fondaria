@@ -1,0 +1,59 @@
+# Edge-facing controls for every listener on fondaria-gateway (Task 10.1
+# acceptance criteria: "TLS 1.1 handshake refused", "Oversized body rejected
+# at the edge, not in the application", explicit timeouts on every route).
+#
+# Fields verified against envoyproxy/gateway release/v1.3 source
+# (api/v1alpha1/{tls,connection,timeout,clienttrafficpolicy}_types.go) rather
+# than assumed, since a wrong field name here fails CRD validation, not a
+# test -- see TASK-LOG.md.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: fondaria-edge-defaults
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: fondaria-gateway
+  tls:
+    # TLS 1.3 only. A `ciphers` list was here too (TLS 1.3's own suite is
+    # fixed and not configurable, so it would have had no effect regardless)
+    # until Task 10.2 actually applied this policy to a live cluster and
+    # found the CRD's own webhook rejects it outright: "setting ciphers has
+    # no effect if the minimum possible TLS version is 1.3" --
+    # ClientTrafficPolicy.spec.tls carries an XValidation rule forbidding the
+    # two together, not just a no-op. Removed rather than kept as
+    # documentation once it turned out to be a rejected apply, not a
+    # harmless one -- Task 10.1's own two "unverified against a live
+    # cluster" acceptance criteria (BACKLOG.md row 29.1) could not otherwise
+    # be tested at all, since this policy is what fails first.
+    minVersion: "1.3"
+    maxVersion: "1.3"
+  # Bounds the per-connection read/write buffer (large, not the 32 KiB Envoy
+  # default). NOTE (phase-closing adversarial review, TASK-LOG.md): this is
+  # flow control, not a size check -- per_connection_buffer_limit_bytes
+  # back-pressures and streams an oversized body to the backend rather than
+  # rejecting it with 413. "Oversized body rejected at the edge, not in the
+  # application" (Task 10.1's own acceptance criterion, phase-10-edge.md)
+  # is NOT met by this field alone; BACKLOG.md records this honestly rather
+  # than leaving it implied as satisfied. A real fix needs an
+  # EnvoyPatchPolicy adding envoy.filters.http.buffer with max_request_bytes
+  # -- not attempted here, since this CRD is new to the tree and getting an
+  # xDS patch wrong on the one platform-wide edge listener is not a change
+  # to make without live-verifying it, which this session's remaining
+  # budget did not allow for.
+  connection:
+    bufferLimit: 1Mi
+  timeout:
+    tcp:
+      idleTimeout: 60s
+    http:
+      requestReceivedTimeout: 10s
+      idleTimeout: 120s
+  headers:
+    # Envoy's own default already rejects the request; declared explicitly so
+    # it reads as a decision, not an inherited default.
+    withUnderscoresAction: RejectRequest

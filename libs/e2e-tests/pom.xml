@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>libs</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>e2e-tests</artifactId>
+    <packaging>jar</packaging>
+
+    <name>e2e-tests</name>
+    <description>Cross-service end-to-end tests: contribution to query through the real CDC path, and a valuation file to a published NAV (ADR-0016)</description>
+
+    <!--
+        This module ships nothing. It holds only test sources, and it is the one
+        place in the reactor where a test may depend on more than one service at a
+        time (ADR-0016) - which is why the dependencies below point at services
+        rather than the other way round. Every dependency is test-scoped: nothing
+        that runs in production can reach any of it.
+    -->
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>contribution-api</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>allotment-job</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>amqp-fanout</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>projection-worker</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>balance-api</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Task 7.2. The daily close's internal reconciliation reads the ledger
+            the allotment wrote and the projection the CDC path filled. It is the
+            only way to assert that the two agree after a real contribution has
+            travelled the whole path - which is what its first acceptance
+            criterion, "zero drift across a 50,000-contribution soak", asks.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>eod-job</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Task 20.7. Phase 20's chain ends in a price held by two different services'
+            caches, so the module that may depend on more than one service is the only
+            place that criterion can be asserted (ADR-0016).
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>valuation-api</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Property-based testing, pinned in AGENTS.md ss5 alongside JUnit 5 and
+            AssertJ. Same version libs/platform-common, libs/rules-engine,
+            libs/valuation and libs/ledger-tigerbeetle already use.
+        -->
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>1.9.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

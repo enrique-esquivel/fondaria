@@ -1,0 +1,421 @@
+openapi: 3.0.3
+info:
+  title: Valuation API
+  version: "1.0.0"
+  description: |
+    Receives valuations from external investment platforms — what a fund's
+    pooled assets are worth on a business date — validates them, and records
+    them for the NAV strike.
+
+    **We do not manage the portfolio.** Every number this API accepts was
+    computed by somebody else. Nothing here prices a security, and nothing
+    here computes a per-participant amount (`AGENTS.md` §2).
+
+    Transport is reference-based and asynchronous, reusing `ADR-0009`
+    unchanged rather than inventing a second ingestion mechanism: the caller
+    requests an object-storage upload slot, uploads the file directly, then
+    submits the batch by reference. Submission returns `202 Accepted`
+    immediately and validation runs in the background. The file format is
+    `contracts/files/valuation-file-v1.md`.
+
+    **Every monetary amount in this contract is an integer of minor units
+    (MXN cents), in a JSON number.** Never a decimal, never a float, never a
+    string — a decimal `reportedValueCents` is rejected with
+    `DECIMAL_AMOUNT` and never rounded (`AGENTS.md` §4).
+
+    **This API does not strike, publish or correct a NAV.** It stops at an
+    accepted valuation. Striking `nav_per_unit = reported value ÷ units in
+    issue` is Task 20.4, correction and supersession are Task 20.5, and
+    publication is Task 20.6. A valuation that contradicts one already
+    accepted is refused here (`VALUATION_ALREADY_LIVE`) precisely so that it
+    has to go through correction, where it needs a reason and an audit
+    trail.
+
+    **This API ships unauthenticated and must not be exposed outside the
+    cluster.** Same position as the contribution and cash-receipt endpoints:
+    authorization is Phase 9's and Phase 10's, and inventing a scheme here
+    would only have to be removed.
+servers:
+  - url: "/"
+    description: Path is environment-specific; provided by deployment configuration, never hardcoded here.
+
+tags:
+  - name: valuation-batches
+    description: Valuation file upload, submission, and status.
+  - name: valuations
+    description: Missing and late valuations — the ageing report.
+
+paths:
+  /v1/valuation-batches/upload-url:
+    post:
+      operationId: createValuationUploadUrl
+      tags: [valuation-batches]
+      summary: Issue a presigned object-storage slot for a valuation file.
+      description: |
+        The file's bytes never pass through this service (`ADR-0009`). The
+        response carries a short-lived presigned `PUT` URL and the object key
+        the service chose; submit that key afterwards.
+
+        The URL carries its signature as a query parameter, so it is a
+        credential: it is returned to the caller and never logged.
+
+        Issuing a slot creates no batch and grants nothing. Re-uploading
+        identical bytes to a fresh slot is harmless, because a batch is
+        identified by the checksum of its bytes rather than by which URL
+        delivered them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValuationUploadUrlRequest"
+      responses:
+        "200":
+          description: An upload slot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationUploadUrlResponse"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "503":
+          description: |
+            The object store could not be reached. Retry: nothing was
+            created and nothing was granted.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /v1/valuation-batches:
+    post:
+      operationId: submitValuationBatch
+      tags: [valuation-batches]
+      summary: Submit an uploaded valuation file by reference.
+      description: |
+        Returns `202` whether this call created the batch or found one that
+        already existed. Nothing has been validated at this point either
+        way, so `201` would claim something this call has not established.
+
+        **A batch is `(source, objectKey, checksumSha256)`**, and its id is
+        derived from those three values. Resubmitting the same file
+        therefore converges on the same batch rather than creating a second
+        one — which is what makes redelivery, something providers do
+        routinely, a no-op rather than a duplicate valuation.
+
+        There is no `Idempotency-Key` header and there is no `409` or `422`
+        on this endpoint. "Same key, different body" cannot be expressed: a
+        different body is a different checksum, and a different checksum is
+        a different batch.
+
+        Poll the `Location` header, or `GET /v1/valuation-batches/{batchId}`,
+        for the outcome.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitValuationBatchRequest"
+      responses:
+        "202":
+          description: |
+            Batch received; validation is asynchronous. Also returned for a
+            resubmission of the same file, carrying the original batch and
+            its current status.
+          headers:
+            Location:
+              description: The batch's status resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationBatch"
+        "400":
+          $ref: "#/components/responses/Problem"
+
+  /v1/valuation-batches/{batchId}:
+    get:
+      operationId: getValuationBatch
+      tags: [valuation-batches]
+      summary: A submitted batch's current status.
+      description: |
+        **A rejected file is not an HTTP error.** Whole-batch rejection is an
+        outcome recorded on the batch and read from here with `200`; the
+        submission that carried it succeeded. `rejection` says why, and its
+        `details` name the fund and valuation date at fault where one row is
+        responsible.
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The batch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationBatch"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /v1/valuations/ageing:
+    get:
+      operationId: getValuationAgeingReport
+      tags: [valuations]
+      summary: Business dates with no accepted valuation.
+      description: |
+        **A silently absent NAV is worse than a late one.** Every balance in
+        a fund is `units × NAV` (`AGENTS.md` §2), so a fund with no valuation
+        for a business date has every participant's balance quietly stale.
+        This report is what makes that visible, and it is the valuation-side
+        counterpart of Task 3.4's cash reconciliation ageing report.
+
+        Every `ACTIVE` fund is expected to have exactly one accepted
+        valuation for every business date from its inception date onward
+        (`O-21`: daily). Rows here are business dates that have passed
+        without one.
+
+        The report is a control, not a repair. Nothing back-fills a missing
+        valuation and no NAV is ever interpolated between two dates.
+      parameters:
+        - name: asOf
+          in: query
+          required: false
+          description: |
+            Business dates are considered up to and including this date.
+            Defaults to the current business date. Never in the future.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The ageing report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationAgeingReport"
+        "400":
+          $ref: "#/components/responses/Problem"
+
+components:
+  responses:
+    Problem:
+      description: RFC 9457 problem details.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    ValuationUploadUrlRequest:
+      type: object
+      required: [source, fileName]
+      properties:
+        source:
+          type: string
+          maxLength: 128
+          description: |
+            The provider delivering this file. Becomes a segment of the
+            object key, so an object pulled out of storage years later still
+            says where it came from, and is carried onto the struck NAV's
+            `source` column (Task 20.4).
+          example: ACME-CUSTODY
+        fileName:
+          type: string
+          maxLength: 255
+          description: |
+            The caller's own file name, carried through for audit. Never
+            used as the object key: it is caller-controlled text, and a key
+            built from it could name any object in the bucket.
+          example: acme-2026-08-20.csv
+
+    ValuationUploadUrlResponse:
+      type: object
+      required: [objectKey, uploadUrl, expiresAt]
+      properties:
+        objectKey:
+          type: string
+          description: Submit this key once the bytes are uploaded.
+        uploadUrl:
+          type: string
+          format: uri
+          description: |
+            Short-lived presigned `PUT` URL. **A credential** — it carries
+            its signature in the query string. Never logged, never stored.
+        expiresAt:
+          type: string
+          format: date-time
+
+    SubmitValuationBatchRequest:
+      type: object
+      required: [objectKey, checksumSha256, source, declaredRowCount]
+      properties:
+        objectKey:
+          type: string
+          maxLength: 1024
+          description: |
+            The key returned by the upload-url call. Must sit under the
+            prefix its declared `source` generates, refused with `400`
+            before anything is fetched.
+        checksumSha256:
+          type: string
+          pattern: "^[a-fA-F0-9]{64}$"
+          description: |
+            SHA-256 of the exact bytes uploaded, in hex. Uppercase is
+            accepted and folded down: the same bytes must be the same batch
+            however a producer spells their digest.
+        source:
+          type: string
+          maxLength: 128
+          description: The provider delivering this file.
+        declaredRowCount:
+          type: integer
+          format: int32
+          minimum: 1
+          description: |
+            How many valuation rows the file contains. A truncation guard —
+            checked against the rows that actually parsed
+            (`ROW_COUNT_MISMATCH`).
+
+    ValuationBatch:
+      type: object
+      required: [batchId, source, objectKey, status, declaredRowCount, submittedAt]
+      properties:
+        batchId:
+          type: string
+          format: uuid
+          description: Derived from `(source, objectKey, checksumSha256)`, never random.
+        source:
+          type: string
+        objectKey:
+          type: string
+        status:
+          $ref: "#/components/schemas/ValuationBatchStatus"
+        declaredRowCount:
+          type: integer
+          format: int32
+        acceptedValuationCount:
+          type: integer
+          format: int32
+          nullable: true
+          description: |
+            How many valuations this batch recorded. Present once the batch
+            is `ACCEPTED`. May be lower than `declaredRowCount` when rows
+            were identical redeliveries of valuations already accepted —
+            those are no-ops, not new valuations.
+        rejection:
+          $ref: "#/components/schemas/ValuationRejection"
+        submittedAt:
+          type: string
+          format: date-time
+        statusUpdatedAt:
+          type: string
+          format: date-time
+
+    ValuationBatchStatus:
+      type: string
+      enum: [RECEIVED, VALIDATING, ACCEPTED, REJECTED]
+      description: |
+        - `RECEIVED` — submitted; the file has not been read yet.
+        - `VALIDATING` — a validation pass holds this batch. Not terminal,
+          and reclaimable once its lease goes stale.
+        - `ACCEPTED` — every row passed, and its valuations are recorded.
+          Terminal for this task; the NAV strike is Task 20.4.
+        - `REJECTED` — a whole-batch failure. Terminal: no valuation in the
+          file was accepted.
+
+    ValuationRejection:
+      type: object
+      nullable: true
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - CHECKSUM_MISMATCH
+            - MALFORMED_FILE
+            - DECIMAL_AMOUNT
+            - ROW_COUNT_MISMATCH
+            - DUPLICATE_ROW
+            - FUTURE_VALUATION_DATE
+            - NON_BUSINESS_DATE
+            - UNKNOWN_FUND
+            - VALUATION_ALREADY_LIVE
+          description: |
+            `valuation-file-v1.md` §4, in the order the checks run.
+
+            `VALUATION_ALREADY_LIVE` means the file contradicts a valuation
+            already accepted for that fund and date. It is not an overwrite
+            and never becomes one — it is a **correction**, and corrections
+            go through Task 20.5, where they need a reason and an audit
+            trail. An identical redelivery is not this: it is an idempotent
+            no-op and the batch is `ACCEPTED`.
+        message:
+          type: string
+          description: |
+            Authored by this service, never a parser, driver or SDK message
+            — those carry hostnames, SQL fragments and file contents
+            (`AGENTS.md` §7).
+        details:
+          type: object
+          additionalProperties: true
+          description: |
+            Code-specific structured detail — the fund and valuation date at
+            fault, declared versus actual row counts. Every amount in it is
+            an integer of cents. Never contains a participant reference;
+            nothing in a valuation file identifies a person.
+
+    ValuationAgeingReport:
+      type: object
+      required: [asOf, generatedAt, missing]
+      properties:
+        asOf:
+          type: string
+          format: date
+        generatedAt:
+          type: string
+          format: date-time
+        missing:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingValuation"
+
+    MissingValuation:
+      type: object
+      required: [fundId, valuationDate, businessDatesLate]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+        valuationDate:
+          type: string
+          format: date
+          description: The business date no accepted valuation exists for.
+        businessDatesLate:
+          type: integer
+          format: int32
+          description: |
+            How many business dates have passed since `valuationDate`,
+            counted in business dates rather than calendar days — a
+            valuation missing over a long weekend is one date late, not
+            four.
+
+    Problem:
+      type: object
+      description: RFC 9457. Never carries an exception message, stack trace, SQL fragment or hostname.
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string

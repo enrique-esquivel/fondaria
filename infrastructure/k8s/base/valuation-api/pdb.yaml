@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: valuation-api
+  labels:
+    app.kubernetes.io/name: valuation-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: fondaria
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valuation-api

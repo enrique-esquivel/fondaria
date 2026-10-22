@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Governing headless Service for the StatefulSet's stable pod names. Not what
+  # clients connect to -- TigerBeetle needs IP literals; see tigerbeetle-N below.
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-0
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Fixed ClusterIP: the IP literal for replica 0 in every TIGERBEETLE_ADDRESSES
+  # list (tigerbeetle-config). Stable across pod restarts, unlike the pod IP.
+  clusterIP: 10.96.100.100
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+    statefulset.kubernetes.io/pod-name: tigerbeetle-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-1
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Fixed ClusterIP: the IP literal for replica 1 in every TIGERBEETLE_ADDRESSES
+  # list (tigerbeetle-config). Stable across pod restarts, unlike the pod IP.
+  clusterIP: 10.96.100.101
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+    statefulset.kubernetes.io/pod-name: tigerbeetle-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-2
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Fixed ClusterIP: the IP literal for replica 2 in every TIGERBEETLE_ADDRESSES
+  # list (tigerbeetle-config). Stable across pod restarts, unlike the pod IP.
+  clusterIP: 10.96.100.102
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+    statefulset.kubernetes.io/pod-name: tigerbeetle-2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-3
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Fixed ClusterIP: the IP literal for replica 3 in every TIGERBEETLE_ADDRESSES
+  # list (tigerbeetle-config). Stable across pod restarts, unlike the pod IP.
+  clusterIP: 10.96.100.103
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+    statefulset.kubernetes.io/pod-name: tigerbeetle-3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-4
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Fixed ClusterIP: the IP literal for replica 4 in every TIGERBEETLE_ADDRESSES
+  # list (tigerbeetle-config). Stable across pod restarts, unlike the pod IP.
+  clusterIP: 10.96.100.104
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+    statefulset.kubernetes.io/pod-name: tigerbeetle-4
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-5
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Fixed ClusterIP: the IP literal for replica 5 in every TIGERBEETLE_ADDRESSES
+  # list (tigerbeetle-config). Stable across pod restarts, unlike the pod IP.
+  clusterIP: 10.96.100.105
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle
+    statefulset.kubernetes.io/pod-name: tigerbeetle-5

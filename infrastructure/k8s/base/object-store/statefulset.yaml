@@ -1,0 +1,166 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: object-store
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: object-store
+    app.kubernetes.io/part-of: fondaria
+spec:
+  serviceName: object-store
+  # SeaweedFS's S3 gateway (ADR-0031), single node: one `weed server` process
+  # runs master, volume, filer and S3 together -- the same command compose and
+  # libs/testing's ObjectStoreFixture run. The platform depends on the S3 API,
+  # not on the implementation (ADR-0022 section 4); a managed object store
+  # replaces this whole directory in an overlay.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: object-store
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: object-store
+        app.kubernetes.io/component: object-store
+        app.kubernetes.io/part-of: fondaria
+      annotations:
+        # ADR-0029's storage amendment: meshed. 8333 (S3 API) is real HTTP --
+        # no opaque-ports needed, Linkerd's own protocol detection handles it.
+        # SeaweedFS's internal traffic (master/volume/filer) never leaves the
+        # pod's loopback (-ip=127.0.0.1), so it bypasses the proxy entirely.
+        linkerd.io/inject: enabled
+    spec:
+      priorityClassName: fondaria-database-critical
+      serviceAccountName: object-store
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: object-store
+      containers:
+        - name: object-store
+          image: docker.io/chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+          imagePullPolicy: IfNotPresent
+          # weed directly, not the image's entrypoint script: that script
+          # chowns /data as root and drops privileges, and this pod never runs
+          # as root (fsGroup already owns the volume).
+          command:
+            - /usr/bin/weed
+          args:
+            - server
+            - -dir=/data
+            - -s3
+            - -s3.port=8333
+            # Off: an Iceberg REST catalog and a Lance namespace server,
+            # neither of which the platform uses.
+            - -s3.port.iceberg=0
+            - -s3.port.lance=0
+            # SeaweedFS creates a missing bucket on upload for admin identities by
+            # default. The services sign with the admin identity, so a mistyped
+            # bucket name would silently create a stray bucket instead of failing
+            # (ADR-0031 amendment). Buckets come only from object-store-buckets.
+            - -s3.autoCreateBucket=false
+            - -master.volumeSizeLimitMB=1024
+            - -volume.max=0
+            # Master, volume and filer advertise and bind loopback only; the
+            # S3 API is the one listener reachable from outside the pod. The
+            # filer's gRPC port carries an unauthenticated IAM service
+            # (ADR-0031), so it must never be reachable by another pod.
+            - -ip=127.0.0.1
+            - -ip.bind=127.0.0.1
+            - -s3.ip.bind=0.0.0.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: s3
+              containerPort: 8333
+              protocol: TCP
+          env:
+            # Each bucket is its own collection; SeaweedFS's default grows a new
+            # one by 7 volumes at once, and -volume.max=0 sizes the slot count as
+            # free disk / volume size. One volume per new bucket, grown only as
+            # it fills (ADR-0031 amendment).
+            - name: WEED_MASTER_VOLUME_GROWTH_COPY_1
+              value: "1"
+            # SeaweedFS registers these as its one admin S3 identity.
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: object-store-credentials
+                  key: OBJECT_STORE_ROOT_ACCESS_KEY
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: object-store-credentials
+                  key: OBJECT_STORE_ROOT_SECRET_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          # Startup probe: the S3 gateway's own health endpoint (anonymous,
+          # unlike every other S3 path). A cold start with master election and
+          # filer start is ~10s; 60 x 2s is generous.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: s3
+            periodSeconds: 2
+            failureThreshold: 60
+            timeoutSeconds: 2
+          # Liveness probe: process answers HTTP.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: s3
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          # Readiness probe: same endpoint; single node, no quorum to report.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: s3
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            # weed's components talk over unix sockets under /tmp.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: object-store
+          app.kubernetes.io/component: object-store
+          app.kubernetes.io/part-of: fondaria
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: tigerbeetle-nvme
+        resources:
+          requests:
+            storage: 50Gi

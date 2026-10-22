@@ -1,0 +1,49 @@
+# Organization summary lives on balance-api (Task 6.5), not contribution-api,
+# even though its path shares the /v1/organizations prefix with the employer
+# API (httproute-employer.yaml). A RegularExpression match is the only core
+# Gateway API way to carve a variable-segment path (.../{organizationId}/summary)
+# out of a sibling HTTPRoute's PathPrefix -- both attach to the same
+# api-https listener.
+#
+# CAVEAT, to verify once a cluster is reachable (ADR-0028, TASK-LOG.md): the
+# Gateway API spec's own match-precedence algorithm only orders Exact and
+# PathPrefix matches against each other; RegularExpression is
+# implementation-specific. Envoy Gateway is expected to prefer this route's
+# more specific match over httproute-employer.yaml's PathPrefix, but that is
+# not yet proven against a running gateway -- curl both
+# /v1/organizations/{id}/summary and /v1/organizations/{id}/plans and confirm
+# each reaches its own backend before relying on this in anger.
+#
+# Task 10.2: securitypolicy-jwt.yaml targets this route by name for JWT
+# validation. The header strip below is defense-in-depth alongside that --
+# `X-Caller-Identity` is the identity header Task 9.2 removed from
+# IdentityContextFilter for exactly this spoofing risk (TASK-LOG.md); nothing
+# reads it today, but a client should not be able to inject it either.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: employer-api-org-summary
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  parentRefs:
+    - name: fondaria-gateway
+      sectionName: api-https
+  hostnames:
+    - "api.fondaria.example"
+  rules:
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "^/v1/organizations/[^/]+/summary$"
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove:
+              - X-Caller-Identity
+              - X-Edge-RateLimit-Subject
+              - X-Edge-RateLimit-Org
+      backendRefs:
+        - name: balance-api
+          port: 80

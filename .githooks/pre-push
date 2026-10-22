@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# Local stand-in for the pieces of hosted CI that no longer run on every push
+# (see .github/workflows/ci.yml and ADR-0023). Runs `make verify` +
+# `mvn spotless:check` before a push reaches the remote.
+#
+# Install:  make hooks   (sets core.hooksPath to .githooks)
+# Skip once:  SKIP_VERIFY=1 git push
+#
+# Skipped automatically when the pushed commits touch only docs (docs/**, *.md),
+# matching the workflow's paths-ignore.
+
+set -euo pipefail
+
+if [ "${SKIP_VERIFY:-}" = "1" ]; then
+  echo "pre-push: SKIP_VERIFY=1 set, skipping make verify."
+  exit 0
+fi
+
+remote_name="${1:-origin}"
+local_sha=""
+remote_sha=""
+zero="0000000000000000000000000000000000000000"
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha> per pushed ref
+while read -r _local_ref local_oid _remote_ref remote_oid; do
+  [ "$local_oid" = "$zero" ] && continue   # branch deletion
+  local_sha="$local_oid"
+  remote_sha="$remote_oid"
+  break
+done
+
+if [ -z "$local_sha" ]; then
+  exit 0
+fi
+
+if [ "$remote_sha" = "$zero" ] || [ -z "$remote_sha" ]; then
+  # New branch on the remote: diff against the default branch instead of the
+  # whole history so a fresh branch does not skip verification on a huge range.
+  base="$(git merge-base "refs/remotes/${remote_name}/main" "$local_sha" 2>/dev/null || true)"
+  range="${base:+$base..}$local_sha"
+else
+  range="$remote_sha..$local_sha"
+fi
+
+changed="$(git diff --name-only "$range" 2>/dev/null || true)"
+non_docs="$(printf '%s\n' "$changed" | grep -vE '^(docs/|.*\.md$)' | grep -v '^$' || true)"
+if [ -n "$changed" ] && [ -z "$non_docs" ]; then
+  echo "pre-push: only docs changed, skipping make verify."
+  exit 0
+fi
+
+echo "pre-push: running make verify (SKIP_VERIFY=1 git push to bypass)..."
+make verify
+echo "pre-push: running mvn spotless:check..."
+mvn spotless:check
+echo "pre-push: OK"

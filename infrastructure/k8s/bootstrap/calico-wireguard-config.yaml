@@ -1,0 +1,32 @@
+# Storage traffic encryption (ADR-0030): encrypts all pod-to-pod traffic
+# that crosses a node boundary -- including every application service's
+# connection to Postgres, TigerBeetle, RabbitMQ, Valkey and the object store, none of
+# which are mesh-injected (ADR-0029) and none of which have native TLS
+# configured yet. Node-to-node WireGuard tunnels, transparent to every pod:
+# no manifest in infrastructure/k8s/base changes, no application or
+# datastore restart depends on this.
+#
+# Lives here, not in infrastructure/k8s/base, for the same reason
+# envoy-gateway-config.yaml does: FelixConfiguration is cluster-scoped,
+# singleton (name: default), install-time state for a CNI this tree does
+# not own the lifecycle of, applied once by bootstrap/up.sh alongside
+# Calico's own install rather than reconciled per environment by kustomize.
+#
+# On this local single-node kind cluster this is provably a no-op -- there
+# is no second node for a tunnel to terminate on, confirmed live this
+# session (Felix creates the wireguard.cali interface and generates a key
+# pair; no peer ever appears; verifying an actual encrypted tunnel needs a
+# real multi-node cluster). Covers node-to-node traffic only: two pods
+# scheduled onto the SAME node exchange plaintext on the local bridge, not
+# through this tunnel -- co-location cannot be assumed away, so this does
+# not replace native per-datastore TLS (ADR-0029's own disclosed follow-up)
+# for anyone who needs authenticated, not just encrypted, connections; it
+# closes the network-segment encryption-in-transit gap the way this
+# platform's own regulatory posture needs, without touching TigerBeetle's
+# unvalidated-sidecar risk at all.
+apiVersion: crd.projectcalico.org/v1
+kind: FelixConfiguration
+metadata:
+  name: default
+spec:
+  wireguardEnabled: true

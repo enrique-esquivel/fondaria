@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>services</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>allotment-job</artifactId>
+    <packaging>jar</packaging>
+
+    <name>allotment-job</name>
+    <description>The allotment run — turns a staged contribution batch into units held by participants, at a struck NAV, atomically (Task 21.2)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: real spans/metrics to the OTel Collector. Version
+            managed by the root pom's spring-boot-dependencies BOM (Spring
+            Boot 3.5's Micrometer Tracing / OTel bridge), the same convention
+            already used for lettuce-core below.
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <exclusions>
+                <!--
+                    Spring Framework 6's spring-aop jar bundles these same
+                    org.aopalliance classes directly; the standalone jar
+                    micrometer-tracing still pulls duplicates them, which
+                    the root pom's banDuplicateClasses enforcer rule catches.
+                -->
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!--
+            Money, Units, Nav, FundId, OrganizationId, BusinessCalendar (Task 7.1),
+            NameBasedUuid.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            PlanVersion (fund_id, vesting_full_years, dealing_lag_business_days),
+            Fund/FundStatus, FundNav, and DealingDateRule — the same rule Task
+            21.1's DealingDateService applies to a batch, reapplied here so this
+            service independently derives the identical dealing date from the
+            batch's own stored value_date and staged_at, never a clock.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>rules-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The one LedgerPort implementation (ADR-0008). This service both reads
+            (units in issue is implicit in the transfer itself) and writes: the
+            CONTRIBUTION_ALLOTMENT linked chain is this task's whole point.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-tigerbeetle</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The platform's shared Flyway tree. reference.plan_version.fund_id
+            (V15), workflow.contribution_batch's ALLOTTED status and
+            workflow.allotment (V16) are both added there by this task.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>db-migrations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            Version deliberately not pinned here: spring-boot-dependencies
+            manages Flyway, and a second local pin is what split the reactor
+            once already — see libs/testing/pom.xml.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Shared Testcontainers fixtures: integration tests never hand-run a database. -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <!--
+                    Arrives via the object-store fixture's S3 client, unused by this service but
+                    pulled in transitively by libs/testing. Its classes duplicate
+                    Spring's own spring-jcl, which the root pom's banDuplicateClasses
+                    rule exists to catch.
+                -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                The runnable jar is `<artifact>-exec.jar`; the plain
+                                jar stays the module's main artifact. Without a
+                                classifier, repackage REPLACES the main artifact with
+                                the executable one, whose classes live under
+                                BOOT-INF/classes and are therefore invisible to any
+                                module that depends on this one - which libs/e2e-tests
+                                does, at test scope (ADR-0016).
+                            -->
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

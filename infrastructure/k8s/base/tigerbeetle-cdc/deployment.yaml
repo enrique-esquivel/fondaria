@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tigerbeetle-cdc
+  labels:
+    app.kubernetes.io/name: tigerbeetle-cdc
+    app.kubernetes.io/component: cdc
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  # NOTE: No HPA on tigerbeetle-cdc (Phase 12, Task 12.5). The CDC stream is a singleton
+  # by design; exactly 2 replicas run for warm-standby leader election via RabbitMQ's
+  # exclusive locker queue (ADR-0007). Additional replicas would only sit in restart loops.
+  replicas: 2
+  # ADR-0033: every pod of this Deployment holds one TigerBeetle client connection, and the
+  # replica accepts only 32. A rollout's surge pods hold one each too, so the surge is pinned
+  # to one pod rather than the 25% default; LedgerClientBudgetValidationTest counts it.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tigerbeetle-cdc
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tigerbeetle-cdc
+        app.kubernetes.io/component: cdc
+        app.kubernetes.io/part-of: fondaria
+    spec:
+      priorityClassName: fondaria-stateless-default
+      serviceAccountName: tigerbeetle-cdc
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        # io_uring is TigerBeetle's I/O engine and the container runtime's default
+        # seccomp profile blocks the io_uring_* syscalls (the `tigerbeetle amqp` connector
+        # exits with "io_uring is not available ... PermissionDenied"; AGENTS.md
+        # "Local Infrastructure" records the same for compose). Unconfined is the
+        # one exception the security policy carves out, by name, for this
+        # workload; a Localhost profile (runtime default + io_uring_*) installed on
+        # the ledger node pool is the tighter prod follow-up.
+        seccompProfile:
+          type: Unconfined
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: tigerbeetle-cdc
+      containers:
+        - name: tigerbeetle-cdc
+          image: ghcr.io/tigerbeetle/tigerbeetle@sha256:3ea0602e798cf58985fe1b5a4bc4b254b3d8899462f7d05cc314ab0a06b88a7d
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /run.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - configMapRef:
+                name: tigerbeetle-cdc-config
+          # Credentials come from the Secrets the operators generate (CloudNativePG's
+          # <cluster>-app, the RabbitMQ operator's <cluster>-default-user) and from the
+          # platform-level object-store-credentials -- never a per-service secret store entry.
+          env:
+            - name: CDC_AMQP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: username
+            - name: CDC_AMQP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # Startup probe: Verifies the supervisor loop process started and can resolve
+          # TigerBeetle and RabbitMQ endpoints.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "ps aux | grep -v grep | grep -q tigerbeetle"
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 15
+            timeoutSeconds: 2
+          # Liveness probe: Ensures the supervisor loop process remains alive.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "ps aux | grep -v grep | grep -q run.sh"
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 2
+          # Readiness probe: Active replica holds the exclusive locker queue; standby replica is warm (ADR-0007).
+          # Both pods report ready to ensure standby pod remains scheduled and ready to claim lock on failover.
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "true"
+            periodSeconds: 10
+            failureThreshold: 2
+            timeoutSeconds: 2
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cdc-script
+              mountPath: /run.sh
+              subPath: run.sh
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        - name: cdc-script
+          configMap:
+            name: tigerbeetle-cdc-script
+            defaultMode: 0755

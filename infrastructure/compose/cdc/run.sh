@@ -1,0 +1,127 @@
+#!/bin/sh
+# CDC job supervisor — Phase 4, Task 4.2.
+#
+# Runs `tigerbeetle amqp` — TigerBeetle's native CDC connector (ADR-0003) —
+# in a fixed-interval restart loop. This loop is the ONLY coordination code in
+# the whole CDC path: there is no leader election here, no lease, no cursor
+# persistence. Arbitration is RabbitMQ's exclusive
+# `tigerbeetle.internal.locker.<cluster_id>` queue, declared by `tigerbeetle
+# amqp` itself on every startup — see
+# infrastructure/compose/rabbitmq/README.md.
+#
+# Kubernetes runs replicas: 2 (ADR-0007). Both replicas run this script. The
+# one that wins the locker-queue race streams; the other's `tigerbeetle amqp`
+# exits non-zero (RabbitMQ answers RESOURCE_LOCKED on the exclusive redeclare,
+# the connector calls its own fatal()) and this loop restarts it after
+# CDC_RETRY_INTERVAL_SECONDS. That fixed, short interval is deliberate: it
+# keeps the loser a WARM standby that reclaims the lock within seconds of the
+# active instance dying, instead of letting Kubernetes' exponential
+# CrashLoopBackOff cool it into a cold standby. The fixed interval is the
+# "cap" — the loop itself never gives up, so a third instance also just keeps
+# retrying rather than crashing out.
+#
+# `tigerbeetle amqp` speaks plaintext AMQP 0-9-1 over TCP only. The pinned
+# 0.17.4 has no TLS anywhere in its AMQP client — see cdc/README.md for the
+# sidecar this implies in any deployment where the hop leaves the pod.
+set -eu
+
+: "${CDC_TIGERBEETLE_ADDRESSES:?CDC_TIGERBEETLE_ADDRESSES is required}"
+: "${CDC_TIGERBEETLE_CLUSTER_ID:?CDC_TIGERBEETLE_CLUSTER_ID is required}"
+: "${CDC_AMQP_HOST:?CDC_AMQP_HOST is required (host or host:port)}"
+: "${CDC_AMQP_USER:?CDC_AMQP_USER is required}"
+: "${CDC_AMQP_PASSWORD:?CDC_AMQP_PASSWORD is required}"
+: "${CDC_AMQP_VHOST:=/}"
+: "${CDC_PUBLISH_EXCHANGE:?CDC_PUBLISH_EXCHANGE is required}"
+: "${CDC_RETRY_INTERVAL_SECONDS:=2}"
+# Replay override. Empty (the default) means resume from the last acknowledged
+# event, read from the progress queue. "0" replays the entire ledger from the
+# beginning. Any other value resumes from that TigerBeetle timestamp.
+: "${CDC_TIMESTAMP_LAST:=}"
+
+# `tigerbeetle amqp` parses --addresses and --host as literal IPv4/IPv6
+# addresses — it does NOT resolve hostnames, while every deployment target
+# (compose service names, Kubernetes Services) hands it a name. Resolve here,
+# on every attempt, so a target whose address changes on restart is picked up.
+resolve_one() {
+  entry=$1
+  colons=$(printf '%s' "$entry" | tr -cd ':' | wc -c | tr -d ' ')
+  if [ "$colons" -gt 1 ]; then
+    # An IPv6 literal (optionally bracketed, optionally with a port). Pass
+    # through untouched — there is no hostname to resolve.
+    printf '%s' "$entry"
+    return 0
+  fi
+  if [ "$colons" -eq 1 ]; then
+    name=${entry%:*}
+    port=${entry##*:}
+  else
+    name=$entry
+    port=
+  fi
+  ip=$(getent hosts "$name" 2>/dev/null | awk 'NR==1 {print $1}')
+  if [ -z "$ip" ]; then
+    echo "cdc-job: cannot resolve host '$name'" >&2
+    return 1
+  fi
+  if [ -n "$port" ]; then
+    printf '%s:%s' "$ip" "$port"
+  else
+    printf '%s' "$ip"
+  fi
+}
+
+resolve_addresses() {
+  out=
+  oldifs=$IFS
+  IFS=','
+  for a in $1; do
+    r=$(resolve_one "$a") || {
+      IFS=$oldifs
+      return 1
+    }
+    out="${out:+$out,}$r"
+  done
+  IFS=$oldifs
+  printf '%s' "$out"
+}
+
+attempt=0
+while true; do
+  attempt=$((attempt + 1))
+
+  if ! addresses=$(resolve_addresses "$CDC_TIGERBEETLE_ADDRESSES") \
+    || ! host=$(resolve_one "$CDC_AMQP_HOST"); then
+    echo "cdc-job: address resolution failed; retrying in ${CDC_RETRY_INTERVAL_SECONDS}s"
+    sleep "$CDC_RETRY_INTERVAL_SECONDS"
+    continue
+  fi
+
+  set -- \
+    amqp \
+    --addresses="$addresses" \
+    --cluster="$CDC_TIGERBEETLE_CLUSTER_ID" \
+    --host="$host" \
+    --user="$CDC_AMQP_USER" \
+    --password="$CDC_AMQP_PASSWORD" \
+    --vhost="$CDC_AMQP_VHOST" \
+    --publish-exchange="$CDC_PUBLISH_EXCHANGE"
+
+  # -n, not a default: --timestamp-last=0 is a valid, meaningful value (full
+  # replay), so it must be forwarded, while an unset variable must not become
+  # `--timestamp-last=`.
+  if [ -n "$CDC_TIMESTAMP_LAST" ]; then
+    set -- "$@" --timestamp-last="$CDC_TIMESTAMP_LAST"
+  fi
+
+  echo "cdc-job: starting \`tigerbeetle amqp\` (attempt ${attempt})"
+
+  # Do not let a non-zero exit from the connector abort the loop (set -e).
+  # Losing the locker-queue race IS a non-zero exit, by design.
+  set +e
+  /tigerbeetle "$@"
+  status=$?
+  set -e
+
+  echo "cdc-job: \`tigerbeetle amqp\` exited with status ${status}; restarting in ${CDC_RETRY_INTERVAL_SECONDS}s"
+  sleep "$CDC_RETRY_INTERVAL_SECONDS"
+done

@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tigerbeetle-config
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+data:
+  TIGERBEETLE_CLUSTER_ID: "0"
+  TIGERBEETLE_REPLICA_COUNT: "6"
+  TIGERBEETLE_DATA_DIR: "/var/lib/tigerbeetle"
+  # TigerBeetle 0.17 parses --addresses as IP literals and does NOT resolve
+  # hostnames -- neither the replica nor the client library (verified against
+  # the Java client: "Replica addresses format is invalid" for a DNS name).
+  # Each replica therefore gets its own Service with a FIXED ClusterIP
+  # (service.yaml), which is a stable IP literal that survives pod restarts,
+  # unlike a pod IP. Ordered by replica index 0..N-1; every client ConfigMap
+  # carries this same list, and start.sh substitutes 0.0.0.0 at the replica's
+  # own index so it binds locally and reaches its peers through their ClusterIPs.
+  # The ClusterIPs live in the cluster's service CIDR; an overlay for a cluster
+  # with a different CIDR patches both this list and service.yaml.
+  TIGERBEETLE_ADDRESSES: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000,10.96.100.103:3000,10.96.100.104:3000,10.96.100.105:3000"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tigerbeetle-scripts
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+
+    # Extract ordinal from pod hostname (e.g. tigerbeetle-0 -> 0)
+    ORDINAL="${HOSTNAME##*-}"
+    DATA_FILE="${TIGERBEETLE_DATA_DIR}/${TIGERBEETLE_CLUSTER_ID}_${ORDINAL}.tigerbeetle"
+
+    echo "tigerbeetle-init: pod=${HOSTNAME}, ordinal=${ORDINAL}, cluster=${TIGERBEETLE_CLUSTER_ID}, replica_count=${TIGERBEETLE_REPLICA_COUNT}"
+    echo "tigerbeetle-init: target data file: ${DATA_FILE}"
+
+    mkdir -p "${TIGERBEETLE_DATA_DIR}"
+
+    if [ -f "${DATA_FILE}" ]; then
+      echo "tigerbeetle-init: data file ${DATA_FILE} exists. Format skipped (format-once invariant preserved)."
+      exit 0
+    fi
+
+    echo "tigerbeetle-init: data file not found. Formatting replica ${ORDINAL}..."
+    TMP_FILE="${DATA_FILE}.tmp"
+    rm -f "${TMP_FILE}"
+    if [ "${TIGERBEETLE_DEVELOPMENT:-false}" = "true" ]; then
+      /tigerbeetle format \
+        --cluster="${TIGERBEETLE_CLUSTER_ID}" \
+        --replica="${ORDINAL}" \
+        --replica-count="${TIGERBEETLE_REPLICA_COUNT}" \
+        --development \
+        "${TMP_FILE}"
+    else
+      /tigerbeetle format \
+        --cluster="${TIGERBEETLE_CLUSTER_ID}" \
+        --replica="${ORDINAL}" \
+        --replica-count="${TIGERBEETLE_REPLICA_COUNT}" \
+        "${TMP_FILE}"
+    fi
+
+    mv "${TMP_FILE}" "${DATA_FILE}"
+    echo "tigerbeetle-init: format complete for replica ${ORDINAL}."
+
+  start.sh: |
+    #!/bin/sh
+    set -eu
+
+    ORDINAL="${HOSTNAME##*-}"
+    DATA_FILE="${TIGERBEETLE_DATA_DIR}/${TIGERBEETLE_CLUSTER_ID}_${ORDINAL}.tigerbeetle"
+
+    if [ ! -f "${DATA_FILE}" ]; then
+      echo "tigerbeetle-start: ERROR - data file ${DATA_FILE} does not exist! Refusing to start."
+      exit 1
+    fi
+
+    # A replica binds to the entry at its own index in --addresses, so that
+    # entry must be a local address: substitute 0.0.0.0 there and keep the
+    # peers' fixed ClusterIPs everywhere else (see tigerbeetle-config).
+    i=0
+    addresses=
+    oldifs=$IFS
+    IFS=','
+    for a in ${TIGERBEETLE_ADDRESSES}; do
+      if [ "$i" -eq "${ORDINAL}" ]; then
+        a="0.0.0.0:${a##*:}"
+      fi
+      addresses="${addresses:+${addresses},}${a}"
+      i=$((i + 1))
+    done
+    IFS=$oldifs
+
+    echo "tigerbeetle-start: launching replica ${ORDINAL} with addresses=${addresses}"
+
+    set -- start --addresses="${addresses}"
+    if [ "${TIGERBEETLE_DEVELOPMENT:-false}" = "true" ]; then
+      # Reduced-capacity mode. No overlay sets it since row 26q (ADR-0033, 2026-10-03 amendment); only
+      # TigerBeetleClusterFormationIntegrationTest does, to fit six replicas on one
+      # Docker VM. Besides the two limits pinned back here, it zeroes the account and
+      # transfer caches and shrinks compaction memory, so it is never used to measure.
+      #
+      # --development does more than relax Direct IO: TigerBeetle 0.17 also drops
+      # the default request size limit from 1MiB to 32KiB, and the client learns
+      # that limit at registration, so any create_transfers over ~253 events is
+      # refused client-side (TooMuchData) before it reaches the replica. Every
+      # contribution batch is far bigger (ADR-0017 sizes parts up to
+      # LedgerLimits.MAX_LINKED_CHAIN_LENGTH), so pin the production limit back.
+      # --limit-request is gated behind --experimental in 0.17.
+      #
+      # It also drops --limit-pipeline-requests from 24 to 0, which cuts the replica to
+      # 8 client connections (clients_limit = pipeline_prepare_queue_max 8 + this value).
+      # Five services plus allotment-job already hold 6; a ninth client is never
+      # accepted, and once every slot is taken the replica stops calling accept()
+      # altogether, so this probe's own connections back up until liveness kills a
+      # healthy replica (row 26p, TASK-LOG.md step 112). 24 is the production default:
+      # 32 clients, the budget ADR-0033 sizes every overlay against.
+      set -- "$@" --development --experimental --limit-request=1MiB --limit-pipeline-requests=24
+    fi
+    # Grid cache (default 1GiB). Unset in prod; the local overlay shrinks it so the
+    # replica fits a laptop-sized node alongside eight JVMs.
+    if [ -n "${TIGERBEETLE_CACHE_GRID:-}" ]; then
+      set -- "$@" --cache-grid="${TIGERBEETLE_CACHE_GRID}"
+    fi
+    exec /tigerbeetle "$@" "${DATA_FILE}"

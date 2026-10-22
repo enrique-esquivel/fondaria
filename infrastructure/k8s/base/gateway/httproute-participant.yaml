@@ -1,0 +1,39 @@
+# Participant API: read-only participant-scoped resources on balance-api.
+# Population/scope checks (is this caller this participant, or an employer
+# admin/staff member allowed to view them) stay in the application
+# (AuthorisationEnforcer, Task 9.3) -- this route only decides which backend
+# Service a path reaches, per phase-10-edge.md Task 10.2's own framing.
+#
+# Task 10.2: securitypolicy-jwt.yaml targets this route by name for JWT
+# validation. The header strip below is defense-in-depth alongside that --
+# `X-Caller-Identity` is the identity header Task 9.2 removed from
+# IdentityContextFilter for exactly this spoofing risk (TASK-LOG.md); nothing
+# reads it today, but a client should not be able to inject it either.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: participant-api
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  parentRefs:
+    - name: fondaria-gateway
+      sectionName: api-https
+  hostnames:
+    - "api.fondaria.example"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/participants
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove:
+              - X-Caller-Identity
+              - X-Edge-RateLimit-Subject
+              - X-Edge-RateLimit-Org
+      backendRefs:
+        - name: balance-api
+          port: 80

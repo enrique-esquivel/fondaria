@@ -1,0 +1,43 @@
+# Example Point-In-Time-Recovery (PITR) restore cluster specification.
+# Used for disaster recovery drills or point-in-time state reconstruction.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-pitr-restore
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database-restore
+    app.kubernetes.io/part-of: fondaria
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.2@sha256:61d2b391e3e324d05edc6c65c555989a7c544ddb72ef271b3abd4a35b57942b1
+
+  # Recovery target timestamp (ISO 8601 UTC)
+  recoveryTarget:
+    targetTime: "2026-09-09T00:00:00Z"
+
+  # Bootstrap from barman object store backup of the primary cluster
+  bootstrap:
+    recovery:
+      source: postgres
+      backup:
+        name: postgres-daily-backup
+
+  externalClusters:
+    - name: postgres
+      barmanObjectStore:
+        destinationPath: "s3://postgres-backups/"
+        endpointURL: "http://object-store:8333"
+        s3Credentials:
+          accessKeyId:
+            name: object-store-credentials
+            key: OBJECT_STORE_ROOT_ACCESS_KEY
+          secretAccessKey:
+            name: object-store-credentials
+            key: OBJECT_STORE_ROOT_SECRET_KEY
+        wal:
+          compression: gzip
+
+  storage:
+    size: 50Gi
+    storageClass: tigerbeetle-nvme

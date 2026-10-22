@@ -1,0 +1,11 @@
+# The base binds every PVC to `tigerbeetle-nvme` (TigerBeetle, Postgres,
+# RabbitMQ, Valkey, the object store, Prometheus, Tempo, Loki). On the kind cluster that
+# class is simply the node's local-path provisioner -- one resource here
+# instead of a storageClassName patch on eight workloads.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: tigerbeetle-nvme
+provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete

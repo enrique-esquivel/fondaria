@@ -1,0 +1,156 @@
+# Task 7.6 -- "each [alert] rehearsed once against an injected fault" (phase-07-eod.md).
+#
+# A `promtool test rules` unit test: a synthetic metric series stands in for the fault
+# eod-job's own tests already prove drives that meter (Task 7.2's injected discrepancy,
+# 7.3's break and late statement, 7.4's injected missing record, 7.5a's blocked gate all
+# already prove the *meter* moves correctly for a real fault -- see those tasks'
+# acceptance criteria). What this file rehearses is the *alert rule* built on top of that
+# meter: that eod-close.rules.yml actually fires when the fault is present, and stays
+# quiet during each alert's `for:` grace period rather than paging on completely normal,
+# momentary behaviour.
+#
+# Every alert with a `for:` longer than 0m gets a check *before* that duration has
+# elapsed, not only a "healthy, gauge at 0" check -- a rule can look right and still page
+# (or fail to page) the instant the gauge flips, which a check that only ever samples
+# "long before" and "long after" the flip would never catch. This caught a real defect
+# during review: an earlier draft of EODMissedSignoff used a `hour() >= 2` (UTC) gate
+# instead of `for: 2h`, and `hour()` wraps to 0 every 24 hours regardless of how long the
+# gauge has actually been up -- so a close blocked for 25 hours straight would have gone
+# quiet for two hours at the 24-hour mark and re-fired after, which is the opposite of
+# what a sustained-outage page should do. The `eval_time: 1500m` case below is that exact
+# 25-hour scenario, kept as a regression check now that the alert uses a plain `for: 2h`.
+rule_files:
+  - eod-close.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- EODInternalReconciliationDrift -----------------------------------------------
+  # Fault: the gauge ReconciliationMetrics#record sets to 1 on a FAILED pass stays raised.
+  - interval: 1m
+    input_series:
+      - series: 'eod_reconciliation_blocked'
+        values: '0 0 0 1x20'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: EODInternalReconciliationDrift
+        exp_alerts: []
+      # Gauge has been 1 since t=3m; only 3m have elapsed here, short of the 5m `for` --
+      # this is what actually exercises the `for` duration, not just "gauge still at 0".
+      - eval_time: 6m
+        alertname: EODInternalReconciliationDrift
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: EODInternalReconciliationDrift
+        exp_alerts:
+          - exp_labels:
+              alertname: EODInternalReconciliationDrift
+              severity: page
+            exp_annotations:
+              summary: "Internal reconciliation is blocked -- the ledger and the projection disagree, or the pass itself did not finish."
+              description: "eod_reconciliation_blocked has been 1 for at least 5 minutes. The daily close cannot proceed past Task 7.2 while this holds: the snapshot (7.4) and statements (7.5b) both refuse to run for a business date reconciliation has not passed. At risk: participants' recorded units may not match what the ledger actually holds."
+              runbook_url: "docs/RUNBOOKS.md#internal-reconciliation-drift"
+
+  # --- EODCustodianBreak --------------------------------------------------------------
+  # Fault: CustodianReconciliationMetrics#record counts a real (non-timing) break, open
+  # or re-confirmed -- the counter rises on every pass that still finds it, not only the
+  # first.
+  - interval: 1m
+    input_series:
+      - series: 'eod_custodian_breaks_total'
+        values: '0x5 1x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: EODCustodianBreak
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: EODCustodianBreak
+        exp_alerts:
+          - exp_labels:
+              alertname: EODCustodianBreak
+              severity: page
+            exp_annotations:
+              summary: "A real custodian-reconciliation break is open -- the custodian's own records disagree with this platform's."
+              description: "eod_custodian_breaks_total increased. This fires for a break's first pass and for every later pass that still finds it open, so it does not by itself mean the break is new. Not a timing difference (those are counted separately, on eod_custodian_timing_differences_total, and are not page-worthy alone) -- a break the custodian's pending-trade figure does not explain. At risk: the counterparty of record disagrees with what participants are shown they hold."
+              runbook_url: "docs/RUNBOOKS.md#custodian-break"
+
+  # --- EODCustodianStatementLate -------------------------------------------------------
+  # Fault: CustodianReconciliationMetrics#record counts a missing statement.
+  - interval: 1m
+    input_series:
+      - series: 'eod_custodian_statements_late_total'
+        values: '0x5 1x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: EODCustodianStatementLate
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: EODCustodianStatementLate
+        exp_alerts:
+          - exp_labels:
+              alertname: EODCustodianStatementLate
+              severity: page
+            exp_annotations:
+              summary: "A provider account had no custodian statement when today's reconciliation pass ran."
+              description: "eod_custodian_statements_late_total increased. Task 7.3's posture is fail closed: a missing statement blocks the custodian-reconciliation gate exactly as a real break does, because an unreconciled position is exactly as unproved as a wrongly reconciled one. At risk: the close cannot prove the custodian agrees, for however many provider accounts are missing a file."
+              runbook_url: "docs/RUNBOOKS.md#late-custodian-file"
+
+  # --- EODSnapshotTieOutFailure ---------------------------------------------------------
+  # Fault: SnapshotMetrics#recordUntied counts a fund whose file did not tie to units_in_issue.
+  - interval: 1m
+    input_series:
+      - series: 'eod_snapshot_untied_total'
+        values: '0x5 1x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: EODSnapshotTieOutFailure
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: EODSnapshotTieOutFailure
+        exp_alerts:
+          - exp_labels:
+              alertname: EODSnapshotTieOutFailure
+              severity: page
+            exp_annotations:
+              summary: "A fund's daily snapshot did not tie: the file's unit total does not equal units_in_issue."
+              description: "eod_snapshot_untied_total increased. This is the one check that proves the dense snapshot complete (Task 7.4) -- a fund failing it means the file is wrong about participants' money, not merely inconsistent with an earlier pass. Nothing is stored for a run that fails this check. At risk: statements (7.5b) would render from a wrong position file if this were not blocking."
+              runbook_url: "docs/RUNBOOKS.md#snapshot-tie-out-failure"
+
+  # --- EODMissedSignoff -----------------------------------------------------------------
+  # Fault: SignoffMetrics#recordBlocked -- the gauge stays 1 continuously, as it would
+  # while an upstream gate stays closed. Held up for well over 24 hours (1600 simulated
+  # minutes) specifically to exercise the 24-hour boundary a `hour()`-based gate got wrong
+  # (see the file header).
+  - interval: 1m
+    input_series:
+      - series: 'eod_signoff_blocked'
+        values: '1x1600'
+    alert_rule_test:
+      # Blocked since t=0; only 90m elapsed, short of the 2h `for` -- the grace period.
+      - eval_time: 90m
+        alertname: EODMissedSignoff
+        exp_alerts: []
+      # 150m elapsed, past the 2h `for` -- fires.
+      - eval_time: 150m
+        alertname: EODMissedSignoff
+        exp_alerts:
+          - exp_labels:
+              alertname: EODMissedSignoff
+              severity: page
+            exp_annotations:
+              summary: "The daily close has not signed off for at least two hours."
+              description: "eod_signoff_blocked has been 1 continuously for at least two hours. Statement generation (7.5b) refuses to run without a sign-off. At risk: reporting for the business date is stalled behind whichever upstream gate (7.2, 7.3 or 7.4) has not passed -- or, if this fires for a date already believed signed off, the sign-off itself needs to be re-examined (see the runbook's second scenario)."
+              runbook_url: "docs/RUNBOOKS.md#missed-signoff"
+      # 25 hours elapsed, still blocked throughout -- the regression check. A hour()-gated
+      # version of this alert went quiet here (00:00-02:00 UTC the next simulated day);
+      # a plain `for: 2h` keeps firing with no gap.
+      - eval_time: 1500m
+        alertname: EODMissedSignoff
+        exp_alerts:
+          - exp_labels:
+              alertname: EODMissedSignoff
+              severity: page
+            exp_annotations:
+              summary: "The daily close has not signed off for at least two hours."
+              description: "eod_signoff_blocked has been 1 continuously for at least two hours. Statement generation (7.5b) refuses to run without a sign-off. At risk: reporting for the business date is stalled behind whichever upstream gate (7.2, 7.3 or 7.4) has not passed -- or, if this fires for a date already believed signed off, the sign-off itself needs to be re-examined (see the runbook's second scenario)."
+              runbook_url: "docs/RUNBOOKS.md#missed-signoff"

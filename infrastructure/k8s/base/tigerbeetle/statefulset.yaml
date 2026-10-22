@@ -1,0 +1,172 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tigerbeetle
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  serviceName: tigerbeetle
+  # Production target: 6 replicas across 3 availability zones (DESIGN.md §13)
+  replicas: 6
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tigerbeetle
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tigerbeetle
+        app.kubernetes.io/component: ledger
+        app.kubernetes.io/part-of: fondaria
+    spec:
+      priorityClassName: fondaria-ledger-critical
+      serviceAccountName: tigerbeetle
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        # io_uring is TigerBeetle's I/O engine and the container runtime's default
+        # seccomp profile blocks the io_uring_* syscalls (the replica
+        # exits with "io_uring is not available ... PermissionDenied"; AGENTS.md
+        # "Local Infrastructure" records the same for compose). Unconfined is the
+        # one exception the security policy carves out, by name, for this
+        # workload; a Localhost profile (runtime default + io_uring_*) installed on
+        # the ledger node pool is the tighter prod follow-up.
+        seccompProfile:
+          type: Unconfined
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: tigerbeetle
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: tigerbeetle
+      initContainers:
+        # Format-once init container: formats the data file ONLY if it does not already exist.
+        - name: tigerbeetle-init
+          image: ghcr.io/tigerbeetle/tigerbeetle@sha256:3ea0602e798cf58985fe1b5a4bc4b254b3d8899462f7d05cc314ab0a06b88a7d
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /scripts/init.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - configMapRef:
+                name: tigerbeetle-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/tigerbeetle
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: tigerbeetle
+          image: ghcr.io/tigerbeetle/tigerbeetle@sha256:3ea0602e798cf58985fe1b5a4bc4b254b3d8899462f7d05cc314ab0a06b88a7d
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /scripts/start.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: peer
+              containerPort: 3000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: tigerbeetle-config
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 2048Mi
+            limits:
+              cpu: 2000m
+              memory: 4096Mi
+          # Startup probe: Verifies replica process opened port 3000 and is participating in the cluster
+          startupProbe:
+            tcpSocket:
+              port: peer
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+            timeoutSeconds: 2
+          # Liveness probe: Ensures TigerBeetle replica remains running and listening on port 3000
+          livenessProbe:
+            tcpSocket:
+              port: peer
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 2
+          # Readiness probe: Asserts the replica is ready to service client transfer requests
+          readinessProbe:
+            tcpSocket:
+              port: peer
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 2
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/tigerbeetle
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: scripts
+          configMap:
+            name: tigerbeetle-scripts
+            defaultMode: 0755
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: tigerbeetle
+          app.kubernetes.io/component: ledger
+          app.kubernetes.io/part-of: fondaria
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: tigerbeetle-nvme
+        resources:
+          requests:
+            storage: 20Gi

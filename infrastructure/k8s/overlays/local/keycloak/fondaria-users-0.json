@@ -1,0 +1,76 @@
+{
+  "realm": "fondaria",
+  "users": [
+    {
+      "id": "user-participant",
+      "username": "participant.user",
+      "enabled": true,
+      "email": "participant@example.com",
+      "emailVerified": true,
+      "firstName": "Participant",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "participant_pass123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "participant"
+      ]
+    },
+    {
+      "id": "user-employer-admin",
+      "username": "employer.admin",
+      "enabled": true,
+      "email": "admin@example.com",
+      "emailVerified": true,
+      "firstName": "Employer",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin_pass123",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "MyTOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXP\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ],
+      "realmRoles": [
+        "employer-admin",
+        "mfa-enforced"
+      ]
+    },
+    {
+      "id": "user-internal-staff",
+      "username": "internal.staff",
+      "enabled": true,
+      "email": "staff@example.com",
+      "emailVerified": true,
+      "firstName": "Internal",
+      "lastName": "Staff",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "staff_pass123",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "MyTOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXP\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ],
+      "realmRoles": [
+        "internal-staff",
+        "mfa-enforced"
+      ]
+    }
+  ]
+}

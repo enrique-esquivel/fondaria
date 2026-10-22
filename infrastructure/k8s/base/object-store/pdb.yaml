@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: object-store
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: object-store
+    app.kubernetes.io/part-of: fondaria
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: object-store

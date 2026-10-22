@@ -1,0 +1,492 @@
+name: funds-infra
+
+networks:
+  funds:
+    name: funds
+
+services:
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.17.4
+    profiles:
+      - infra
+      - ledger
+      - all
+    ports:
+      - "${TIGERBEETLE_PORT:-3000}:3000"
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      TIGERBEETLE_CLUSTER_ID: ${TIGERBEETLE_CLUSTER_ID:-0}
+      TIGERBEETLE_REPLICA_ID: ${TIGERBEETLE_REPLICA_ID:-0}
+    volumes:
+      - ./data/tigerbeetle:/var/lib/tigerbeetle
+      - ./tigerbeetle/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 3000"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    # Row 26q: without --development the replica allocates ~2.5GiB at init with a
+    # 512MiB grid cache (~2GiB fixed); 1024M OOM-killed it at startup, and so did
+    # --development once the request and client limits were pinned back.
+    deploy:
+      resources:
+        limits:
+          memory: 3072M
+    networks:
+      - funds
+
+  postgres:
+    image: postgres:17-alpine
+    profiles:
+      - infra
+      - all
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-funds}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-funds_dev_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-funds}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-funds} -d ${POSTGRES_DB:-funds}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    networks:
+      - funds
+
+  redis:
+    image: valkey/valkey:8.0.2-alpine
+    profiles:
+      - infra
+      - all
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-funds_dev_pass}
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-funds_dev_pass} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - funds
+
+  rabbitmq:
+    image: rabbitmq:4.0.9-management-alpine
+    profiles:
+      - infra
+      - all
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-funds}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-funds_dev_pass}
+    volumes:
+      - ./data/rabbitmq:/var/lib/rabbitmq
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    networks:
+      - funds
+
+  # One-shot: declares the RabbitMQ topology Task 4.1 owns (the `tigerbeetle`
+  # exchange, `bridge.ledger` and `bridge.ledger.dlq`) via the management API.
+  # Idempotent: re-running with the same topology is a no-op; re-running
+  # after a manual, conflicting redeclare fails loudly rather than diverging
+  # silently (RabbitMQ's own declare semantics — see rabbitmq/README.md).
+  # Never declares tigerbeetle.internal.locker.*/progress.* — those are the
+  # CDC job's own (Task 4.2), declared by the job itself.
+  rabbitmq-topology:
+    image: curlimages/curl:8.11.1
+    profiles:
+      - infra
+      - all
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./rabbitmq/declare-topology.sh:/declare-topology.sh:ro
+    entrypoint: ["/bin/sh", "/declare-topology.sh"]
+    environment:
+      RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-funds}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-funds_dev_pass}
+      RABBITMQ_BRIDGE_LEDGER_DELIVERY_LIMIT: ${RABBITMQ_BRIDGE_LEDGER_DELIVERY_LIMIT:-5}
+    restart: "no"
+    networks:
+      - funds
+
+  # The CDC job (Task 4.2): TigerBeetle's native `tigerbeetle amqp` connector
+  # (ADR-0003), streaming every committed ledger movement onto the `tigerbeetle`
+  # exchange (Task 4.1). The container is the stock TigerBeetle image; the only
+  # thing this repository adds is cdc/run.sh — a fixed-interval restart loop,
+  # the sole coordination in the whole CDC path (ADR-0007: the exclusive
+  # `tigerbeetle.internal.locker.<cluster_id>` queue is the arbitration, never
+  # code we wrote). Starts only after RabbitMQ is healthy AND the topology
+  # one-shot has declared the exchange — `tigerbeetle amqp` validates the
+  # exchange passively and exits if it is missing.
+  #
+  # Kubernetes runs replicas: 2 (ADR-0007); compose runs one. Exercise the
+  # warm standby with `docker compose --profile infra up --scale cdc-job=2`:
+  # the second instance's `tigerbeetle amqp` loses the locker race, exits, and
+  # run.sh keeps it warm until the first instance stops.
+  #
+  # No TLS: `tigerbeetle amqp` in 0.17.4 is plaintext AMQP over TCP. On the
+  # `funds` bridge network that is fine; in Kubernetes the CDC -> RabbitMQ hop
+  # is encrypted by the service mesh (mTLS), not by this container — see
+  # cdc/README.md "TLS".
+  cdc-job:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.17.4
+    profiles:
+      - infra
+      - all
+    depends_on:
+      tigerbeetle:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-topology:
+        condition: service_completed_successfully
+    volumes:
+      - ./cdc/run.sh:/run.sh:ro
+    entrypoint: ["/bin/sh", "/run.sh"]
+    # Same as the `tigerbeetle` service: the stock image's `io_uring` probe fails
+    # under the default seccomp profile (AGENTS.md §"Local Infrastructure").
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      # Same cluster every service talks to (TIGERBEETLE_* above). As seen from
+      # inside the compose network, not from the host.
+      CDC_TIGERBEETLE_ADDRESSES: ${TIGERBEETLE_ADDRESSES:-tigerbeetle:3000}
+      CDC_TIGERBEETLE_CLUSTER_ID: ${TIGERBEETLE_CLUSTER_ID:-0}
+      CDC_AMQP_HOST: ${CDC_AMQP_HOST:-rabbitmq}
+      CDC_AMQP_VHOST: ${CDC_AMQP_VHOST:-/}
+      # Reuses the broker's own credentials, like the rabbitmq-topology one-shot.
+      CDC_AMQP_USER: ${RABBITMQ_DEFAULT_USER:-funds}
+      CDC_AMQP_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-funds_dev_pass}
+      CDC_PUBLISH_EXCHANGE: ${CDC_PUBLISH_EXCHANGE:-tigerbeetle}
+      CDC_TIMESTAMP_LAST: ${CDC_TIMESTAMP_LAST:-}
+      CDC_RETRY_INTERVAL_SECONDS: ${CDC_RETRY_INTERVAL_SECONDS:-2}
+    restart: unless-stopped
+    networks:
+      - funds
+
+  # SeaweedFS's S3 gateway (ADR-0031). One process runs master, volume, filer
+  # and S3 together -- SeaweedFS's single-node mode, the same command the
+  # Kubernetes StatefulSet and libs/testing's ObjectStoreFixture run. Only the
+  # S3 port listens beyond loopback: the filer's gRPC port carries an
+  # unauthenticated IAM service, so nothing outside this container may reach it.
+  object-store:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    profiles:
+      - infra
+      - all
+    ports:
+      - "${OBJECT_STORE_PORT:-8333}:8333"
+    entrypoint: ["/usr/bin/weed"]
+    command:
+      - server
+      - -dir=/data
+      - -s3
+      - -s3.port=8333
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+      # A write to a missing bucket must fail, never create it (ADR-0031 amendment).
+      - -s3.autoCreateBucket=false
+      - -master.volumeSizeLimitMB=1024
+      - -volume.max=0
+      # Master, volume and filer on loopback only; S3 is the one listener
+      # other containers can reach (ADR-0031 amendment).
+      - -ip=127.0.0.1
+      - -ip.bind=127.0.0.1
+      - -s3.ip.bind=0.0.0.0
+    environment:
+      # One volume per new bucket, grown only as it fills (ADR-0031 amendment).
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: "1"
+      # SeaweedFS registers these as its one admin S3 identity.
+      AWS_ACCESS_KEY_ID: ${OBJECT_STORE_ROOT_ACCESS_KEY:-funds}
+      AWS_SECRET_ACCESS_KEY: ${OBJECT_STORE_ROOT_SECRET_KEY:-funds_dev_pass}
+    volumes:
+      - ./data/object-store:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - funds
+
+  # One-shot: creates the buckets the services read and write (ADR-0009,
+  # Task 3.4). No service ever creates a bucket -- a service that could
+  # delete and recreate the store holding employers' files would be a far larger
+  # privilege than reading and writing objects in it -- so local development
+  # needs the buckets provisioned the way a deployment provisions them.
+  # Uses the object store's own image: its curl signs S3 requests (SigV4), so
+  # there is no second image to keep pullable (ADR-0031). Idempotent: a bucket
+  # that already exists answers 409 BucketAlreadyExists/OwnedByYou.
+  object-store-buckets:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    profiles:
+      - infra
+      - all
+    depends_on:
+      object-store:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        for bucket in "$${CONTRIBUTION_FILE_BUCKET}" "$${VALUATION_FILE_BUCKET}" "$${SNAPSHOT_BUCKET}" "$${STATEMENT_BUCKET}"; do
+          code=$$(curl -sS --connect-timeout 5 --max-time 30 -o /tmp/response -w '%{http_code}' --aws-sigv4 "aws:amz:us-east-1:s3" \
+            --user "$${OBJECT_STORE_ROOT_ACCESS_KEY}:$${OBJECT_STORE_ROOT_SECRET_KEY}" \
+            -X PUT "http://object-store:8333/$${bucket}")
+          if [ "$${code}" = 200 ] || { [ "$${code}" = 409 ] && grep -q BucketAlready /tmp/response; }; then
+            echo "object-store-buckets: $${bucket} ready ($${code})"
+          else
+            echo "object-store-buckets: creating $${bucket} failed ($${code})"; cat /tmp/response; exit 1
+          fi
+        done
+    environment:
+      OBJECT_STORE_ROOT_ACCESS_KEY: ${OBJECT_STORE_ROOT_ACCESS_KEY:-funds}
+      OBJECT_STORE_ROOT_SECRET_KEY: ${OBJECT_STORE_ROOT_SECRET_KEY:-funds_dev_pass}
+      CONTRIBUTION_FILE_BUCKET: ${CONTRIBUTION_FILE_BUCKET:-contribution-files}
+      # Separate from the contribution bucket: different producers, different
+      # retention, different access (Task 20.3).
+      VALUATION_FILE_BUCKET: ${VALUATION_FILE_BUCKET:-valuation-files}
+      # Separate again (Task 7.4): the producer is the close itself, and the
+      # contents are every participant's position rather than one employer's
+      # file. Phase 8's object lock would be applied to this bucket at creation
+      # (Task 8.1) — Phase 8 is skipped, so it is a plain bucket for now.
+      SNAPSHOT_BUCKET: ${SNAPSHOT_BUCKET:-eod-snapshots}
+      # Separate again (Task 7.5b): the producer is statement-worker, not the
+      # close, and the contents are rendered participant statements rather than
+      # positions. eod-job's credentials cannot write here and statement-worker's
+      # cannot write to SNAPSHOT_BUCKET.
+      STATEMENT_BUCKET: ${STATEMENT_BUCKET:-statement-objects}
+    restart: "no"
+    networks:
+      - funds
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.0
+    profiles:
+      - identity
+      - all
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_dev_pass}
+      KC_HTTP_PORT: 8080
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_PORT: 5432
+      KC_DB_URL_DATABASE: ${POSTGRES_DB:-funds}
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-funds}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-funds_dev_pass}
+    volumes:
+      - ./data/keycloak:/opt/keycloak/data
+      - ../keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && echo -e 'GET /realms/fondaria HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK' || curl -f http://localhost:8080/realms/fondaria"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    networks:
+      - funds
+
+  # Task 11.1 -- the fan-out every service will export OTLP to (Task 11.2 wires
+  # the services themselves; nothing does yet). Applications must never know
+  # about Prometheus, Tempo or Loki directly -- this is the one place that
+  # fan-out is named. See otel-collector/config.yaml.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.160.0
+    profiles:
+      - observability
+      - all
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "${OTEL_COLLECTOR_OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTEL_COLLECTOR_OTLP_HTTP_PORT:-4318}:4318"
+      - "${OTEL_COLLECTOR_SELF_METRICS_PORT:-8888}:8888"
+      # health_check extension (otel-collector/config.yaml). Published for a
+      # human to `curl` from the host, since no compose healthcheck can (see
+      # below) -- not otherwise load-bearing.
+      - "${OTEL_COLLECTOR_HEALTH_CHECK_PORT:-13133}:13133"
+    volumes:
+      - ../observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    # No healthcheck: the image is fully distroless (no shell, no wget, no
+    # coreutils -- only the /otelcol-contrib binary itself, which has no
+    # subcommand that probes a running instance's own health_check extension).
+    # Same constraint as tempo and loki below. Nothing depends_on this
+    # service, so the gap costs only the up-all healthy count, not correctness
+    # -- Prometheus scrapes it (and the dashboard reads live data from it)
+    # regardless of what Docker itself believes its health is.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - funds
+
+  # Task 11.1. Scrapes the Collector's self-telemetry and app fan-out ports
+  # (prometheus.yml), and evaluates infrastructure/observability/alerts/*.rules.yml
+  # -- including eod-close.rules.yml (Task 7.6), written ahead of this stack on
+  # the understanding that Phase 11 would wire it in rather than re-derive it.
+  prometheus:
+    image: prom/prometheus:v3.13.0
+    profiles:
+      - observability
+      - all
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    volumes:
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts:/etc/prometheus/rules:ro
+      - ./data/prometheus:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9090/-/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - funds
+
+  # Task 11.1 -- traces. Single-binary local-dev mode (tempo/tempo.yaml). The
+  # Collector is its only writer; no service ever sends a span here directly.
+  tempo:
+    image: grafana/tempo:2.9.5
+    profiles:
+      - observability
+      - all
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+    volumes:
+      - ../observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - ./data/tempo:/var/tempo
+    # No healthcheck: the image is fully distroless (no shell, no wget, no
+    # coreutils -- only the /tempo binary itself), so there is no CMD form
+    # that can probe /ready. grafana depends on it with service_started.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - funds
+
+  # Task 11.1 -- logs. Single-process local-dev mode, filesystem storage
+  # (loki/loki-config.yaml). The Collector is its only writer, over Loki's
+  # native OTLP ingestion endpoint; no service ever sends a log line here
+  # directly.
+  loki:
+    image: grafana/loki:3.7.7
+    profiles:
+      - observability
+      - all
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ../observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - ./data/loki:/loki
+    # No healthcheck: same reason as tempo above -- fully distroless, no CMD
+    # form can probe /ready. grafana depends on it with service_started.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - funds
+
+  # Task 11.1. Datasources and dashboards are provisioned from files in Git
+  # (grafana/provisioning/), never created in the UI -- `make clean`/`down -v`
+  # deletes ./data/grafana (grafana.db, the sqlite store for anything created
+  # by hand) but the provisioning files are re-read from the read-only mounts
+  # below on every boot, so what matters here survives that cycle unchanged.
+  grafana:
+    image: grafana/grafana:13.2.1
+    profiles:
+      - observability
+      - all
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin_dev_pass}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/dashboards:/etc/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      # tempo/loki have no healthcheck (see their own service comments) --
+      # service_started is the strongest condition compose can express for them.
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    networks:
+      - funds

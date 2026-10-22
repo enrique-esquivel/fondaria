@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>services</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>eod-job</artifactId>
+    <packaging>jar</packaging>
+
+    <name>eod-job</name>
+    <description>The daily close — internal and custodian reconciliation, the dense daily snapshot, and the gates the rest of the chain passes through (phase-07, Tasks 7.2–7.4; ADR-0018)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: real spans/metrics to the OTel Collector. Version
+            managed by the root pom's spring-boot-dependencies BOM (Spring
+            Boot 3.5's Micrometer Tracing / OTel bridge), the same convention
+            already used for lettuce-core below.
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <exclusions>
+                <!--
+                    Spring Framework 6's spring-aop jar bundles these same
+                    org.aopalliance classes directly; the standalone jar
+                    micrometer-tracing still pulls duplicates them, which
+                    the root pom's banDuplicateClasses enforcer rule catches.
+                -->
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!--
+            Producer only. Task 7.5a publishes close.signed-off.v1 when a business
+            date's close is signed off (ADR-0021) - the trigger for the statement
+            fan-out, which is a separate service (services/statement-worker, Task
+            7.5b). eod-job consumes nothing: the close reads Postgres, the ledger
+            and object storage and produces this one event. Version managed by
+            spring-boot-dependencies, never pinned locally (the same rule the
+            Flyway and S3 dependencies above follow).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- Money, Units, FundId, OrganizationId, BusinessCalendar (Task 7.1), StorableClock. -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            LedgerPort and the id derivers. The close reads the ledger and never
+            writes it (see LedgerConfiguration), so no TransferIdDeriver is wired -
+            but AccountIdDeriver is the whole ledger side of the tie-out: every
+            account it reads is re-derived from public inputs rather than looked up.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-tigerbeetle</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The platform's shared Flyway tree. workflow.reconciliation_run,
+            workflow.reconciliation_break and the allotment_by_holding index (V25)
+            are added there by this task.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>db-migrations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            No rules-engine dependency, deliberately, and unlike every other service
+            that touches a fund. A tie-out evaluates no rule: it needs a fund's
+            identity and its unit ledger, both of which are fixed at registration and
+            read here through this service's own narrow FundDirectory. Depending on
+            the rule engine would invite the close to start resolving plan versions,
+            which is how a control acquires an opinion about what the answer should be.
+        -->
+
+        <!--
+            Version deliberately not pinned here: spring-boot-dependencies
+            manages Flyway, and a second local pin is what split the reactor
+            once already — see libs/testing/pom.xml.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            provider SDKs and carves out exactly this. Task 7.4 writes the dense
+            daily snapshot and its manifest to the object store, never to AWS; the endpoint
+            is configuration. Both default HTTP clients are excluded and
+            url-connection-client supplied instead, for the reasons
+            contribution-api's and valuation-api's poms record: apache-client
+            duplicates commons-logging classes against spring-jcl, and
+            netty-nio-client is an async transport a blocking, virtual-threaded
+            runtime has no use for. Version managed by the root pom, so this
+            module and libs/testing's object-store fixture can never resolve different
+            ones.
+        -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Shared Testcontainers fixtures: integration tests never hand-run a database. -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <!--
+                    Arrives via the object-store fixture's S3 client. Its classes are also in
+                    Spring's spring-jcl, and two jars shipping
+                    org.apache.commons.logging.Log is exactly what the root pom's
+                    banDuplicateClasses rule exists to catch. The main-scope S3
+                    dependency above excludes apache-client for the same reason.
+                -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                The runnable jar is `<artifact>-exec.jar`; the plain
+                                jar stays the module's main artifact. Without a
+                                classifier, repackage REPLACES the main artifact with
+                                the executable one, whose classes live under
+                                BOOT-INF/classes and are therefore invisible to any
+                                module that depends on this one - which libs/e2e-tests
+                                does, at test scope (ADR-0016).
+                            -->
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

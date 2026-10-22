@@ -1,0 +1,75 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: fondaria
+build:
+  artifacts:
+    - image: fondaria/contribution-api
+      jib:
+        project: services/contribution-api
+      sync:
+        auto: true
+    - image: fondaria/balance-api
+      jib:
+        project: services/balance-api
+      sync:
+        auto: true
+    - image: fondaria/valuation-api
+      jib:
+        project: services/valuation-api
+      sync:
+        auto: true
+    - image: fondaria/allotment-job
+      jib:
+        project: services/allotment-job
+      sync:
+        auto: true
+    - image: fondaria/amqp-fanout
+      jib:
+        project: services/amqp-fanout
+      sync:
+        auto: true
+    - image: fondaria/projection-worker
+      jib:
+        project: services/projection-worker
+      sync:
+        auto: true
+    - image: fondaria/eod-job
+      jib:
+        project: services/eod-job
+      sync:
+        auto: true
+    - image: fondaria/statement-worker
+      jib:
+        project: services/statement-worker
+      sync:
+        auto: true
+  local:
+    push: false
+manifests:
+  kustomize:
+    paths:
+      - infrastructure/k8s/overlays/local
+portForward:
+  # External APIs (matches local overlay NodePort mappings)
+  - resourceType: Service
+    resourceName: contribution-api
+    port: 80
+    localPort: 30080
+  - resourceType: Service
+    resourceName: balance-api
+    port: 80
+    localPort: 30081
+  - resourceType: Service
+    resourceName: valuation-api
+    port: 80
+    localPort: 30082
+  # Storage and Infrastructure services
+  - resourceType: Service
+    resourceName: tigerbeetle
+    port: 3000
+    localPort: 3000
+  - resourceType: Service
+    resourceName: valkey
+    port: 6379
+    localPort: 6379

@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fondaria-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: fondaria-prod
+    app.kubernetes.io/part-of: fondaria
+    environment: prod
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/enrique-esquivel/fondaria.git
+    targetRevision: HEAD
+    path: infrastructure/k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fondaria
+  # Production requires manual approval: no syncPolicy.automated block
+  syncPolicy:
+    syncOptions:
+      - Validate=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>libs</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>ledger-tigerbeetle</artifactId>
+    <packaging>jar</packaging>
+
+    <name>ledger-tigerbeetle</name>
+    <description>TigerBeetle implementation of LedgerPort, via the official Java client only</description>
+
+    <properties>
+        <!-- Must match infrastructure/compose/docker-compose.yml and libs/testing's ContainerImages.TIGERBEETLE. -->
+        <tigerbeetle.version>0.17.4</tigerbeetle.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.tigerbeetle</groupId>
+            <artifactId>tigerbeetle-java</artifactId>
+            <version>${tigerbeetle.version}</version>
+        </dependency>
+
+        <!-- Micrometer: every LedgerPort call is wrapped in an Observation, which materializes as
+             both a Timer and a trace span once the caller registers the corresponding handlers on
+             the ObservationRegistry it supplies (this library only depends on the neutral API). -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-observation</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>1.9.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

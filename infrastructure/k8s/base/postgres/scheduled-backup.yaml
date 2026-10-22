@@ -1,0 +1,17 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-daily-backup
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Daily snapshot backup at 02:00 UTC (retained for 30 days per Cluster retentionPolicy)
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: postgres
+  # A first backup on creation, so the object-store path is proven the moment the
+  # cluster exists and PostgresBackupAgeTooHigh has a real timestamp to age.
+  immediate: true

@@ -1,0 +1,145 @@
+spring:
+  application:
+    name: balance-api
+  threads:
+    virtual:
+      enabled: true
+  flyway:
+    # The shared migration tree in libs/db-migrations (ADR-0011's four schemas are one
+    # database, not one per service). Version numbers are a single global sequence, so no
+    # service holds a private view of the schema.
+    enabled: true
+    locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  # Must resolve to a writable path: the container runs with a read-only root
+  # filesystem and only /tmp is mounted writable.
+  tomcat:
+    basedir: ${TOMCAT_BASEDIR:/tmp/balance-api}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      # Never render component details: they would expose hostnames (AGENTS.md §7).
+      show-details: never
+      show-components: never
+      group:
+        # `demoClock` alone, `show-details` overridden back on for this group only -- see
+        # contribution-api's application.yaml for the full rationale (Task D.2).
+        demo:
+          include: demoClock
+          show-details: always
+          show-components: always
+
+  opentelemetry:
+    resource-attributes:
+      # Row 26n (as projection-worker, ADR-0032 §4): the Collector's Prometheus exporter turns
+      # service.instance.id into the `instance` label. Without it every replica's counters are one
+      # series the pods overwrite, and rate()/increase() read each swing as a counter reset.
+      "[service.instance.id]": ${HOSTNAME:local}
+
+  # Task 11.2: real spans and domain metrics to the OTel Collector (Task 11.1).
+  # This service never names Prometheus, Tempo or Loki directly -- the
+  # Collector is the only address configured (Task 11.1's own acceptance
+  # criterion).
+  tracing:
+    sampling:
+      # Every span is exported, not a probabilistic sample. Task 11.2's
+      # acceptance criteria ("every ledger call is a span", "a single trace
+      # spans HTTP -> ledger -> CDC -> projection") need the trace that
+      # actually happened, not a 10%-of-the-time one.
+      probability: 1.0
+  metrics:
+    distribution:
+      slo:
+        "[http.server.requests]": 50ms,250ms,1s
+        http.server.requests: 50ms,250ms,1s
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+      transport: http
+    metrics:
+      export:
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+fondaria:
+  demo-clock:
+    # Task D.1. DEMO_CLOCK_ENABLED must never be set in production -- unset,
+    # this service never reads reference.demo_clock at all. The local Kustomize
+    # overlay is the only place that sets it to "true".
+    enabled: ${DEMO_CLOCK_ENABLED:false}
+
+  database:
+    # No defaults. Production must fail to start when a required secret is absent
+    # (AGENTS.md §4); local-dev values live in infrastructure/compose/.env.example.
+    #
+    # Read at startup (Flyway) and to resolve a participantId the first time it is seen.
+    # NOT on the balance path in steady state — see CachingParticipantDirectory.
+    url: ${POSTGRES_URL:}
+    username: ${POSTGRES_USER:}
+    password: ${POSTGRES_PASSWORD:}
+    connect-timeout: ${POSTGRES_CONNECT_TIMEOUT:5s}
+    # Upper bound on a single statement (AGENTS.md §4 — every external call has an explicit
+    # timeout). Applies to application queries only, never to Flyway's migrations.
+    query-timeout: ${POSTGRES_QUERY_TIMEOUT:5s}
+    max-pool-size: ${POSTGRES_MAX_POOL_SIZE:10}
+
+  identity:
+    # Must be the identical value contribution-api and allotment-job use: a participant's
+    # holding account ids are derived from it, and a different namespace would report every
+    # participant as holding nothing. See IdentityProperties.
+    ledger-namespace: ${LEDGER_ID_NAMESPACE:}
+
+  ledger:
+    # No default. Absence is a startup failure naming the variable. Must resolve to the same
+    # TigerBeetle cluster contribution-api and allotment-job write to.
+    addresses: ${TIGERBEETLE_ADDRESSES:}
+    connect-timeout: ${TIGERBEETLE_CONNECT_TIMEOUT:1s}
+    client:
+      # No default: defaulting to cluster 0 would silently address whichever cluster happens
+      # to have been formatted with that id.
+      cluster-id: ${TIGERBEETLE_CLUSTER_ID:}
+      cluster-name: ${LEDGER_CLUSTER_NAME:primary}
+      call-timeout: ${TIGERBEETLE_CALL_TIMEOUT:5s}
+
+  nav-cache:
+    # How long this instance may go before it picks up a price struck by valuation-api.
+    # No Redis here: this cache is a pure reader (see NavCacheProperties).
+    refresh-interval: ${NAV_CACHE_REFRESH_INTERVAL:10s}
+    # How old a published price may be before every figure it values is served marked stale.
+    # Over 24 hours because NAV is daily (O-21). A stale price is served, never withheld.
+    stale-after: ${NAV_CACHE_STALE_AFTER:26h}
+
+  query:
+    # The key the movement-history pagination cursor is signed with (Task 6.3). No default:
+    # a signing key committed to this repository would sign nothing. Must be identical across
+    # every instance, since a cursor issued by one is presented to another.
+    cursor-secret: ${QUERY_CURSOR_SECRET:}
+
+  calendar:
+    # Only the zone, and only for one thing: which calendar month "contributions this period"
+    # covers on the organization summary (Task 6.5). This service builds no BusinessCalendar and
+    # honours no cut-off, so CALENDAR_CUTOFF_TIME and CALENDAR_HOLIDAYS are deliberately not read
+    # here. Same variable and same default as contribution-api and allotment-job.
+    zone: ${CALENDAR_ZONE:America/Mexico_City}
+
+  participant-directory:
+    # How many participantId -> (organizationId, internalRef) resolutions this instance holds.
+    # Operational tuning with a working default; the bound is what keeps a large tenant from
+    # growing the heap without limit. See ParticipantDirectoryProperties.
+    maximum-cached-participants: ${BALANCE_PARTICIPANT_CACHE_MAX:100000}
+
+  business-metrics:
+    # Task 30.10: Lagging observational business metrics exported via Micrometer to Prometheus.
+    enabled: ${BUSINESS_METRICS_ENABLED:true}
+    refresh-interval: ${BUSINESS_METRICS_REFRESH_INTERVAL:15s}
+

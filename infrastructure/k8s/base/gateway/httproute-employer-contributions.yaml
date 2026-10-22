@@ -1,0 +1,60 @@
+# Task 10.3 (phase-10-edge.md): "Tighter limits on contribution submission
+# than on reads." BackendTrafficPolicy cannot target one named rule inside an
+# existing HTTPRoute -- its own CRD validation says so explicitly ("this
+# policy does not yet support the sectionName field", envoyproxy/gateway
+# release/v1.3 api/v1alpha1/backendtrafficpolicy_types.go) -- so a tighter
+# policy needs its own route, the same way httproute-org-summary.yaml already
+# carves balance-api's summary endpoint out of this same PathPrefix. Carves
+# out exactly the three POST endpoints that move money into the ledger
+# (contracts/openapi/contribution-api.yaml): recordCashReceipt,
+# createContributionBatchUploadUrl and submitContributionBatch. Everything
+# else under /v1/organizations -- every GET, plans, participants, admins --
+# still falls through to httproute-employer.yaml's PathPrefix rule and gets
+# the default (reads) limit in backendtrafficpolicy-ratelimit-default.yaml.
+#
+# CAVEAT, verified live this session (TASK-LOG.md): Gateway API's own
+# match-precedence algorithm only orders Exact and PathPrefix against each
+# other; RegularExpression ranking against a sibling HTTPRoute's PathPrefix is
+# implementation-specific (the same caveat httproute-org-summary.yaml already
+# carries for the same reason). Confirmed against a live Envoy Gateway 1.3.0:
+# POST .../cash-receipts is billed against this route's tighter counter, not
+# employer-api's, and GET .../contribution-batches (a read, same PathPrefix
+# root) is billed against the default counter -- Envoy Gateway does prefer
+# the more specific RegularExpression+method match.
+#
+# Task 10.2: securitypolicy-jwt.yaml targets this route by name too --
+# contribution submission needs the same edge signature/issuer/audience check
+# as every other application route, not a weaker one just because it's new.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: employer-api-contributions
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  parentRefs:
+    - name: fondaria-gateway
+      sectionName: api-https
+  hostnames:
+    - "api.fondaria.example"
+  rules:
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "^/v1/organizations/[^/]+/cash-receipts$"
+          method: POST
+        - path:
+            type: RegularExpression
+            value: "^/v1/organizations/[^/]+/contribution-batches(/upload-url)?$"
+          method: POST
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove:
+              - X-Caller-Identity
+              - X-Edge-RateLimit-Subject
+              - X-Edge-RateLimit-Org
+      backendRefs:
+        - name: contribution-api
+          port: 80

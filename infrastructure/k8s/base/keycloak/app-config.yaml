@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-config
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: fondaria
+data:
+  KC_DB: "postgres"
+  KC_DB_URL_HOST: "postgres-rw"
+  KC_DB_URL_PORT: "5432"
+  KC_DB_URL_DATABASE: "funds"
+  # Postgres is meshed (Task 29.11, storage-authorization.yaml): Linkerd's
+  # mTLS already encrypts this connection, so Postgres's own redundant SSL
+  # negotiation layer must be turned off the same way every other service's
+  # POSTGRES_URL is (`?sslmode=disable`) -- otherwise Keycloak hits the same
+  # `Connection reset` inside the driver's SSL preamble that crash-looped the
+  # whole app tier when this was tried without it (TASK-LOG.md step 86).
+  KC_DB_URL_PROPERTIES: "?sslmode=disable"
+  KC_DB_SCHEMA: "keycloak"
+  KC_HTTP_ENABLED: "true"
+  # Task 10.1: fondaria-gateway (infrastructure/k8s/base/gateway/) now
+  # terminates TLS in front of this Service and forwards plain HTTP on the
+  # cluster network, so Keycloak is strict about its one public hostname and
+  # trusts the gateway's X-Forwarded-* headers rather than guessing its own
+  # scheme/host from the request line. KC_HOSTNAME is the auth-https
+  # listener's hostname (gateway.yaml); the local overlay patches it to
+  # auth.fondaria.local to match that listener's own hostname override.
+  # Signature verification of the tokens this realm issues is still Task
+  # 10.2's job (ADR-0026) -- unrelated to how Keycloak sees its own traffic.
+  KC_HOSTNAME_STRICT: "true"
+  KC_HOSTNAME: "https://auth.fondaria.example"
+  KC_PROXY_HEADERS: "xforwarded"
+  KC_HEALTH_ENABLED: "true"
+  # Single replica (`pdb.yaml` and the local overlay both assume one) --
+  # skip Infinispan's JGroups cluster discovery rather than let it spend the
+  # first 20-30s of every boot searching for peers that do not exist.
+  KC_CACHE: "local"

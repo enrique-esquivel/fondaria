@@ -1,0 +1,131 @@
+# Task 10.2 (phase-10-edge.md): signature/issuer/audience validation at the
+# edge, so an unsigned or forged bearer token never reaches contribution-api
+# or balance-api -- closing the gap ADR-0026 recorded and deliberately left
+# open ("contribution-api and balance-api still accept an unsigned, hand-built
+# claims token exactly as before... only Phase 10's JWKS-verifying edge
+# gateway closes it").
+#
+# Targets the three application HTTPRoutes individually, not the Gateway --
+# SecurityPolicy's targetRef is one of Gateway/HTTPRoute/GRPCRoute, and
+# attaching to the Gateway would apply JWT validation to httproute-keycloak.yaml
+# too, breaking Keycloak's own unauthenticated /realms/fondaria/protocol/
+# openid-connect/{auth,token,certs} endpoints (chicken-and-egg: a client
+# cannot obtain a token from an endpoint that itself demands one). Fields
+# verified against envoyproxy/gateway release/v1.3.0 source
+# (api/v1alpha1/{securitypolicy,jwt}_types.go) rather than assumed, per the
+# same practice ADR-0028 used for ClientTrafficPolicy/BackendTrafficPolicy.
+#
+# Population/role/organization checks are explicitly NOT here (phase-10-edge.md:
+# "scope and organization checks stay in the application -- those are business
+# rules"). This policy only proves the token is authentic, current and meant
+# for this API; CallerIdentityParser (libs/platform-common) still reads the
+# same claims out of the same Authorization header downstream, now guaranteed
+# signature-verified before it ever arrives.
+#
+# Task 10.3: claimToHeaders (below, per provider) copies "sub" and "org_id"
+# into two gateway-internal request headers so the rate-limit filter's
+# per-subject and per-organization Distinct selectors
+# (backendtrafficpolicy-ratelimit-*.yaml) have something to bucket on --
+# RateLimitSelectCondition only matches headers, never a JWT claim directly.
+# recomputeRoute is deliberately omitted: its own field comment
+# (jwt_types.go) says it is only needed "if the headers generated from the
+# claim are used for route matching decisions" -- these two headers drive
+# rate-limit bucketing, not routing, so nothing needs the route cache
+# invalidated. Every route below now also strips both headers on the way to
+# its backend, the same defense-in-depth already applied to
+# X-Caller-Identity: a client pre-setting either header before this filter
+# runs can at most misbucket their own traffic (self-inflicted, since JWT
+# signature validation -- the actual identity guarantee -- is unaffected),
+# and the strip means the application never sees them regardless.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: fondaria-edge-jwt
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: participant-api
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: employer-api
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: employer-api-org-summary
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: employer-api-contributions
+  jwt:
+    providers:
+      # One provider for the whole "fondaria" realm: every client (participant-app,
+      # employer-portal, internal-services) shares one issuer. Keycloak's issuer
+      # is KC_HOSTNAME + "/realms/<realm>" (infrastructure/k8s/base/keycloak/
+      # app-config.yaml); the local overlay patches this alongside that
+      # ConfigMap's own KC_HOSTNAME patch, both tracking the auth-https
+      # listener's hostname.
+      - name: fondaria-realm
+        issuer: "https://auth.fondaria.example/realms/fondaria"
+        # A custom claim, not a client's own client_id: Keycloak does not
+        # reliably place the calling client's own client_id in `aud` without
+        # an explicit protocol mapper (it is `azp`, not `aud`, that carries
+        # that; the built-in default scopes' own audience behaviour depends
+        # on realm role-mapping state, not a fixed value an edge policy can
+        # pin to). Each of the three clients (infrastructure/keycloak/realm.json)
+        # now carries an explicit "oidc-audience-mapper" protocol mapper
+        # hardcoding this value into every access token's `aud`, independent
+        # of role/scope state -- see that file's own comment.
+        audiences:
+          - "fondaria-api"
+        # Task 10.3: "sub" is a standard OIDC claim, present on every token
+        # Keycloak issues -- per-subject rate limiting works today. "org_id"
+        # is the first claim key CallerIdentityParser already checks
+        # (libs/platform-common, org_id > organization_id > organizationId >
+        # attributes.organization_id) but realm.json defines no protocol
+        # mapper that populates it for any client yet (grepped: no
+        # "org_id"/"organization_id" mapper exists) -- a Task 9.x gap, out of
+        # this task's file list. Wired to the same, already-established claim
+        # key rather than inventing a new one, so the very next identity task
+        # that adds the mapper needs to touch nothing here. Until then every
+        # employer-admin request has an empty org_id and all of them share
+        # one Distinct bucket -- real per-subject isolation, not yet real
+        # per-organization isolation. See BACKLOG.md "Where we are".
+        claimToHeaders:
+          - header: X-Edge-RateLimit-Subject
+            claim: "sub"
+          - header: X-Edge-RateLimit-Org
+            claim: "org_id"
+        remoteJWKS:
+          # In-cluster call, not through fondaria-gateway's own public listener
+          # (that would be circular: the gateway fetching its own JWKS through
+          # itself). Plain HTTP: Keycloak's Service is HTTP-only inside the
+          # cluster network (app-config.yaml -- TLS is terminated at the edge,
+          # same as every HTTPRoute's backendRefs in this directory). Envoy
+          # Gateway does not require an https:// scheme here -- confirmed
+          # against envoyproxy/gateway's own SecurityPolicy test fixture
+          # (internal/gatewayapi/testdata/securitypolicy-with-jwt.in.yaml),
+          # which uses a plain http:// remoteJWKS.uri for exactly this reason.
+          uri: "http://keycloak.fondaria.svc.cluster.local:8080/realms/fondaria/protocol/openid-connect/certs"
+          backendRefs:
+            - name: keycloak
+              port: 8080
+          # No cacheDuration field exists on this CRD version (RemoteJWKS in
+          # api/v1alpha1/jwt_types.go, v1.3.0) -- key rotation is picked up on
+          # Envoy jwt_authn's own built-in default, 300s (5 minutes;
+          # envoy/extensions/filters/http/jwt_authn/v3/config.proto,
+          # RemoteJwks.cache_duration doc comment), not configurable through
+          # this policy. This is the "documented refresh interval" the task's
+          # own acceptance criterion asks for: 300s, undocumented-by-us only
+          # in the sense that Envoy Gateway gives us no field to change it.
+          #
+          # Fail-closed on a JWKS outage falls out of the same default: until
+          # the first fetch succeeds, or once a previously-cached key set also
+          # expires with no successful refetch, jwt_authn has no key to verify
+          # against and every request requiring this provider is rejected
+          # (401) -- there is no "trust unverified" fallback mode to
+          # accidentally enable. The alert on the outage itself is
+          # `EdgeJwksFetchFailing` (infrastructure/observability/alerts/
+          # edge-security.rules.yml), reading the filter's own
+          # `jwks_fetch_failed` counter.

@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>services</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>projection-worker</artifactId>
+    <packaging>jar</packaging>
+
+    <name>projection-worker</name>
+    <description>The CDC projection consumer (Phase 5) — reads the ledger.transfers.v1 / ledger.entries.v1 topics from Redpanda and maintains the append-only projection schema. Kill it at any instant, any number of times; it converges to exactly the right state.</description>
+
+    <dependencies>
+        <!--
+            starter-web + actuator for the /actuator/health readiness probe, the
+            same shape every other service uses. There is no HTTP API here — the
+            worker is a consumer.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: real spans/metrics to the OTel Collector. Version
+            managed by the root pom's spring-boot-dependencies BOM (Spring
+            Boot 3.5's Micrometer Tracing / OTel bridge).
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <exclusions>
+                <!--
+                    Spring Framework 6's spring-aop jar bundles these same
+                    org.aopalliance classes directly; the standalone jar
+                    micrometer-tracing still pulls duplicates them, which
+                    the root pom's banDuplicateClasses enforcer rule catches.
+                -->
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: reads a contribution-api-written trace correlation
+            entry (transferId -> traceparent) to link this consumer's span
+            to the HTTP request's, across the async CDC boundary. This is
+            the one new runtime dependency this deliberately minimal service
+            takes on, and it is strictly best-effort: TraceCorrelationReader
+            swallows every Redis error, so a stopped or absent Redis affects
+            only whether a span gets linked, never sink processing or the
+            checkpoint advance. The "kill it any time, it converges" property
+            is unaffected. Version managed by spring-boot-dependencies, the
+            same convention every other Redis-using service already follows.
+        -->
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+        </dependency>
+
+        <!--
+            The broker the projection reads from (RabbitMQ, ADR-0022) and, for the
+            poison path, writes one dead-letter record to.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!--
+            The projection is a Postgres write. JDBC + JdbcClient by name
+            (AGENTS.md §5): no ORM, no JPA, no R2DBC.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!--
+            Version not pinned here: spring-boot-dependencies manages Flyway, and a
+            second local pin is what split the reactor once already (libs/testing/pom.xml).
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!--
+            The platform's shared Flyway tree. The projection schema (V20, V21)
+            lives here (ADR-0011's four schemas are one database); this service is
+            the only writer of it.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>db-migrations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            LedgerEventDecoder and the sealed LedgerTransferEvent / LedgerEntryEvent
+            (Task 4.4): the projection decodes exactly what the bridge produced,
+            routing on ledger id so a cash quantity is Money and a unit quantity is
+            Units. An UnknownLedgerEventVersionException / MalformedLedgerEventException
+            is this consumer's to dead-letter and halt on. Brings platform-common
+            and jackson-databind transitively.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            StorableClock: this service's Clock bean must not outrun what a
+            timestamptz stores. Arrives transitively via ledger-client, but is
+            used directly here, so it is declared (NoRawSystemClockTest).
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Shared Testcontainers fixtures: PostgresFixture (runs Flyway on start),
+            RedpandaFixture, and (Task 11.2) RedisFixture for the trace-correlation
+            read path. Integration tests never hand-run a broker or a database
+            (AGENTS.md §4). Object-store- and ledger-related transitive jars stay
+            excluded — this service has neither, unlike Redis, which it now takes on
+            directly above. Lettuce itself stays excluded here too, even though it is
+            now a direct dependency: two resolved versions of the same jar (one via
+            this transitive edge, one direct) is exactly what the banDuplicateClasses
+            enforcer rule exists to catch.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.lettuce</groupId>
+                    <artifactId>lettuce-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>s3</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.tigerbeetle</groupId>
+                    <artifactId>tigerbeetle-java</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                The runnable jar is `<artifact>-exec.jar`; the plain
+                                jar stays the module's main artifact. Without a
+                                classifier, repackage REPLACES the main artifact with
+                                the executable one, whose classes live under
+                                BOOT-INF/classes and are therefore invisible to any
+                                module that depends on this one - which libs/e2e-tests
+                                does, at test scope (ADR-0016).
+                            -->
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

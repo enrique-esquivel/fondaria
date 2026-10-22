@@ -1,0 +1,145 @@
+# Task 10.4 (ADR-0029): the mesh's own per-pair authorization for the one
+# real service-to-service HTTP call path this platform has -- the edge
+# gateway's dataplane calling into contribution-api/balance-api/keycloak
+# (the three routes gateway/httproute-*.yaml actually attach). Every other
+# app-tier Deployment is meshed too (its own deployment.yaml annotation) but
+# gets no Server here: nothing calls them over HTTP, so the cluster's
+# --default-inbound-policy=deny (bootstrap/up.sh) already denies every
+# non-probe connection -- the same "no route, no exposure" intent
+# ADR-0028 already relies on for the internal API, now enforced a second,
+# independent way. Datastores (Postgres, TigerBeetle, RabbitMQ, Valkey,
+# the object store) are deliberately not meshed at all (ADR-0029) -- NetworkPolicy
+# (../networkpolicies/) remains their only boundary, unchanged by this file.
+#
+# One Server + one AuthorizationPolicy per call path, sharing one
+# MeshTLSAuthentication -- deleting any single AuthorizationPolicy below
+# breaks exactly that one path and no other, without touching the Server it
+# targets or the other two paths' own AuthorizationPolicy.
+#
+# Generated once here, in base, and never duplicated per overlay -- the
+# same "single source, no per-environment copy" shape this tree already
+# uses for every other cross-cutting security policy (see
+# ../networkpolicies/services-network-policies.yaml, hand-authored the same
+# way, at the same per-pair granularity, for the L3/L4 layer).
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: edge-gateway-identity
+  labels:
+    app.kubernetes.io/name: edge-gateway-identity
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  identities:
+    # Envoy Gateway generates the dataplane Deployment's ServiceAccount name
+    # from a hash of the Gateway's own namespace/name (observed live this
+    # session: envoy-fondaria-fondaria-gateway-d138af1f) -- not stable across a
+    # Gateway rename, so this matches by SUFFIX: any identity in
+    # envoy-gateway-system, not just the dataplane's own ServiceAccount
+    # (phase-closing adversarial review, TASK-LOG.md: this is broader than
+    # "effectively one ServiceAccount" -- the controller's own
+    # ServiceAccount, envoy-ratelimit's, and the namespace's default one are
+    # all authorized too, even though none of them ever originates a call
+    # to an app-tier service today). envoy-gateway-system is a namespace
+    # this tree does not own; this authorization is only as tight as that
+    # namespace's own RBAC (who can create a Pod/ServiceAccount there) --
+    # accepted as the right trade against hardcoding a name that silently
+    # stops matching on the next Gateway rename, not treated as equivalent
+    # to naming the one real caller.
+    - "*.envoy-gateway-system.serviceaccount.identity.linkerd.cluster.local"
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: contribution-api-http
+  labels:
+    app.kubernetes.io/name: contribution-api
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: contribution-api
+  port: http
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: contribution-api-allow-edge
+  labels:
+    app.kubernetes.io/name: contribution-api
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: contribution-api-http
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: edge-gateway-identity
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: balance-api-http
+  labels:
+    app.kubernetes.io/name: balance-api
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: balance-api
+  port: http
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: balance-api-allow-edge
+  labels:
+    app.kubernetes.io/name: balance-api
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: balance-api-http
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: edge-gateway-identity
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: keycloak-http
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  port: http
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: keycloak-allow-edge
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: keycloak-http
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: edge-gateway-identity

@@ -1,0 +1,24 @@
+# Backend-facing timeouts for every route through fondaria-gateway (Task 10.1:
+# "Request and header size limits, and timeouts, on every route" -- the other
+# half of clienttrafficpolicy.yaml, which covers the client-facing side).
+# `AGENTS.md` also requires an explicit timeout on every external call; this
+# is that timeout for the one call this platform does not make itself --
+# the gateway proxying to a backend Service.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: fondaria-backend-defaults
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: fondaria-gateway
+  timeout:
+    tcp:
+      connectTimeout: 5s
+    http:
+      requestTimeout: 30s
+      connectionIdleTimeout: 60s

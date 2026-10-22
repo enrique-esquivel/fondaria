@@ -1,0 +1,43 @@
+{
+  "timestamp": "1700000000000000000",
+  "type": "single_phase",
+  "ledger": 484,
+  "transfer": {
+    "id": "900000000000000001",
+    "amount": "125000",
+    "pending_id": "0",
+    "user_data_128": "0",
+    "user_data_64": "0",
+    "user_data_32": 0,
+    "timeout": 0,
+    "code": 1,
+    "flags": 0,
+    "timestamp": "1700000000000000000"
+  },
+  "debit_account": {
+    "id": "700000000000000010",
+    "debits_pending": "0",
+    "debits_posted": "125000",
+    "credits_pending": "0",
+    "credits_posted": "0",
+    "user_data_128": "0",
+    "user_data_64": "0",
+    "user_data_32": 0,
+    "code": 1,
+    "flags": 0,
+    "timestamp": "1700000000000000000"
+  },
+  "credit_account": {
+    "id": "700000000000000020",
+    "debits_pending": "0",
+    "debits_posted": "0",
+    "credits_pending": "0",
+    "credits_posted": "125000",
+    "user_data_128": "0",
+    "user_data_64": "0",
+    "user_data_32": 0,
+    "code": 2,
+    "flags": 0,
+    "timestamp": "1700000000000000000"
+  }
+}

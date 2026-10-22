@@ -1,0 +1,60 @@
+# Controls the Service Envoy Gateway generates for `gateway.yaml` (referenced
+# from there via spec.infrastructure.parametersRef). Base default is a real
+# cloud LoadBalancer, matching prod; the local overlay patches this to
+# NodePort 30443 because kind has no cloud LoadBalancer controller
+# (bootstrap/kind-config.yaml maps that port to the host, replacing the three
+# per-service NodePorts Task 10.1 removes -- see overlays/local's patch and
+# ADR-0028).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: fondaria-gateway-proxy-config
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: LoadBalancer
+      # Task 10.3's first acceptance criterion is "enforced consistently
+      # across three gateway replicas" -- the generated proxy Deployment
+      # this field controls is not part of this kustomize tree's own output
+      # (Envoy Gateway's controller creates it dynamically from this CRD), so
+      # the local overlay's blanket "one replica for every Deployment" patch
+      # cannot reach it and needs its own explicit override, same as every
+      # other local exception in this directory.
+      envoyDeployment:
+        replicas: 3
+        # Task 10.4 (ADR-0029): mesh mTLS for the edge -> app-service call
+        # path. This is the generated dataplane Deployment's own pod
+        # template, not the envoy-gateway controller or envoy-ratelimit
+        # (neither originates app-service calls) -- EnvoyProxy has no field
+        # to pin the generated ServiceAccount's name (it's a controller-
+        # derived hash, e.g. envoy-fondaria-fondaria-gateway-d138af1f, verified
+        # live this session), so the app-tier AuthorizationPolicies
+        # (linkerd-policy/) match any identity in envoy-gateway-system
+        # rather than hardcode a name that regenerates on a Gateway rename.
+        #
+        # skip-inbound-ports is not optional: bootstrap/up.sh sets
+        # --default-inbound-policy=deny cluster-wide, and this pod's own two
+        # inbound ports serve traffic Linkerd cannot and must not gate --
+        # 10443 is gateway.yaml's public HTTPS listener (both api-https and
+        # auth-https share it, both port 443 -> +10000 for the non-root
+        # container), reached by external clients with no mesh identity at
+        # all, and 19001 is the stats/metrics port (verified live, Task
+        # 10.2's EdgeJwksFetchFailing alert) our own unmeshed Prometheus
+        # scrapes -- kubelet's own readiness probe on 19001 is auto-exempted
+        # regardless, but a Prometheus scrape is not a probe. Skipping both
+        # leaves Envoy's own TLS termination, JWT validation and rate
+        # limiting completely unchanged; only this pod's OUTBOUND calls to
+        # contribution-api/balance-api/keycloak go through the mesh proxy,
+        # which is the only direction linkerd-policy/ actually needs.
+        # Found live this session, phase-closing review: without this,
+        # meshing the dataplane at all takes the entire public API offline,
+        # not just the internal one ADR-0028 already denies structurally.
+        pod:
+          annotations:
+            linkerd.io/inject: enabled
+            config.linkerd.io/skip-inbound-ports: "10443,19001"

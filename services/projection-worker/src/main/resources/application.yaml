@@ -1,0 +1,151 @@
+spring:
+  application:
+    name: projection-worker
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+  flyway:
+    # The shared migration tree in libs/db-migrations (ADR-0011's four schemas are one
+    # database). Runs during context refresh, which completes before the Kafka listener
+    # containers start — so the worker never consumes against an unmigrated schema
+    # (phase-05 Task 5.1: "Flyway runs at startup, before consuming").
+    enabled: true
+    locations: classpath:db/migration
+
+  rabbitmq:
+    host: ${PROJECTION_AMQP_HOST:}
+    port: ${PROJECTION_AMQP_PORT:5672}
+    username: ${PROJECTION_AMQP_USERNAME:}
+    password: ${PROJECTION_AMQP_PASSWORD:}
+    virtual-host: ${PROJECTION_AMQP_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      # Informational: AmqpConsumeConfiguration builds the projection's own (simple, batching)
+      # container factory and sets both explicitly (ADR-0034 §1).
+      simple:
+        acknowledge-mode: manual
+        prefetch: ${PROJECTION_PREFETCH:200}
+    observation-enabled: true
+
+server:
+  # Must resolve to a writable path: the container runs with a read-only root filesystem
+  # and only /tmp is mounted writable.
+  tomcat:
+    basedir: ${TOMCAT_BASEDIR:/tmp/projection-worker}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      # Never render component details: the halt reason names a topic/partition/offset and
+      # the db component would carry a hostname (AGENTS.md §7).
+      show-details: never
+      show-components: never
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          # readinessState + the database + the halt latch. A halted worker, or one that
+          # cannot reach Postgres, reports DOWN and is taken out of rotation.
+          include: readinessState,db,projectionHalt
+
+  opentelemetry:
+    resource-attributes:
+      # ADR-0032 §4: the Collector's Prometheus exporter turns service.instance.id into the
+      # `instance` label. Without it every replica's ledger_cdc_lag_seconds is the same series and
+      # they overwrite each other, so max() across pods would see only the last writer.
+      "[service.instance.id]": ${PROJECTION_INSTANCE_ID:${HOSTNAME:local}}
+
+  # Task 11.2: real spans and domain metrics to the OTel Collector (Task 11.1).
+  # This service never names Prometheus, Tempo or Loki directly -- the
+  # Collector is the only address configured (Task 11.1's own acceptance
+  # criterion).
+  tracing:
+    sampling:
+      # Every span is exported, not a probabilistic sample. Task 11.2's
+      # acceptance criteria ("every ledger call is a span", "a single trace
+      # spans HTTP -> ledger -> CDC -> projection") need the trace that
+      # actually happened, not a 10%-of-the-time one.
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+      transport: http
+    metrics:
+      export:
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+fondaria:
+  database:
+    # No defaults. Production must fail to start when a required secret is absent
+    # (AGENTS.md §4); local-dev values live in infrastructure/compose/.env.example.
+    # The login role must be a member of fondaria_cdc — the role with INSERT on the
+    # projection tables and UPDATE/DELETE on projection_consumer_checkpoint (V35).
+    url: ${POSTGRES_URL:}
+    username: ${POSTGRES_USER:}
+    password: ${POSTGRES_PASSWORD:}
+    connect-timeout: ${POSTGRES_CONNECT_TIMEOUT:5s}
+    # 24, not the other services' 10: one pod may own all 16 entries queues (ADR-0034 amendment,
+    # row 26w), and 16 + 4 transfer consumers + 2 for the halt poller and health checks must fit.
+    max-pool-size: ${POSTGRES_MAX_POOL_SIZE:24}
+
+  calendar:
+    # Task 7.1's BusinessCalendar, used by the transfer projection (Task 5.4) to derive
+    # booking_date (= value_date for v1) from a change event's ledger timestamp. These MUST be
+    # the identical values the other three services read — a movement booked on business date D
+    # here must be the D the Phase 7 close and reconciliation jobs look for. The holiday list is
+    # a STOPGAP: Task 7.1 specifies Mexican holidays as effective-dated reference data and that
+    # table does not exist yet; an empty list means weekends are the only non-business dates.
+    zone: ${CALENDAR_ZONE:America/Mexico_City}
+    cutoff-time: ${CALENDAR_CUTOFF_TIME:18:00}
+    holidays: ${CALENDAR_HOLIDAYS:}
+
+  projection:
+    amqp-host: ${PROJECTION_AMQP_HOST:}
+    transfers-exchange: ${PROJECTION_TRANSFERS_EXCHANGE:ledger.transfers.v1}
+    entries-exchange: ${PROJECTION_ENTRIES_EXCHANGE:ledger.entries.v1}
+    dead-letter-queue: ${PROJECTION_DEAD_LETTER_QUEUE:ledger.entries.dlq}
+    transfers-queue: ${PROJECTION_TRANSFERS_QUEUE:projection.transfers.v1}
+    entries-queue-prefix: ${PROJECTION_ENTRIES_QUEUE_PREFIX:projection.entries.v1}
+    entries-queue-count: ${PROJECTION_ENTRIES_QUEUE_COUNT:16}
+    prefetch: ${PROJECTION_PREFETCH:200}
+    # ADR-0034 (amended by row 26w): competing batch consumers per pod on the transfers queue.
+    # Each entries queue has its own container with one exclusive consumer, active on exactly one
+    # pod. Batches hold up to batch-size deliveries (or what arrived within batch-timeout), one
+    # transaction and one ack per batch. Each active consumer holds a pool connection for its
+    # batch: startup fails unless entries-queue-count + transfer-consumers <= POSTGRES_MAX_POOL_SIZE - 2.
+    transfer-consumers: ${PROJECTION_TRANSFER_CONSUMERS:4}
+    batch-size: ${PROJECTION_BATCH_SIZE:200}
+    batch-timeout: ${PROJECTION_BATCH_TIMEOUT:100ms}
+    retry-initial-backoff: ${PROJECTION_RETRY_INITIAL_BACKOFF:1s}
+    retry-max-backoff: ${PROJECTION_RETRY_MAX_BACKOFF:30s}
+    dead-letter-timeout: ${PROJECTION_DEAD_LETTER_TIMEOUT:10s}
+    # ADR-0032 §1: one checkpoint row per AMQP consumer, keyed <instance-id>/<consumer tag>.
+    # Kubernetes sets PROJECTION_INSTANCE_ID to the pod name (downward API); blank falls back
+    # to a random id, since the consumer tag alone already keeps rows apart.
+    checkpoint:
+      instance-id: ${PROJECTION_INSTANCE_ID:}
+      active-window: ${PROJECTION_CHECKPOINT_ACTIVE_WINDOW:5m}
+      retention: ${PROJECTION_CHECKPOINT_RETENTION:1h}
+    # ADR-0032 §2: the cluster-wide halt flag (workflow.projection_halt). Every replica reads it
+    # this often, so this bounds how long another replica keeps consuming after a halt is raised.
+    halt:
+      poll-interval: ${PROJECTION_HALT_POLL_INTERVAL:1s}
+
+  trace-redis:
+    # Task 11.2. Optional -- absent disables CDC-boundary trace links entirely, never startup.
+    # Must resolve to the same Redis instance as contribution-api's REDIS_URL (see
+    # TraceRedisProperties).
+    url: ${TRACE_CORRELATION_REDIS_URL:}
+    password: ${TRACE_CORRELATION_REDIS_PASSWORD:}
+    command-timeout: ${TRACE_CORRELATION_REDIS_COMMAND_TIMEOUT:200ms}

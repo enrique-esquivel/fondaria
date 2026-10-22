@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: projection-worker
+  labels:
+    app.kubernetes.io/name: projection-worker
+    app.kubernetes.io/component: projection
+    app.kubernetes.io/part-of: fondaria
+spec:
+  maxUnavailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: projection-worker

@@ -1,0 +1,36 @@
+# Task 10.4: every meshed pod's own linkerd-proxy sidecar pulls its identity
+# certificate, endpoint/policy data from the control plane in the `linkerd`
+# namespace -- a namespace this tree does not own (installed by
+# bootstrap/up.sh, same ownership boundary as envoy-gateway-system and
+# cnpg-system). Without this, the default-deny-all NetworkPolicy blocks the
+# proxy's own control-plane connections before Calico ever reaches Linkerd's
+# separate mTLS policy layer -- found live this session: every injected pod
+# hung in Init, its linkerd-proxy logging "connect timed out" to
+# linkerd-identity-headless/linkerd-dst-headless/linkerd-policy.
+# podSelector: {} (same shape as allow-dns-and-telemetry.yaml) rather than
+# duplicated per meshed workload -- harmless on unmeshed pods, which never
+# open this traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-linkerd-control-plane
+  labels:
+    app.kubernetes.io/name: allow-linkerd-control-plane
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+      ports:
+        - protocol: TCP
+          port: 8080 # linkerd-identity
+        - protocol: TCP
+          port: 8086 # linkerd-dst
+        - protocol: TCP
+          port: 8090 # linkerd-policy

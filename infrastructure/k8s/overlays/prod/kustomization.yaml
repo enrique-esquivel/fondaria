@@ -1,0 +1,319 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - certificates.yaml
+  - storageclass.yaml
+
+patches:
+  # Production floor for the API autoscalers (base: 2; local: 1)
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+
+  # Production replica counts per DESIGN.md §13 (services differing from base)
+  - target:
+      kind: Deployment
+      name: contribution-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: contribution-api
+      spec:
+        replicas: 3
+
+  - target:
+      kind: Deployment
+      name: balance-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: balance-api
+      spec:
+        replicas: 3
+
+  - target:
+      kind: Deployment
+      name: statement-worker
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: statement-worker
+      spec:
+        replicas: 4
+
+  # Strict multi-zone spread in production
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/topologySpreadConstraints/0/whenUnsatisfiable
+        value: DoNotSchedule
+
+  - target:
+      kind: StatefulSet
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/topologySpreadConstraints/0/whenUnsatisfiable
+        value: DoNotSchedule
+
+  - target:
+      kind: Cluster
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/topologySpreadConstraints/0/whenUnsatisfiable
+        value: DoNotSchedule
+
+  - target:
+      kind: RabbitmqCluster
+      name: rabbitmq
+    patch: |-
+      - op: replace
+        path: /spec/override/statefulSet/spec/template/spec/topologySpreadConstraints/0/whenUnsatisfiable
+        value: DoNotSchedule
+
+  # Tolerations and node affinity for production stateless node pools (DESIGN.md §13)
+  - target:
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ignored
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "fondaria.example/node-pool"
+                operator: "Equal"
+                value: "stateless"
+                effect: "NoSchedule"
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: "fondaria.example/node-pool"
+                          operator: "In"
+                          values: ["stateless"]
+
+  # Tolerations and node affinity for production stateful NVMe node pool (DESIGN.md §13)
+  - target:
+      kind: StatefulSet
+      name: tigerbeetle
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: tigerbeetle
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "fondaria.example/node-pool"
+                operator: "Equal"
+                value: "stateful"
+                effect: "NoSchedule"
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: "fondaria.example/node-pool"
+                          operator: "In"
+                          values: ["stateful"]
+              podAntiAffinity:
+                $patch: replace
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  - labelSelector:
+                      matchLabels:
+                        app.kubernetes.io/name: tigerbeetle
+                    topologyKey: kubernetes.io/hostname
+
+  - target:
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: valkey
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "fondaria.example/node-pool"
+                operator: "Equal"
+                value: "stateful"
+                effect: "NoSchedule"
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: "fondaria.example/node-pool"
+                          operator: "In"
+                          values: ["stateful"]
+
+  - target:
+      kind: Cluster
+      name: postgres
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: postgres
+      spec:
+        affinity:
+          tolerations:
+            - key: "fondaria.example/node-pool"
+              operator: "Equal"
+              value: "stateful"
+              effect: "NoSchedule"
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: "fondaria.example/node-pool"
+                      operator: "In"
+                      values: ["stateful"]
+
+  - target:
+      kind: RabbitmqCluster
+      name: rabbitmq
+    patch: |-
+      apiVersion: rabbitmq.com/v1beta1
+      kind: RabbitmqCluster
+      metadata:
+        name: rabbitmq
+      spec:
+        tolerations:
+          - key: "fondaria.example/node-pool"
+            operator: "Equal"
+            value: "stateful"
+            effect: "NoSchedule"
+        affinity:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: "fondaria.example/node-pool"
+                      operator: "In"
+                      values: ["stateful"]
+
+  # Production observability replicas (DESIGN.md §13)
+  - target:
+      kind: Deployment
+      name: otel-collector
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: otel-collector
+      spec:
+        replicas: 2
+
+  - target:
+      kind: Deployment
+      name: grafana
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: grafana
+      spec:
+        replicas: 2
+
+  # Stateful node pool affinity for Prometheus TSDB
+  - target:
+      kind: StatefulSet
+      name: prometheus
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: prometheus
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "fondaria.example/node-pool"
+                operator: "Equal"
+                value: "stateful"
+                effect: "NoSchedule"
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: "fondaria.example/node-pool"
+                          operator: "In"
+                          values: ["stateful"]
+
+  # Stateful node pool affinity for Tempo trace storage
+  - target:
+      kind: StatefulSet
+      name: tempo
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: tempo
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "fondaria.example/node-pool"
+                operator: "Equal"
+                value: "stateful"
+                effect: "NoSchedule"
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: "fondaria.example/node-pool"
+                          operator: "In"
+                          values: ["stateful"]
+
+  # Stateful node pool affinity for Loki log chunk storage
+  - target:
+      kind: StatefulSet
+      name: loki
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: loki
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "fondaria.example/node-pool"
+                operator: "Equal"
+                value: "stateful"
+                effect: "NoSchedule"
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: "fondaria.example/node-pool"
+                          operator: "In"
+                          values: ["stateful"]

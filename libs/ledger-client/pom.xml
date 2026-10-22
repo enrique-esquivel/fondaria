@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>libs</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>ledger-client</artifactId>
+    <packaging>jar</packaging>
+
+    <name>ledger-client</name>
+    <description>LedgerPort contract, domain types and chart-of-accounts codes — vendor-neutral, no adapter lives here</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The consumer-side decoder for the ledger event stream (Task 4.4,
+            dev.fondaria.ledger.event) parses the JSON messages the CDC bridge
+            produces to Redpanda. jackson-databind is version-managed by the
+            Spring Boot BOM and is already on every service classpath via the
+            starters; ledger-client is the first module to declare it directly,
+            because this is where the sealed Cash/Unit domain types and
+            LedgerCodes.CASH_LEDGER_ID live. No Jackson type appears in the
+            decoder's public signature.
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>ban-tigerbeetle-client</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.tigerbeetle:*</exclude>
+                                    </excludes>
+                                    <message>
+                                        libs/ledger-client is the vendor-neutral LedgerPort contract; the
+                                        TigerBeetle client belongs only in libs/ledger-tigerbeetle (Task 2.4).
+                                    </message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

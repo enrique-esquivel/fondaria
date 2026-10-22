@@ -1,0 +1,26 @@
+# Keycloak: the realm's login/token/JWKS endpoints, on their own hostname so
+# a browser redirect and the OIDC issuer both have one stable public origin
+# distinct from the JSON APIs. Signature verification against this JWKS
+# endpoint is Task 10.2's job, not this route's -- see ADR-0026 and
+# ADR-0028.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: keycloak
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  parentRefs:
+    - name: fondaria-gateway
+      sectionName: auth-https
+  hostnames:
+    - "auth.fondaria.example"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: keycloak
+          port: 8080

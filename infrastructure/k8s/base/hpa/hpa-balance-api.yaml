@@ -1,0 +1,26 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: balance-api
+  labels:
+    app.kubernetes.io/name: balance-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: fondaria
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: balance-api
+  # CPU is the one signal metrics-server provides out of the box; a request-rate
+  # metric needs prometheus-adapter, which the platform does not run.
+  minReplicas: 2
+  # ADR-0033: sized against TigerBeetle's 32-client limit, together with every other
+  # ledger client's maximum and rollout surge (LedgerClientBudgetValidationTest).
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

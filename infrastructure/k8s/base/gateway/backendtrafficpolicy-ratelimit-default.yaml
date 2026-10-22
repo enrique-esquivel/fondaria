@@ -1,0 +1,69 @@
+# Task 10.3 (phase-10-edge.md): per-subject and per-organization limits on
+# every read (and non-contribution write) route. Global, not Local -- Local
+# rate limiting is a per-Envoy-instance token bucket with no shared state
+# (envoyproxy/gateway api/v1alpha1/ratelimit_types.go, LocalRateLimit has no
+# backend at all), so it would let each of the three gateway replicas hand
+# out its own full quota; the task's own first acceptance criterion
+# ("enforced consistently across three gateway replicas") is exactly what
+# Global buys, backed by the cluster's existing Valkey (the install-time
+# Redis backend config lives in infrastructure/k8s/bootstrap/up.sh, not
+# here -- Envoy Gateway's global rate limit service is configured once for
+# the whole controller, not per BackendTrafficPolicy).
+#
+# Numbers are a starting point for the demo, not a modeled capacity plan --
+# there is no traffic data yet to model against. Per-organization is wide
+# (an org's admins, participant self-service traffic and any integration
+# calls all share it) because a 10,000-employee employer's aggregate read
+# traffic should not be bounded by what one operator would generate alone.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: fondaria-ratelimit-default
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: participant-api
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: employer-api
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: employer-api-org-summary
+  # Row 29.8: see backendtrafficpolicy-ratelimit-contributions.yaml's comment
+  # -- a route-level BackendTrafficPolicy overrides, rather than merges with,
+  # fondaria-backend-defaults' Gateway-level timeout for the same route.
+  # Confirmed live: `kubectl get backendtrafficpolicy fondaria-backend-defaults
+  # -o yaml` reported Overridden=True for exactly these three routes.
+  timeout:
+    tcp:
+      connectTimeout: 5s
+    http:
+      requestTimeout: 30s
+      connectionIdleTimeout: 60s
+  rateLimit:
+    type: Global
+    global:
+      rules:
+        # Distinct: one counter per unique header value seen, not one shared
+        # counter (HeaderMatchType, ratelimit_types.go) -- this is what makes
+        # the limit "per-subject"/"per-organization" rather than a single
+        # route-wide ceiling. securitypolicy-jwt.yaml's claimToHeaders is what
+        # puts a value into each header before this filter runs.
+        - clientSelectors:
+            - headers:
+                - type: Distinct
+                  name: X-Edge-RateLimit-Subject
+          limit:
+            requests: 300
+            unit: Minute
+        - clientSelectors:
+            - headers:
+                - type: Distinct
+                  name: X-Edge-RateLimit-Org
+          limit:
+            requests: 3000
+            unit: Minute

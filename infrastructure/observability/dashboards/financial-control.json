@@ -1,0 +1,333 @@
+{
+  "title": "Financial Control (Task 11.3)",
+  "uid": "financial-control",
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "CDC Lag (seconds)",
+      "description": "ledger_cdc_lag_seconds -- max lag between wall clock and last consumed ledger event. Warn > 30s, Page > 300s.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(ledger_cdc_lag_seconds)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 300 }
+            ]
+          },
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Projection Drift (Total & Worst Account)",
+      "description": "projection_drift_minor and eod_reconciliation_blocked. Any non-zero drift or blocked reconciliation indicates book imbalance.",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(abs(projection_drift_minor))",
+          "legendFormat": "Total Drift (minor units)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(abs(projection_drift_minor))",
+          "legendFormat": "Worst Account Drift",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "eod_reconciliation_blocked",
+          "legendFormat": "Reconciliation Blocked",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "EOD Hash-Chain Validity",
+      "description": "eod_hash_chain_valid -- tamper-evident row_hash verification. 1 = valid, 0 = broken chain / page.",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "eod_hash_chain_valid",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "BROKEN", "color": "red" },
+                "1": { "text": "VALID", "color": "green" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "DLQ Depth & Poison Messages",
+      "description": "dlq_depth and increase(projection_poison_total[5m]). Never skip: unparseable messages land in DLQ and halt.",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "dlq_depth",
+          "legendFormat": "DLQ Depth",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(projection_poison_total[5m]))",
+          "legendFormat": "Poison Messages (5m)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "CDC Lag Over Time",
+      "description": "ledger_cdc_lag_seconds: one line per projection-worker pod, plus the worst pod (max), which is what the alerts read (ADR-0032 §4). A pod's lag is measured from its slowest active consumer.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "ledger_cdc_lag_seconds",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(ledger_cdc_lag_seconds)",
+          "legendFormat": "Worst pod (alerts)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Ledger Head vs Projection Head",
+      "description": "ledger_head_timestamp vs last_timestamp. Discrepancy shows unprocessed events buffered in the transport layer.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "ledger_head_timestamp / 1e9",
+          "legendFormat": "Ledger Head",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "last_timestamp / 1e9",
+          "legendFormat": "Projection Head ({{instance}})",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(max(ledger_head_timestamp) - min(last_timestamp)) / 1e9",
+          "legendFormat": "Head Gap (s)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Head Gap (s)" },
+            "properties": [
+              { "id": "unit", "value": "s" },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Transfer Rejection Rate by Reason",
+      "description": "sum by (reason) (rate(transfer_rejected_total[5m])). Shows validation, balance ceiling, or business policy transfer rejections.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (reason) (rate(transfer_rejected_total[5m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Idempotency Conflicts & Replays",
+      "description": "rate(idempotency_conflict_total[5m]) and rate(idempotency_replay_total[5m]). Distinguishes legitimate retries from payload mismatches.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(idempotency_conflict_total[5m]))",
+          "legendFormat": "Conflicts",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(idempotency_replay_total[5m]))",
+          "legendFormat": "Replays",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Reconciliation Run Status & Duration",
+      "description": "Duration and block status of daily internal and custodian reconciliation passes (services/eod-job).",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(eod_reconciliation_duration_milliseconds_sum[1h]) / rate(eod_reconciliation_duration_milliseconds_count[1h])",
+          "legendFormat": "Internal Recon Mean Duration (ms)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(eod_custodian_reconciliation_duration_milliseconds_sum[1h]) / rate(eod_custodian_reconciliation_duration_milliseconds_count[1h])",
+          "legendFormat": "Custodian Recon Mean Duration (ms)",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "eod_reconciliation_blocked",
+          "legendFormat": "Internal Recon Blocked",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "eod_custodian_reconciliation_blocked",
+          "legendFormat": "Custodian Recon Blocked",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*Blocked.*" },
+            "properties": [
+              { "id": "unit", "value": "short" },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Projection Drift History",
+      "description": "History of projection_drift_minor and internal reconciliation breaks raised over time.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "projection_drift_minor",
+          "legendFormat": "Total Drift (minor units)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "increase(eod_reconciliation_breaks_total[1h])",
+          "legendFormat": "Reconciliation Breaks (1h)",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}

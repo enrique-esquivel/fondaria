@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>services</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>amqp-fanout</artifactId>
+    <packaging>jar</packaging>
+
+    <name>amqp-fanout</name>
+    <description>The CDC fan-out (Task 30b, ADR-0022) — consumes bridge.ledger from RabbitMQ, explodes each TigerBeetle change event into one transfer message and two entry messages, and publishes them to RabbitMQ exchanges (ledger.transfers.v1 fanout and ledger.entries.v1 consistent-hash), acking only after publisher confirms. A pure transport transform: one broker, no database.</description>
+
+    <dependencies>
+        <!--
+            starter-web + actuator only for the /actuator/health probe, the same
+            shape every other service uses. There is no HTTP API here.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: real spans/metrics to the OTel Collector. Version
+            managed by the root pom's spring-boot-dependencies BOM (Spring
+            Boot 3.5's Micrometer Tracing / OTel bridge).
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <exclusions>
+                <!--
+                    Spring Framework 6's spring-aop jar bundles these same
+                    org.aopalliance classes directly; the standalone jar
+                    micrometer-tracing still pulls duplicates them, which
+                    the root pom's banDuplicateClasses enforcer rule catches.
+                -->
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+
+        <!--
+            RabbitMQ AMQP starter (ADR-0022: single broker architecture).
+            Consumes bridge.ledger and publishes to ledger.transfers.v1
+            and ledger.entries.v1.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!--
+            StorableClock: this service's Clock bean must not outrun what a
+            timestamptz stores. Arrives transitively via ledger-client, but is
+            used directly here, so it is declared (NoRawSystemClockTest).
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            NO spring-boot-starter-jdbc, NO flyway, NO postgresql, NO
+            dev.fondaria:db-migrations. The bridge must not touch a database
+            (phase-04-cdc.md Task 4.3), and NoDatabaseDependencyTest asserts
+            nothing on the classpath can.
+        -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Shared Testcontainers fixtures: integration tests never hand-run a broker, and
+            RabbitMqFixture / RedpandaFixture are reused (singleton, container-reuse hash)
+            across every module's run.
+
+            Everything database-, cache-, object-store- and ledger-related is excluded. The
+            bridge has none of those and NoDatabaseDependencyTest asserts as much by classpath
+            absence — an exclusion here is what keeps that assertion honest when the only thing
+            that would otherwise drag Flyway/JDBC in is a test fixture the bridge does not use.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.flywaydb</groupId>
+                    <artifactId>flyway-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.flywaydb</groupId>
+                    <artifactId>flyway-database-postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.lettuce</groupId>
+                    <artifactId>lettuce-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>s3</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.tigerbeetle</groupId>
+                    <artifactId>tigerbeetle-java</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                The runnable jar is `<artifact>-exec.jar`; the plain
+                                jar stays the module's main artifact. Without a
+                                classifier, repackage REPLACES the main artifact with
+                                the executable one, whose classes live under
+                                BOOT-INF/classes and are therefore invisible to any
+                                module that depends on this one - which libs/e2e-tests
+                                does, at test scope (ADR-0016).
+                            -->
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: amqp-fanout
+  labels:
+    app.kubernetes.io/name: amqp-fanout
+    app.kubernetes.io/component: transport
+    app.kubernetes.io/part-of: fondaria
+spec:
+  type: ClusterIP
+  ports:
+    - name: http-mgmt
+      port: 8080
+      targetPort: http-mgmt
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: amqp-fanout

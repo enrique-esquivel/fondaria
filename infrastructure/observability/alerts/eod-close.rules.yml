@@ -1,0 +1,106 @@
+# Task 7.6 -- alert rules for the daily close (services/eod-job).
+#
+# Phase 11 (Task 11.1) has not built the Prometheus/Grafana stack yet -- this file is not
+# wired into a running Prometheus, and there is no scrape config, service discovery or
+# Alertmanager route to go with it. It exists now, ahead of that stack, because Tasks
+# 7.2-7.5a already emit the meters these rules read (see ReconciliationMetrics,
+# CustodianReconciliationMetrics, SnapshotMetrics and SignoffMetrics, each of which says
+# "the alert rule and its runbook are Task 7.6's and Phase 11's to write") and because a
+# rule can be written, syntax-checked and rehearsed against a synthetic metric series
+# (eod-close.tests.yml) entirely with promtool, independent of a live server. Phase 11
+# adopts this file rather than re-deriving it, and adds scrape config and routing around it.
+#
+# NOT YET SCRAPABLE. `services/eod-job` registers these meters on a Micrometer
+# MeterRegistry, but the service has no `micrometer-registry-prometheus` dependency and
+# `management.endpoints.web.exposure.include` is `health` only (application.yaml) -- there
+# is no `/actuator/prometheus` endpoint today. The metric names below are therefore
+# verified against the registration call sites (ReconciliationMetrics etc.), not against a
+# real scrape; adding the Prometheus registry and exposing the endpoint is Phase 11's, not
+# this task's.
+#
+# Five alerts, one per docs/RUNBOOKS.md page named in phase-07-eod.md Task 7.6. Every alert
+# is `severity: page` -- each names a condition that blocks the daily close or leaves
+# participants' money unproved for a business date, the same bar AGENTS.md Sec 7 and
+# Task 11.4 set for a page ("page-level alerts are limited to things that are actually
+# urgent"). No alert carries a fund, organization or participant label, for the same
+# reason the meters it reads do not (AGENTS.md Sec 7): a label is as much a log line as a
+# message is, and an alert only has to say *that* something is wrong. Which fund or
+# account is wrong is in the workflow.* row behind authentication, and every runbook's
+# first diagnostic command is the query that finds it.
+groups:
+  - name: eod-close
+    rules:
+      - alert: EODInternalReconciliationDrift
+        expr: eod_reconciliation_blocked == 1
+        # 5m: the gauge also starts at 1 on process boot, before the first pass of a
+        # process has run (ReconciliationMetrics). A `for` this short absorbs a restart
+        # without absorbing a real break, whose pass completes and re-raises the gauge
+        # every poll interval (fondaria.reconciliation.poll-interval) until it is fixed.
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Internal reconciliation is blocked -- the ledger and the projection disagree, or the pass itself did not finish."
+          description: "eod_reconciliation_blocked has been 1 for at least 5 minutes. The daily close cannot proceed past Task 7.2 while this holds: the snapshot (7.4) and statements (7.5b) both refuse to run for a business date reconciliation has not passed. At risk: participants' recorded units may not match what the ledger actually holds."
+          runbook_url: "docs/RUNBOOKS.md#internal-reconciliation-drift"
+
+      - alert: EODCustodianBreak
+        # A real (non-timing) break open or re-confirmed. CustodianReconciliationResult
+        # documents breaksTouched() as breaks this pass "opened OR RE-CONFIRMED" -- an
+        # unresolved break increments this counter on every pass that still finds it, not
+        # only the pass that first opened it. increase() over a window wider than the poll
+        # interval (fondaria.custodian-reconciliation.poll-interval, default 1h) so one slow
+        # scrape does not miss a pass, but the page means "a real break is open", not "a
+        # new break just appeared" -- the runbook's first diagnostic is what tells the two
+        # apart (an existing row vs. no matching row).
+        expr: increase(eod_custodian_breaks_total[2h]) > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "A real custodian-reconciliation break is open -- the custodian's own records disagree with this platform's."
+          description: "eod_custodian_breaks_total increased. This fires for a break's first pass and for every later pass that still finds it open, so it does not by itself mean the break is new. Not a timing difference (those are counted separately, on eod_custodian_timing_differences_total, and are not page-worthy alone) -- a break the custodian's pending-trade figure does not explain. At risk: the counterparty of record disagrees with what participants are shown they hold."
+          runbook_url: "docs/RUNBOOKS.md#custodian-break"
+
+      - alert: EODCustodianStatementLate
+        expr: increase(eod_custodian_statements_late_total[2h]) > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "A provider account had no custodian statement when today's reconciliation pass ran."
+          description: "eod_custodian_statements_late_total increased. Task 7.3's posture is fail closed: a missing statement blocks the custodian-reconciliation gate exactly as a real break does, because an unreconciled position is exactly as unproved as a wrongly reconciled one. At risk: the close cannot prove the custodian agrees, for however many provider accounts are missing a file."
+          runbook_url: "docs/RUNBOOKS.md#late-custodian-file"
+
+      - alert: EODSnapshotTieOutFailure
+        expr: increase(eod_snapshot_untied_total[2h]) > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "A fund's daily snapshot did not tie: the file's unit total does not equal units_in_issue."
+          description: "eod_snapshot_untied_total increased. This is the one check that proves the dense snapshot complete (Task 7.4) -- a fund failing it means the file is wrong about participants' money, not merely inconsistent with an earlier pass. Nothing is stored for a run that fails this check. At risk: statements (7.5b) would render from a wrong position file if this were not blocking."
+          runbook_url: "docs/RUNBOOKS.md#snapshot-tie-out-failure"
+
+      - alert: EODMissedSignoff
+        # An earlier draft gated this on `hour() >= 2` (UTC), meant to give a grace window
+        # right after cutoff before paging. It was wrong: `hour()` wraps to 0 every 24
+        # hours regardless of how long the gauge has actually been raised, so a close
+        # blocked for, say, 25 hours straight would have gone quiet from 00:00-02:00 UTC
+        # the *next* day too -- Alertmanager would resolve a still-broken page and refire
+        # it two hours later, which is the opposite of what a sustained-outage page should
+        # do. Caught by rehearsing the alert past a 24-hour boundary in eod-close.tests.yml
+        # before this was corrected. `for: 2h`, measured from whenever the gauge actually
+        # went to 1, gives the same grace period without the wraparound: right after
+        # cutoff, "not signed off yet" stays quiet for up to two hours (SignoffMetrics's
+        # javadoc: "a time-of-day window in the rule ... because 'not signed off yet' is
+        # normal until the close runs"), and once it fires it keeps firing continuously for
+        # as long as the gauge stays up, with no periodic reset.
+        expr: eod_signoff_blocked == 1
+        for: 2h
+        labels:
+          severity: page
+        annotations:
+          summary: "The daily close has not signed off for at least two hours."
+          description: "eod_signoff_blocked has been 1 continuously for at least two hours. Statement generation (7.5b) refuses to run without a sign-off. At risk: reporting for the business date is stalled behind whichever upstream gate (7.2, 7.3 or 7.4) has not passed -- or, if this fires for a date already believed signed off, the sign-off itself needs to be re-examined (see the runbook's second scenario)."
+          runbook_url: "docs/RUNBOOKS.md#missed-signoff"

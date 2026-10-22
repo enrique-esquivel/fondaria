@@ -1,0 +1,56 @@
+# Task 10.2 -- promtool unit test for edge-security.rules.yml. Mirrors eod-close.tests.yml's own
+# practice of checking the `for` duration boundary, not just "long before" and "long after" the
+# fault, plus the specific "ordinary blip does not page" case the `> 3` threshold exists for.
+rule_files:
+  - edge-security.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- Quiet: a healthy gateway with zero fetch failures ------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'envoy_http_jwt_authn_jwks_fetch_failed{envoy_http_conn_manager_prefix="https-10443"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: EdgeJwksFetchFailing
+        exp_alerts: []
+
+  # --- Quiet: the one-off startup blip this session actually observed live -----------
+  # A single failed fetch (the async pre-fetch racing xDS convergence) followed by
+  # successful fetches thereafter -- exactly what a fresh proxy pod does on a healthy
+  # cluster. This must never page.
+  - interval: 1m
+    input_series:
+      - series: 'envoy_http_jwt_authn_jwks_fetch_failed{envoy_http_conn_manager_prefix="https-10443"}'
+        values: '1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: EdgeJwksFetchFailing
+        exp_alerts: []
+
+  # --- Fires: a sustained outage, more than 3 failures inside the 5m window ----------
+  # Flat at 0 through t=5m, then a sharp jump to 10 -- a real outage where every retry
+  # (Envoy's default 1s failed-refetch interval) fails, not a slow trickle.
+  - interval: 1m
+    input_series:
+      - series: 'envoy_http_jwt_authn_jwks_fetch_failed{envoy_http_conn_manager_prefix="https-10443"}'
+        values: '0 0 0 0 0 0 10 10 10 10 10 10'
+    alert_rule_test:
+      # t=5m: still flat at 0 -- increase[5m] is 0, condition not yet true.
+      - eval_time: 5m
+        alertname: EdgeJwksFetchFailing
+        exp_alerts: []
+      # t=7m: condition has been true since t=6m (the jump); `for: 1m` has now elapsed.
+      - eval_time: 7m
+        alertname: EdgeJwksFetchFailing
+        exp_alerts:
+          - exp_labels:
+              alertname: EdgeJwksFetchFailing
+              severity: page
+              envoy_http_conn_manager_prefix: "https-10443"
+            exp_annotations:
+              summary: "The edge gateway cannot fetch Keycloak's signing keys -- every protected route is failing closed."
+              description: "envoy_http_jwt_authn_jwks_fetch_failed has increased more than 3 times in 5m. Envoy's jwt_authn filter (securitypolicy-jwt.yaml) has no valid, current key set and is rejecting every request to the participant and employer APIs with 401, correctly (Task 10.2's fail-closed posture) but indiscriminately -- this is not limited to forged tokens. Check Keycloak's own health and the in-cluster path to keycloak.fondaria.svc.cluster.local:8080."
+              runbook_url: "docs/RUNBOOKS.md#jwks-outage"

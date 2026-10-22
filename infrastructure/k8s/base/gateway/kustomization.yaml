@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Task 10.1 (phase-10-edge.md): the platform's single public entry point.
+# Envoy Gateway + Gateway API resources only (ADR-0028) -- no vendor CRDs, so
+# the mesh/gateway choice in ADR-0028 stays reversible per its own terms.
+resources:
+  - gatewayclass.yaml
+  - envoyproxy.yaml
+  - gateway.yaml
+  - clienttrafficpolicy.yaml
+  - backendtrafficpolicy.yaml
+  - httproute-participant.yaml
+  - httproute-org-summary.yaml
+  - httproute-employer.yaml
+  - httproute-employer-contributions.yaml
+  - httproute-keycloak.yaml
+  - securitypolicy-jwt.yaml
+  # Task 10.3 (phase-10-edge.md): rate limiting.
+  - backendtrafficpolicy-ratelimit-default.yaml
+  - backendtrafficpolicy-ratelimit-contributions.yaml

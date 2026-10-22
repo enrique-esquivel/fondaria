@@ -1,0 +1,1458 @@
+openapi: 3.0.3
+info:
+  title: Contribution API
+  version: "1.0.0"
+  description: |
+    Accepts employer contribution batches (dispersion files) for validation
+    and staging ahead of unit allotment.
+
+    Transport is reference-based and asynchronous — see `ADR-0009`. The
+    caller never sends file bytes to this API: it requests an object-storage
+    upload slot, uploads the file directly, then submits the batch by
+    reference. Submission returns `202 Accepted` immediately; a batch's
+    contents (declared totals, plan, payroll period, value date) live in the
+    file itself, defined in `contracts/files/contribution-file-v2.md`, and
+    are populated onto the status resource once the file is parsed.
+
+    Allotment (converting staged cash into units at a NAV) is out of scope —
+    this API stops at "ready to allot" (Phase 21).
+
+    **Money and the file are independent arrivals.** Cash is posted by a
+    separate, internal cash-receipt entry (`ADR-0010`) and simply rests in
+    `EMPLOYER_COLLECTIONS` until a file matches it. It may arrive before its
+    file, after it, or without one ever arriving, and a failed file never
+    sends money back.
+
+    **Every monetary amount in this contract is an integer of minor units
+    (MXN cents), in a JSON number.** Never a decimal, never a float, never a
+    string. v1 is MXN-only (`ADR-0004`).
+
+    This service also serves organization registration and maintenance
+    (Task 2b.1). Organizations live here in v1 because they are the tenant
+    every contribution path is scoped by and nothing else exists to own
+    them yet; the endpoints are versioned and pathed so they can move to a
+    service of their own without a client change.
+
+    **A tax identifier (`RFC`) appears in exactly one place in this
+    contract: the registration request body.** It is never a path segment,
+    a query parameter or a response field — anything in a URL reaches an
+    access log, a proxy log and a trace (`AGENTS.md` §7). Callers use the
+    derived `organizationId` everywhere else.
+servers:
+  - url: "/"
+    description: Path is environment-specific; provided by deployment configuration, never hardcoded here.
+
+tags:
+  - name: organizations
+    description: Client organization registration and maintenance.
+  - name: funds
+    description: |
+      Fund registration (Task D.0, `phase-D-demo.md`). Until now only the
+      e2e test harness, reaching into `FundRepository` directly, could bring
+      a fund into existence — there was no way to onboard one on a cluster.
+  - name: plans
+    description: |
+      Plan-version publication (Task D.0), linking an organization to the
+      fund its contributions allot into (`ADR-0012`).
+  - name: participants
+    description: |
+      Resolves a participant's opaque `participantId` from a reference the
+      caller already holds (Task D.0) — the key every Phase 6 read endpoint
+      is addressed by. Enrolment itself happens as a side effect of staging
+      a contribution file (Task 2b.3); nothing here creates a participant.
+  - name: contribution-batches
+    description: Employer contribution batch upload, submission, and status.
+  - name: cash-receipts
+    description: |
+      **Internal, ops-facing. Not part of the employer surface.**
+
+      An operator, having reconciled a wire against the bank statement, posts
+      it into the ledger (`ADR-0010`). `ADR-0010` requires this to be
+      authorized separately — posting money into the ledger is a far stronger
+      privilege than submitting a file — and that authorization is Phase 9's
+      and Phase 10's. It is documented here rather than in a contract of its
+      own because it is keyed by the same `organizationId` and returns the
+      same problem shape; a deployment must not expose it publicly.
+
+paths:
+  /v1/organizations:
+    post:
+      operationId: registerOrganization
+      tags: [organizations]
+      summary: Register an organization, or return the one already registered.
+      description: |
+        `organizationId` is derived from the tax identifier, so registering
+        the same employer twice converges on one organization and one set of
+        ledger accounts. `201` the first time, `200` afterwards — the same
+        organization either way.
+
+        There is deliberately no `409`. Registering twice is not a conflict,
+        it is the same statement made twice, and rejecting the repeat would
+        leave a caller that lost its response with no way to converge.
+
+        Registration also provisions the organization's cash-ledger accounts
+        (`EMPLOYER_COLLECTIONS`, and the platform's `BANK_CLEARING` if it does
+        not yet exist).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterOrganizationRequest'
+      responses:
+        '201':
+          description: Registered.
+          headers:
+            Location:
+              description: URL of the organization resource.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '200':
+          description: Already registered under this tax identifier; the existing organization is returned unchanged.
+          headers:
+            Location:
+              description: URL of the organization resource.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      operationId: listOrganizations
+      tags: [organizations]
+      summary: List registered organizations, oldest first.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Registration order, oldest first, so paging is stable as new ones are added.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/organizations/{organizationId}:
+    get:
+      operationId: getOrganization
+      tags: [organizations]
+      summary: Look an organization up by its derived id.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateOrganization
+      tags: [organizations]
+      summary: Correct an organization's mutable fields.
+      description: |
+        An absent field means "leave as it is". The update never changes
+        `organizationId` and never touches a ledger account: the accounts are
+        derived from the id, and the id from a tax identifier no update can
+        alter. An employer whose `RFC` genuinely changes is a new
+        organization, registered as one.
+
+        Each accepted update appends a revision rather than overwriting one —
+        see `GET .../revisions`.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: The organization at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/organizations/{organizationId}/revisions:
+    get:
+      operationId: listOrganizationRevisions
+      tags: [organizations]
+      summary: The append-only history an update adds to.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Every revision, oldest first. Revision 1 is the registration.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrganizationRevision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/organizations/{organizationId}/cash-receipts:
+    post:
+      operationId: recordCashReceipt
+      tags: [cash-receipts]
+      summary: Record a reconciled employer wire and post it to the ledger.
+      description: |
+        Posts a single `CASH_RECEIPT` transfer, `BANK_CLEARING →
+        EMPLOYER_COLLECTIONS[org]` (`chart-of-accounts.md` §4). The trigger is
+        a manual reconciliation entry: an ops operator has seen the wire on
+        the bank statement (`ADR-0010`). There is no bank feed in v1.
+
+        **The ledger is the idempotency authority, not this service and not a
+        cache.** `transfer_id` is derived as
+        `UUIDv5(ledgerNamespace, organizationId + ":" + idempotencyKey)`, so a
+        duplicate is refused by the ledger itself. `Idempotency-Key` is
+        required and is scoped to the organization: the same key under two
+        different organizations is two different receipts.
+
+        Redis caches the response for 24 hours as a latency optimisation only.
+        With Redis stopped, a resubmission still results in exactly one
+        movement, and key reuse is still detected — that check reads a request
+        fingerprint stored alongside the receipt in PostgreSQL.
+
+        **Cash is independent of the file.** A receipt with no matching
+        contribution batch is accepted and rests in `EMPLOYER_COLLECTIONS`
+        until one arrives (Task 3.4). Money is never conjured to match a file,
+        and a failed file never reverses a receipt.
+
+        **Corrections are never made here.** A wrong amount is fixed with a
+        `CORRECTION` transfer, never by resubmitting, editing or reversing
+        this entry, and never with a negative amount.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordCashReceiptRequest'
+      responses:
+        '201':
+          description: This call posted the movement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashReceipt'
+        '200':
+          description: |
+            The same request again. The original outcome is returned unchanged
+            and nothing moved a second time — including when an earlier attempt
+            posted the movement but crashed before recording that it had.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashReceipt'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: |
+            No organization is registered under this id. A receipt is refused
+            rather than silently opening an account for an unknown employer
+            (`ADR-0011`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: |
+            Another request for this receipt is in flight, so this one cannot
+            tell whether the movement has happened. Retry: the movement happens
+            at most once, whichever request wins. Carries `transferId`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Either the `Idempotency-Key` was reused for a materially different
+            request, or the ledger refused the movement. Nothing moved in either
+            case. Carries `transferId`, and `rejectionReason` when the ledger
+            refused it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/CashReceiptProblem'
+        '503':
+          description: |
+            The receipt was recorded but its ledger movement could not be
+            confirmed — the receipt is `UNCONFIRMED`. Retry with the same
+            `Idempotency-Key`: it converges on one movement, never two.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/organizations/{organizationId}/contribution-batches/upload-url:
+    post:
+      operationId: createContributionBatchUploadUrl
+      tags: [contribution-batches]
+      summary: Request a presigned upload slot for a dispersion file.
+      description: |
+        Returns a short-lived, presigned URL for uploading the contribution
+        file directly to object storage. The file's bytes never pass through
+        this API. Call `POST .../contribution-batches` with the resulting
+        `objectKey` once the upload completes.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Upload slot created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/organizations/{organizationId}/contribution-batches:
+    post:
+      operationId: submitContributionBatch
+      tags: [contribution-batches]
+      summary: Submit an uploaded dispersion file for validation.
+      description: |
+        Accepts a reference to an already-uploaded file and returns
+        immediately. Validation (checksum verification, parsing, per-source
+        total checks, then plan-rule validation) runs asynchronously; poll
+        `GET .../contribution-batches/{batchId}` for the outcome.
+
+        Duplicate suppression is keyed on the object: a batch is identified by
+        `(organizationId, objectKey, checksumSha256)`, so submitting the same
+        file twice returns the same batch rather than creating a second one,
+        and there is no `Idempotency-Key` header. This is why the operation
+        defines no conflict or key-reuse status code: "same key, different
+        body" cannot be expressed, because a different body is a different
+        checksum and therefore a different batch. A resubmission that declares
+        different totals for the same bytes is the same batch, and its
+        original declaration stands — the file is what either one has to
+        match, and the validator says so.
+
+        `objectKey` must be one this organization was issued by the
+        upload-url call, **for the same plan and payroll period this call
+        declares**; a key outside that prefix is a `400`, refused before
+        anything is fetched.
+
+        A file that turns out to be wrong is **not** an error on this call.
+        Whole-batch rejection is an outcome recorded on the batch and read
+        from its status resource — this call still returns `202`.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContributionBatchSubmission'
+      responses:
+        '202':
+          description: |
+            Batch received; validation is asynchronous. Also returned when
+            this file has already been submitted, carrying the original
+            batch and its current status.
+          headers:
+            Location:
+              description: URL of the batch status resource.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContributionBatch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/organizations/{organizationId}/reconciliation/ageing:
+    get:
+      operationId: getReconciliationAgeing
+      tags: [contribution-batches]
+      summary: Cash with no file against it, and files with no cash against them.
+      description: |
+        Both are first-class states rather than errors (Task 3.4). A wire can
+        land days before its dispersion file or days after it, and neither
+        half is wrong for being early — what is wrong is either half sitting
+        unmatched for a long time, which is what this report makes visible.
+
+        **The two sides are never added together and no grand total is
+        rendered.** One is money the ledger holds; the other is money an
+        employer says it sent. A single number combining them would read as a
+        balance, and it would be a wrong one.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The organization's outstanding halves.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationAgeingReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/organizations/{organizationId}/contribution-batches/{batchId}:
+    get:
+      operationId: getContributionBatch
+      tags: [contribution-batches]
+      summary: Get a contribution batch's status.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Batch status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContributionBatch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/funds:
+    post:
+      operationId: registerFund
+      tags: [funds]
+      summary: Register a fund, or publish a corrected version of one.
+      description: |
+        Mirrors `dev.fondaria.rules.Fund`, minus `unitLedgerId`: the platform
+        assigns the next free one (from 1001, `LedgerCodes`) and returns it —
+        the caller never chooses it.
+
+        **Idempotent on `(fundId, version)`.** Omit `fundId` to register a
+        brand-new fund; supply one an earlier call returned to publish a
+        corrected version, or to retry a call whose response was lost.
+        Replaying the identical request is a `200` carrying the row already
+        on record; the same key with different content is a `409`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterFundRequest'
+      responses:
+        '201':
+          description: Registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fund'
+        '200':
+          description: The same `(fundId, version)` already published with identical content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fund'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: This `(fundId, version)` was already published with different content.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/organizations/{organizationId}/plans:
+    post:
+      operationId: publishPlanVersion
+      tags: [plans]
+      summary: Publish a plan version, linking an organization to the fund its contributions allot into.
+      description: |
+        Mirrors `dev.fondaria.rules.PlanVersion`. `fundId` must resolve as of
+        `effectiveFrom` (`ADR-0012`: one fund per plan version for v1) — a
+        fund that does not is a named `404` rather than a raw foreign-key
+        failure.
+
+        **Idempotent on `(organizationId, planId, version)`**, on the same
+        200/409 rule `POST /v1/funds` follows.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishPlanVersionRequest'
+      responses:
+        '201':
+          description: Published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanVersion'
+        '200':
+          description: The same `(organizationId, planId, version)` already published with identical content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No organization is registered under this id, or `fundId` does not resolve as of `effectiveFrom`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: This `(organizationId, planId, version)` was already published with different content.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/organizations/{organizationId}/participants:
+    get:
+      operationId: lookupParticipant
+      tags: [participants]
+      summary: Resolve a participant's opaque participantId from a reference already held.
+      description: |
+        Exactly one of `internalRef` or `payrollRef` must be supplied. A
+        paged listing without a filter is out of scope for this endpoint.
+        The response carries nothing else — no name, no `RFC`, no employment
+        dates (`AGENTS.md` §7).
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: internalRef
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: payrollRef
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The participant resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipantLookup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No participant resolves under the reference supplied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  parameters:
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      description: |
+        Stable internal identifier of the client organization (tenant),
+        derived from its tax identifier at registration. Never the tax
+        identifier itself — a path segment reaches an access log, a proxy log
+        and a trace (`AGENTS.md` §7).
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Caller-generated key, scoped to the organization, from which the
+        ledger `transfer_id` is derived. Required: without one a retry cannot
+        converge on the same movement, and a server-generated key would give
+        every retry a new id and a second credit. A UUIDv4 is recommended
+        (docs/DESIGN-DECISIONS.md); any stable string up to 200 characters is
+        accepted, because the key's only job is to be the same string twice.
+      schema:
+        type: string
+        maxLength: 200
+      example: "9f1c2e7a-1b44-4a0e-9a1e-2c6f0d3b8e51"
+  schemas:
+    TaxIdScheme:
+      type: string
+      description: Which national tax-identifier scheme a value belongs to. v1 is Mexico-only (`ADR-0004`).
+      enum: [MX_RFC]
+
+    OrganizationStatus:
+      type: string
+      description: |
+        `CLOSED` ends the commercial relationship and stops new remittance.
+        It is not a delete: the id and the ledger accounts survive for as long
+        as any participant holds a position.
+      enum: [ACTIVE, SUSPENDED, CLOSED]
+
+    RegisterOrganizationRequest:
+      type: object
+      required: [taxIdScheme, taxId, legalName]
+      properties:
+        taxIdScheme:
+          $ref: '#/components/schemas/TaxIdScheme'
+        taxId:
+          type: string
+          description: |
+            The employer's tax identifier. Canonicalized on receipt, so
+            `abc-010101-xy1` and `ABC010101XY1` register one organization
+            rather than two. **The only field in this contract that carries
+            one, and it is never echoed back.**
+          example: "ABC010101XY1"
+        legalName:
+          type: string
+          example: "Acme S.A. de C.V."
+        contractReference:
+          type: string
+          nullable: true
+        feeBracket:
+          type: string
+          nullable: true
+          description: Commercial bracket code agreed in the contract. Opaque here on purpose — the fee schedule it selects is effective-dated reference data (Task 2b.2).
+
+    UpdateOrganizationRequest:
+      type: object
+      description: Every field optional; an absent or blank one leaves the current value alone. There is no field for the tax identifier — see the operation description.
+      properties:
+        legalName:
+          type: string
+        contractReference:
+          type: string
+        feeBracket:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+
+    Organization:
+      type: object
+      description: An organization as returned by the API. Carries the tax-identifier *scheme*, never the identifier.
+      required: [organizationId, taxIdScheme, legalName, status, revision, createdAt, updatedAt]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+          description: Derived from the tax identifier, stable forever, and the tenant id everything downstream is scoped by (`ADR-0005`).
+        taxIdScheme:
+          $ref: '#/components/schemas/TaxIdScheme'
+        legalName:
+          type: string
+        contractReference:
+          type: string
+          nullable: true
+        feeBracket:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        revision:
+          type: integer
+          description: 1 at registration; incremented by each accepted update.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrganizationRevision:
+      type: object
+      required: [revision, legalName, status, recordedAt]
+      properties:
+        revision:
+          type: integer
+        legalName:
+          type: string
+        contractReference:
+          type: string
+          nullable: true
+        feeBracket:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        recordedAt:
+          type: string
+          format: date-time
+
+    RecordCashReceiptRequest:
+      type: object
+      required: [amountMinorUnits, currency, valueDate, bankReference, operatorId]
+      properties:
+        amountMinorUnits:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            MXN cents, as a JSON integer. Always positive: a wire that did not
+            arrive is not a negative receipt, and an over-credit is fixed with
+            a `CORRECTION` transfer.
+          example: 250000
+        currency:
+          type: string
+          enum: [MXN]
+          description: Required rather than defaulted. v1 is MXN-only (`ADR-0004`), and a currency the service silently assumed would be the field nobody checked on the day a second one arrives.
+        valueDate:
+          type: string
+          format: date
+          description: The date the bank credited the funds, which is frequently not today — a wire seen on Monday may have been credited on Friday.
+          example: "2026-08-18"
+        bankReference:
+          type: string
+          description: |
+            The bank-statement line this receipt claims to be, kept for
+            tie-out against a statement. Stored in PostgreSQL; the ledger
+            carries only a derived 128-bit reference, because it holds money
+            and links, never descriptive data (`ADR-0011`).
+          example: "SPEI-2026-08-18-0001"
+        operatorId:
+          type: string
+          description: |
+            Provenance of the assertion — who or what claims to have seen this
+            wire. **Self-asserted in v1, and therefore an audit trail rather
+            than an authentication:** there is no authenticated subject to take
+            it from until Phase 9, which replaces it. `O-36`'s bank feed later
+            replaces the operator with a statement matcher. It is not a
+            signature — see `docs/01-DECISIONS-TO-DISCUSS.md` G16.
+          example: "ops-marta"
+
+    CashReceiptStatus:
+      type: string
+      description: |
+        `UNCONFIRMED` is written before the ledger is touched and is what a
+        crash mid-post leaves — a reconcilable state, never a lost one
+        (`ADR-0011`). Any retry converges from it.
+      enum: [UNCONFIRMED, POSTED, REJECTED]
+
+    CashReceipt:
+      type: object
+      description: |
+        A cash receipt as returned by the API. **There is no balance field.**
+        What an employer holds in `EMPLOYER_COLLECTIONS` is read from the
+        ledger when it is asked for; carrying it here would mean a replayed
+        receipt — served from cache, up to 24 hours old — reporting a balance
+        as it stood when the wire was first keyed.
+      required: [organizationId, transferId, amountMinorUnits, currency, valueDate, bankReference, operatorId, status, recordedAt, statusUpdatedAt]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        transferId:
+          type: string
+          format: uuid
+          description: |
+            The derived ledger transfer id, and the tie-out handle: identical
+            on every retry, and the one value the ledger, the logs and the
+            receipt record all agree on. The `Idempotency-Key` that produced it
+            is deliberately not echoed — keys are on the never-log list
+            (`AGENTS.md` §7) and a response body reaches logs.
+        amountMinorUnits:
+          type: integer
+          format: int64
+          example: 250000
+        currency:
+          type: string
+          enum: [MXN]
+        valueDate:
+          type: string
+          format: date
+        bankReference:
+          type: string
+        operatorId:
+          type: string
+        status:
+          $ref: '#/components/schemas/CashReceiptStatus'
+        recordedAt:
+          type: string
+          format: date-time
+          description: When the operator's assertion was recorded — before the movement was attempted.
+        statusUpdatedAt:
+          type: string
+          format: date-time
+
+    CashReceiptRejectionReason:
+      type: string
+      description: |
+        Our own rejection vocabulary, never a ledger vendor's status string.
+        In practice a cash receipt only meets `ACCOUNT_NOT_FOUND` — an
+        organization registered whose ledger accounts were never provisioned;
+        the rest are enumerated because the ledger can return them and a
+        client should not have to guess at an unlisted value.
+      enum:
+        - ACCOUNT_NOT_FOUND
+        - CROSS_LEDGER
+        - CROSS_CLUSTER
+        - SELF_TRANSFER
+        - ZERO_OR_NEGATIVE_AMOUNT
+        - INSUFFICIENT_FUNDS
+        - UNKNOWN
+
+    CashReceiptProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            transferId:
+              type: string
+              format: uuid
+              description: The derived transfer id this problem concerns, so a failure is traceable to the receipt and the ledger.
+            rejectionReason:
+              allOf:
+                - $ref: '#/components/schemas/CashReceiptRejectionReason'
+              description: Present only when the ledger refused the movement.
+
+    UploadUrlRequest:
+      type: object
+      required: [planId, payrollPeriod, fileName]
+      properties:
+        planId:
+          type: string
+          maxLength: 128
+          description: The plan this batch contributes under. The service mints the object key from it, so a stored file stays identifiable on its own (`contribution-file-v2.md` §1.1). Must equal the `planId` submitted with the batch.
+          example: "PLAN-ACME-CAJA-1"
+        payrollPeriod:
+          type: string
+          maxLength: 128
+          description: The payroll period this batch is for. Also part of the object key, and must equal the `payrollPeriod` submitted with the batch.
+          example: "2026-08-B"
+        fileName:
+          type: string
+          description: Original file name, carried through for audit and object-key naming only. Not parsed for content.
+          example: "acme-2026-08-b.csv"
+
+    UploadUrlResponse:
+      type: object
+      required: [objectKey, uploadUrl, uploadMethod, expiresAt]
+      properties:
+        objectKey:
+          type: string
+          description: |
+            Object-storage key the file must be uploaded to, and later referenced in the
+            batch submission. Minted by the service from the organization, plan and
+            payroll period, so an object pulled out of storage years later still says
+            what it is. The key mirrors the declaration and is never the authority for
+            it — submission checks the two agree.
+          example: "contribution-batches/{organizationId}/PLAN-ACME-CAJA-1/2026-08-B/1f8b6c2e-acme-2026-08-b.csv"
+        uploadUrl:
+          type: string
+          format: uri
+          description: Presigned URL. A single `PUT` of the raw file bytes to this URL completes the upload.
+        uploadMethod:
+          type: string
+          enum: [PUT]
+        expiresAt:
+          type: string
+          format: date-time
+          description: The presigned URL stops working after this instant; request a new one.
+
+    ContributionBatchSubmission:
+      type: object
+      description: |
+        Where the file is, and what the employer says it contains.
+
+        `objectKey` and `checksumSha256` are also the batch's identity — see
+        the operation's description. Submitting them again returns the
+        existing batch.
+
+        Everything after them is the batch's own declaration
+        (`contribution-file-v2.md` §1.1), which earlier drafts carried as a
+        header row inside the file. It describes the batch rather than the
+        participants, and it needs typing, validation and rejection on its
+        own terms. The async validator compares every one of these against
+        the rows that actually parsed; a declaration the file does not bear
+        out rejects the batch.
+
+        **Every amount is an integer of MXN cents.** Never a decimal, never a
+        float, never a string.
+      required: [objectKey, checksumSha256, planId, payrollPeriod, valueDate, declaredTotalCents, declaredRowCount, declaredSourceCents]
+      properties:
+        objectKey:
+          type: string
+          description: The `objectKey` returned by the upload-url call, after the file has been uploaded to it. Must sit under the prefix its declared plan and payroll period generate.
+        checksumSha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Lowercase-hex SHA-256 of the exact bytes uploaded. Verified against the stored object before any parsing — see `contribution-file-v2.md` §4.
+          example: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        planId:
+          type: string
+          maxLength: 128
+          description: The plan (reglamento) this batch contributes under. Must equal the `planId` the upload slot was issued for.
+          example: "PLAN-ACME-CAJA-1"
+        payrollPeriod:
+          type: string
+          maxLength: 128
+          description: The employer's payroll period identifier. Opaque to the platform; carried through for the employer's own reconciliation. Must equal the `payrollPeriod` the upload slot was issued for.
+          example: "2026-08-B"
+        valueDate:
+          type: string
+          format: date
+          description: The date this batch is staged for (Task 3.6). Never the date the file was produced or uploaded.
+          example: "2026-08-20"
+        declaredTotalCents:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Declared grand total across every source, in MXN cents. This is the number
+            the reconciliation gate compares against the money actually received — the
+            control docs/DOMAIN.md calls the most important in the
+            contribution path. A declaration, never a balance. Must equal the sum of
+            `declaredSourceCents` (`DECLARED_TOTAL_MISMATCH`).
+          example: 750000
+        declaredRowCount:
+          type: integer
+          minimum: 1
+          description: Number of participant rows the file contains — one per participant. A cheap truncation guard, checked before the per-source column sums (`ROW_COUNT_MISMATCH`).
+          example: 2
+        declaredSourceCents:
+          type: object
+          description: |
+            One declared total per contribution source, in MXN cents, keyed by source
+            name. A source with nothing to contribute may declare `0` or be omitted;
+            omitted means zero and the file is held to it either way.
+
+            Kept per source rather than as one number because Task 3.1 requires employee
+            and employer money to stay separately represented end to end — including in
+            how a mismatch is reported (`SOURCE_SUBTOTAL_MISMATCH` names the source).
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+          propertyNames:
+            enum: [EMPLOYEE, EMPLOYER, VOLUNTARY]
+          example:
+            EMPLOYEE: 500000
+            EMPLOYER: 250000
+            VOLUNTARY: 0
+
+    ContributionBatchStatus:
+      type: string
+      description: |
+        `RECEIVED`, `VALIDATING`, `VALIDATED`, `PENDING_RECONCILIATION`,
+        `STAGED`, `ALLOTTED` and `REJECTED` are this contract's states.
+
+        `PENDING_RECONCILIATION` (Task 3.4) is **not a rejection and not
+        terminal**. The file is structurally sound; the cash matching its
+        declared total has not arrived, or has arrived in an amount that does
+        not equal it. Money and file are independent arrivals, so this state
+        resolves itself when the missing half turns up — no resubmission is
+        needed — and both halves appear on the reconciliation ageing report
+        until it does.
+
+        `VALIDATED` (structurally sound, plan-rule validated and fully
+        funded) and `STAGED` (every row recorded with the batch's value date,
+        Task 3.6) are reached in the same instant: nothing in this service
+        waits between them, so a batch is never observed resting at
+        `VALIDATED`. `STAGED` is not terminal: `allotment-job` (Task 21.2)
+        moves a staged batch to `ALLOTTED` once every row has been priced at
+        a struck NAV and posted to the ledger. `ALLOTTED` is terminal.
+      enum: [RECEIVED, VALIDATING, VALIDATED, PENDING_RECONCILIATION, STAGED, ALLOTTED, REJECTED]
+
+    ContributionBatchRejectionCode:
+      type: string
+      description: |
+        Whole-batch rejection reasons this contract defines, in the order the checks
+        run (`contribution-file-v2.md` §4). Per-row (plan-rule) rejection reasons are
+        Task 3.5's contract.
+
+        There is no organization-mismatch code: the file declares no organization, and
+        a submitted `objectKey` outside its organization's prefix is refused at
+        submission with a `400`, before anything is fetched.
+      enum:
+        - CHECKSUM_MISMATCH
+        - MALFORMED_FILE
+        - ROW_COUNT_MISMATCH
+        - DUPLICATE_ROW
+        - SOURCE_SUBTOTAL_MISMATCH
+        - DECLARED_TOTAL_MISMATCH
+
+    ContributionBatchRejection:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          $ref: '#/components/schemas/ContributionBatchRejectionCode'
+        message:
+          type: string
+          description: Human-readable, safe to show the employer. Never a raw exception message (`AGENTS.md` §7).
+        details:
+          type: object
+          description: Code-specific structured detail, e.g. expected vs. actual totals for `DECLARED_TOTAL_MISMATCH`. Amounts here are always integer cents, never a float or decimal string.
+          additionalProperties: true
+          example:
+            source: "EMPLOYER"
+            declaredCents: 250000
+            actualCents: 249900
+
+    ContributionBatch:
+      type: object
+      required: [batchId, organizationId, status, objectKey, checksumSha256, planId, payrollPeriod, valueDate, declaredTotalCents, declaredRowCount, submittedAt, statusUpdatedAt, awaitingAllotment]
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+        status:
+          $ref: '#/components/schemas/ContributionBatchStatus'
+        objectKey:
+          type: string
+        checksumSha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        planId:
+          type: string
+          description: |
+            As submitted. Present from the moment the batch exists, not only once the
+            file has parsed — `contribution-file-v2.md` §1.1 moved the declarations out
+            of the file — so a `REJECTED` batch says which plan and payroll period were
+            refused whatever stage it failed at.
+        payrollPeriod:
+          type: string
+        valueDate:
+          type: string
+          format: date
+        declaredTotalCents:
+          type: integer
+          format: int64
+          description: |
+            The submitted grand total, in MXN cents. **A declaration, never a balance** —
+            it is what the employer says it sent, and the reconciliation gate compares it
+            against money read from the ledger.
+        declaredRowCount:
+          type: integer
+          description: Participant rows the submission declares — one per participant.
+        submittedAt:
+          type: string
+          format: date-time
+        statusUpdatedAt:
+          type: string
+          format: date-time
+        awaitingAllotment:
+          type: boolean
+          description: |
+            `true` exactly when `status = STAGED` — this batch's cash has reconciled and it
+            holds no units yet (Task 21.1). Not an inconsistency: docs/DOMAIN.md
+            §5 treats the window between reconciliation and allotment as a first-class state,
+            and this field, together with `dealingDate`, is what reports it as pending rather
+            than as a status that looks stuck.
+        dealingDate:
+          type: string
+          format: date
+          nullable: true
+          description: |
+            The valuation date this batch will deal at — the NAV strike Phase 21's allotment
+            run prices its participants at. Present if and only if `awaitingAllotment` is
+            `true`; `null` otherwise, including while the batch's plan version cannot be
+            resolved. Determined by the batch's value date, the plan's dealing lag and
+            cut-off (`BusinessCalendar`) — never by the current date, so a batch one second
+            either side of cut-off can receive a different date, and a batch is never
+            back-dated to a valuation date already struck.
+        parts:
+          allOf:
+            - $ref: '#/components/schemas/ContributionBatchParts'
+          nullable: true
+          description: |
+            Present **only when this file was divided** (`ADR-0017`), and absent otherwise —
+            which is every file small enough to allot in one go. A one-part file has nothing
+            to explain, and emitting `partCount: 1` everywhere would invite a reader to treat
+            an ordinary batch as a fragment of something larger.
+
+        rejection:
+          allOf:
+            - $ref: '#/components/schemas/ContributionBatchRejection'
+          nullable: true
+          description: Present only when `status = REJECTED`.
+
+    ContributionBatchParts:
+      type: object
+      description: |
+        Where this batch sits among its file's parts, and how much of that file has been
+        priced (`ADR-0017`).
+
+        **A file too large to allot as one atomic ledger chain becomes several batches.**
+        The employer still submits once and funds once, with one wire against one declared
+        total; what changes is that the file's progress stops being a single `status` and
+        becomes a count. Each part is a batch in its own right, with its own status and its
+        own dealing date, and is allotted atomically on its own.
+
+        This object counts **batches, never money**. What a participant holds is units, read
+        from the ledger; this says how much of the file has got there.
+      required: [fileBatchId, partNumber, partCount, allottedParts]
+      properties:
+        fileBatchId:
+          type: string
+          format: uuid
+          description: |
+            The batch the employer actually submitted and their wire funded — this batch
+            itself when it is the file, its parent when it is a part.
+        partNumber:
+          type: integer
+          minimum: 1
+          description: |
+            This batch's own 1-based position within the file. The submitted batch is part 1
+            and holds part 1's rows; it is not an empty container.
+        partCount:
+          type: integer
+          minimum: 2
+          description: How many batches the file was divided into.
+        allottedParts:
+          type: integer
+          minimum: 0
+          description: |
+            How many of them have reached `ALLOTTED`. Anything short of `partCount` is a
+            file still being priced — a state, not a fault. The unallotted remainder of the
+            employer's cash is still held in their collections account until its part posts.
+
+    ReconciliationAgeingReport:
+      type: object
+      required: [organizationId, asOf, unmatchedCash, unmatchedFiles]
+      properties:
+        organizationId:
+          type: string
+        asOf:
+          type: string
+          format: date-time
+        unmatchedCash:
+          type: array
+          items:
+            type: object
+            required: [transferId, valueDate, ageDays]
+            properties:
+              transferId:
+                type: string
+                format: uuid
+                description: The `CASH_RECEIPT` transfer this receipt posted.
+              valueDate:
+                type: string
+                format: date
+              amountCents:
+                type: integer
+                format: int64
+                nullable: true
+                description: |
+                  MXN cents, **read from the ledger**, never from a database
+                  column. Null when the ledger does not hold the movement this
+                  receipt claims — a discrepancy, shown rather than hidden,
+                  because it is the item an operator most needs to see.
+              ageDays:
+                type: integer
+                description: Days since the wire's value date.
+        unmatchedFiles:
+          type: array
+          items:
+            type: object
+            required: [batchId, declaredTotalCents, submittedAt, ageDays]
+            properties:
+              batchId:
+                type: string
+                format: uuid
+              payrollPeriod:
+                type: string
+                nullable: true
+              valueDate:
+                type: string
+                format: date
+                nullable: true
+              declaredTotalCents:
+                type: integer
+                format: int64
+                description: What the file declared, in MXN cents. A declaration, not a balance — the whole reason this row is on the report is that no money matches it.
+              submittedAt:
+                type: string
+                format: date-time
+              ageDays:
+                type: integer
+                description: Days since the batch was submitted.
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details (`AGENTS.md` §7). Never carries an exception message, stack trace, SQL fragment, or hostname.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+
+    RegisterFundRequest:
+      type: object
+      required: [effectiveFrom, version, name, vehicleType, currency, unitScale, launchDate, launchNavScaled]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Omit to register a new fund. Supply an id an earlier call returned to publish a corrected version, or to retry a call whose response was lost.
+        effectiveFrom:
+          type: string
+          format: date
+        version:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        vehicleType:
+          type: string
+          description: >-
+            Free text, matching the product configuration model's vehicle axis
+            (docs/DOMAIN.md) — e.g. `CAJA_DE_AHORRO`. Not an
+            enum: a new vehicle is a published row, not a code change.
+        currency:
+          type: string
+          description: v1 is MXN-only (`ADR-0004`).
+          enum: [MXN]
+        unitScale:
+          type: integer
+          format: int64
+          description: Must equal `Units.SCALE` (1e8).
+          example: 100000000
+        launchDate:
+          type: string
+          format: date
+          description: The fund's inception date.
+        launchNavScaled:
+          type: integer
+          format: int64
+          description: The opening price a new fund's first contribution buys at, 1e-8 scaled. Never a decimal (`AGENTS.md` §4).
+
+    Fund:
+      type: object
+      required: [fundId, effectiveFrom, version, name, vehicleType, currency, unitLedgerId, unitScale, launchDate, launchNavScaled, status, publishedAt]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+        effectiveFrom:
+          type: string
+          format: date
+        version:
+          type: integer
+        name:
+          type: string
+        vehicleType:
+          type: string
+        currency:
+          type: string
+          enum: [MXN]
+        unitLedgerId:
+          type: integer
+          format: int64
+          description: The TigerBeetle ledger id carrying this fund's units (from 1001), platform-assigned and fixed forever.
+        unitScale:
+          type: integer
+          format: int64
+        launchDate:
+          type: string
+          format: date
+        launchNavScaled:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+        publishedAt:
+          type: string
+          format: date-time
+
+    PublishPlanVersionRequest:
+      type: object
+      required: [planId, effectiveFrom, version, employerMatchRatioNumerator, employerMatchRatioDenominator, vestingFullYears, dealingLagBusinessDays, fundId]
+      properties:
+        planId:
+          type: string
+        effectiveFrom:
+          type: string
+          format: date
+        version:
+          type: integer
+          minimum: 0
+        employerMatchRatioNumerator:
+          type: integer
+          description: Together with `employerMatchRatioDenominator`, the ratio an employer's contribution must bear to the matching employee contribution (e.g. 1/1 for dollar-for-dollar).
+        employerMatchRatioDenominator:
+          type: integer
+        vestingFullYears:
+          type: integer
+          description: Years of continuous service at which a graded vesting schedule reaches 100%. Zero means immediate vesting.
+        dealingLagBusinessDays:
+          type: integer
+          description: Business days between a batch's value date and the valuation date it deals at. Zero means same-day dealing.
+        fundId:
+          type: string
+          format: uuid
+          description: The fund this plan version's contributions allot into (`ADR-0012`). Must resolve as of `effectiveFrom`.
+
+    PlanVersion:
+      type: object
+      required: [organizationId, planId, effectiveFrom, version, employerMatchRatioNumerator, employerMatchRatioDenominator, vestingFullYears, dealingLagBusinessDays, fundId, publishedAt]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+        effectiveFrom:
+          type: string
+          format: date
+        version:
+          type: integer
+        employerMatchRatioNumerator:
+          type: integer
+        employerMatchRatioDenominator:
+          type: integer
+        vestingFullYears:
+          type: integer
+        dealingLagBusinessDays:
+          type: integer
+        fundId:
+          type: string
+          format: uuid
+        publishedAt:
+          type: string
+          format: date-time
+
+    ParticipantLookup:
+      type: object
+      description: Nothing but the reference resolution — no name, no `RFC`, no employment dates (`AGENTS.md` §7).
+      required: [participantId, internalRef, payrollRef]
+      properties:
+        participantId:
+          type: string
+          format: uuid
+          description: The opaque id every Phase 6 read endpoint is keyed by.
+        internalRef:
+          type: string
+        payrollRef:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Malformed request (not a file-content problem — see `ContributionBatchRejection` for those).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Caller is not authorized for this organization.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: No such organization, or no such batch for this organization.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'

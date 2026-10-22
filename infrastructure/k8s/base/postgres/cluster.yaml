@@ -1,0 +1,128 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # 1 primary + 2 synchronous replicas in production (DESIGN.md §13)
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.2@sha256:61d2b391e3e324d05edc6c65c555989a7c544ddb72ef271b3abd4a35b57942b1
+  priorityClassName: fondaria-database-critical
+
+  # Labels the operator copies onto the instance pods, so the NetworkPolicies can
+  # select Postgres the same way they select every other workload.
+  #
+  # Meshed (Task 29.11, completing ADR-0029's storage amendment). An earlier
+  # attempt (opaque-ports:5432 alone) broke JDBC connectivity platform-wide --
+  # every service using PostgreSQL's own SSL negotiation (the "send a byte,
+  # maybe upgrade to TLS in-band" preamble, distinct from a clean
+  # TLS-from-the-first-byte protocol) hit `Connection reset` inside
+  # `ConnectionFactoryImpl.enableSSL` once that handshake was wrapped a
+  # second time in Linkerd's opaque TCP proxying (confirmed live:
+  # CrashLoopBackOff on contribution-api, balance-api, valuation-api,
+  # allotment-job, keycloak -- everything that talks to Postgres; reverted
+  # immediately rather than left half-fixed; see TASK-LOG.md step 86). The
+  # real fix, done together with this change: every service's own JDBC URL
+  # (each service's configmap.yaml) and Keycloak's KC_DB_URL_PROPERTIES
+  # (keycloak/app-config.yaml) now carry `sslmode=disable`, so Postgres never
+  # attempts its own redundant SSL layer on top of the mesh's own mTLS.
+  # skip-inbound-ports covers the two ports real unmeshed callers still need
+  # untouched by the proxy: 9187 (Prometheus, plain-HTTP scrape, no mesh
+  # identity) and 8000 (CloudNativePG's own instance-manager status/probe
+  # port, served over the operator's own TLS via --status-port-tls and called
+  # directly by the cnpg-system operator, itself unmeshed).
+  inheritedMetadata:
+    labels:
+      app.kubernetes.io/name: postgres
+      app.kubernetes.io/component: database
+      app.kubernetes.io/part-of: fondaria
+    annotations:
+      linkerd.io/inject: enabled
+      config.linkerd.io/opaque-ports: "5432"
+      config.linkerd.io/skip-inbound-ports: "8000,9187"
+
+  # The database and its owning role. The operator generates the owner's
+  # password into Secret `postgres-app` (keys username/password), which
+  # every service's Deployment reads -- there is no separate database secret.
+  # `funds` mirrors compose (POSTGRES_USER/POSTGRES_DB in .env.example).
+  bootstrap:
+    initdb:
+      database: funds
+      owner: funds
+      # Flyway V1__schemas_and_grants.sql runs as `funds` and creates the
+      # NOLOGIN roles fondaria_app / fondaria_cdc; that needs CREATEROLE, which a
+      # CNPG application owner does not have by default.
+      postInitSQL:
+        - ALTER ROLE funds CREATEROLE
+
+  # Strict synchronous replication ensuring zero transaction loss on failover
+  minSyncReplicas: 1
+  maxSyncReplicas: 2
+
+  postgresql:
+    parameters:
+      shared_buffers: "1GB"
+      max_connections: "200"
+      synchronous_commit: "on"
+
+  # Dedicated NVMe storage for data and WAL
+  storage:
+    size: 50Gi
+    storageClass: tigerbeetle-nvme
+  walStorage:
+    size: 20Gi
+    storageClass: tigerbeetle-nvme
+
+  # Continuous backup to object storage with WAL archiving and PITR support
+  backup:
+    barmanObjectStore:
+      destinationPath: "s3://postgres-backups/"
+      endpointURL: "http://object-store:8333"
+      # The platform's object store credentials (base/object-store). Bucket
+      # `postgres-backups` is created by the object-store-buckets Job.
+      s3Credentials:
+        accessKeyId:
+          name: object-store-credentials
+          key: OBJECT_STORE_ROOT_ACCESS_KEY
+        secretAccessKey:
+          name: object-store-credentials
+          key: OBJECT_STORE_ROOT_SECRET_KEY
+      wal:
+        compression: gzip
+        maxParallel: 4
+      data:
+        compression: gzip
+        immediateCheckpoint: true
+    retentionPolicy: "30d"
+
+  # No PodMonitor: there is no prometheus-operator here. Prometheus discovers the
+  # instance pods itself (base/observability/prometheus, scrape.d/cnpg.yml).
+  monitoring:
+    enablePodMonitor: false
+
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2048Mi
+    limits:
+      cpu: 2000m
+      memory: 4096Mi
+
+  # CloudNativePG's own affinity schema (not a raw PodSpec): anti-affinity is
+  # a switch + topology key; spread constraints are a top-level field.
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: preferred
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: postgres

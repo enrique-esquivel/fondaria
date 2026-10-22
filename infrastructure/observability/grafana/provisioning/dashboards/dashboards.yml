@@ -1,0 +1,15 @@
+# Task 11.1. Points Grafana at dashboard JSON files in Git
+# (infrastructure/observability/dashboards/) instead of dashboards created in
+# the UI, for the same reason as datasources.yml: they must survive `down -v`.
+apiVersion: 1
+
+providers:
+  - name: git-provisioned
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

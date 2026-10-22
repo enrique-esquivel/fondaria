@@ -1,0 +1,63 @@
+# Task 10.3 (phase-10-edge.md): "Tighter limits on contribution submission
+# than on reads" -- both dimensions below are stricter than
+# backendtrafficpolicy-ratelimit-default.yaml's, and because they are
+# separate Global rate limit counters keyed by a different route (Envoy
+# Gateway's rate limit domain scopes descriptors per xDS route,
+# internal/xds/translator/ratelimit.go), exhausting this one has no effect on
+# the default policy's counters for the same subject/org, and vice versa --
+# this is what the task's third acceptance criterion asks for.
+#
+# 10/min per subject is deliberately low: cash-receipts and
+# contribution-batches are reconciliation-triggered, manual-operator actions
+# (contracts/openapi/contribution-api.yaml's own description -- "an ops
+# operator has seen the wire on the bank statement"), not a high-frequency
+# API. 60/min per organization allows several operators working the same
+# employer's reconciliation queue concurrently without either limit being the
+# bottleneck under normal use.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: fondaria-ratelimit-contributions
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: employer-api-contributions
+  # Row 29.8: a BackendTrafficPolicy targeting an HTTPRoute is more specific
+  # than one targeting the Gateway (fondaria-backend-defaults, in
+  # backendtrafficpolicy.yaml) for the same route, and Envoy Gateway resolves
+  # same-kind policy attachment by specificity, replacing the whole policy
+  # rather than merging per field -- confirmed live via `kubectl get
+  # httproute employer-api-contributions -o yaml`, whose policy ancestor
+  # status showed fondaria-backend-defaults as Overridden for this route. Left
+  # unset, this route would silently lose the gateway's 5s connect / 30s
+  # request timeout the moment it got its own rate-limit policy. Repeated
+  # here rather than merged so it survives independently of the Gateway
+  # default's own values.
+  timeout:
+    tcp:
+      connectTimeout: 5s
+    http:
+      requestTimeout: 30s
+      connectionIdleTimeout: 60s
+  rateLimit:
+    type: Global
+    global:
+      rules:
+        - clientSelectors:
+            - headers:
+                - type: Distinct
+                  name: X-Edge-RateLimit-Subject
+          limit:
+            requests: 10
+            unit: Minute
+        - clientSelectors:
+            - headers:
+                - type: Distinct
+                  name: X-Edge-RateLimit-Org
+          limit:
+            requests: 60
+            unit: Minute

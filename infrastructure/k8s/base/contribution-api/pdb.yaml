@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: contribution-api
+  labels:
+    app.kubernetes.io/name: contribution-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: fondaria
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: contribution-api

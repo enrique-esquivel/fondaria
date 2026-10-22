@@ -1,0 +1,706 @@
+{
+  "id": "fondaria",
+  "realm": "fondaria",
+  "displayName": "Fondaria Funds",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>Fondaria Funds</span></div>",
+  "notBefore": 0,
+  "defaultSignatureAlgorithm": "RS256",
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionIdleTimeoutRememberMe": 0,
+  "ssoSessionMaxLifespanRememberMe": 0,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "offlineSessionMaxLifespan": 5184000,
+  "clientSessionIdleTimeout": 0,
+  "clientSessionMaxLifespan": 0,
+  "clientOfflineSessionIdleTimeout": 0,
+  "clientOfflineSessionMaxLifespan": 0,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 5,
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxTemporaryLockouts": 0,
+  "bruteForceStrategy": "MULTIPLE",
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "roles": {
+    "realm": [
+      {
+        "id": "role-default-roles-fondaria",
+        "name": "default-roles-fondaria",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "offline_access",
+            "uma_authorization"
+          ]
+        },
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-offline-access",
+        "name": "offline_access",
+        "description": "${role_offline-access}",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-uma-authorization",
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-participant",
+        "name": "participant",
+        "description": "Participant employee accessing own holdings and statements",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-mfa-enforced",
+        "name": "mfa-enforced",
+        "description": "Role requiring multi-factor authentication",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-employer-admin",
+        "name": "employer-admin",
+        "description": "Employer administrator managing own organization",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "mfa-enforced"
+          ]
+        },
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-internal-staff",
+        "name": "internal-staff",
+        "description": "Internal operations staff base role",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "mfa-enforced"
+          ]
+        },
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-internal-support",
+        "name": "internal-support",
+        "description": "Internal read-only customer support",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "internal-staff"
+          ]
+        },
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-internal-operations",
+        "name": "internal-operations",
+        "description": "Internal operations operator",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "internal-staff"
+          ]
+        },
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-internal-approver",
+        "name": "internal-approver",
+        "description": "Internal four-eyes approver",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "internal-staff"
+          ]
+        },
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      },
+      {
+        "id": "role-internal-service",
+        "name": "internal-service",
+        "description": "Service-to-service caller (Task 9.3, UserPopulation.INTERNAL_SERVICE) -- confidential client credential grants only, never a human user",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "fondaria",
+        "attributes": {}
+      }
+    ],
+    "client": {}
+  },
+  "defaultRole": {
+    "id": "role-default-roles-fondaria",
+    "name": "default-roles-fondaria",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false,
+    "containerId": "fondaria"
+  },
+  "clients": [
+    {
+      "id": "client-participant-app",
+      "clientId": "participant-app",
+      "name": "Participant Application",
+      "description": "Public client with PKCE for participant portal and mobile apps",
+      "rootUrl": "",
+      "adminUrl": "",
+      "baseUrl": "",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://app.fondaria.example/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+",
+        "access.token.lifespan": "300"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "id": "mapper-audience-participant-app",
+          "name": "fondaria-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "fondaria-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-employer-portal",
+      "clientId": "employer-portal",
+      "name": "Employer Portal",
+      "description": "Confidential client with PKCE for employer HR/payroll administration portal",
+      "rootUrl": "",
+      "adminUrl": "",
+      "baseUrl": "",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "employer-portal-secret",
+      "redirectUris": [
+        "http://localhost:3001/*",
+        "https://employer.fondaria.example/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+",
+        "access.token.lifespan": "300"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "id": "mapper-audience-employer-portal",
+          "name": "fondaria-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "fondaria-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-internal-services",
+      "clientId": "internal-services",
+      "name": "Internal Services",
+      "description": "Confidential service account client for inter-service communication",
+      "rootUrl": "",
+      "adminUrl": "",
+      "baseUrl": "",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "internal-services-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "id": "mapper-audience-internal-services",
+          "name": "fondaria-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "fondaria-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "config-require-mfa-roles",
+      "alias": "require-mfa-roles",
+      "config": {
+        "condUserRole": "mfa-enforced",
+        "applyNegation": "false"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "id": "flow-browser",
+      "alias": "browser",
+      "description": "Browser based authentication with conditional OTP for staff and employer admins",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": true,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-spnego",
+          "authenticatorFlow": false,
+          "requirement": "DISABLED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 25,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "autheticatorFlow": true,
+          "flowAlias": "forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "flow-forms",
+      "alias": "forms",
+      "description": "Username, password, and conditional MFA forms",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": true,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "flowAlias": "Browser - Staff and Admin OTP",
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "autheticatorFlow": true,
+          "flowAlias": "Browser - Conditional OTP",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "flow-browser-staff-admin-otp",
+      "alias": "Browser - Staff and Admin OTP",
+      "description": "Force OTP for employer-admin and internal-staff roles",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorConfig": "require-mfa-roles",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "flow-browser-conditional-otp",
+      "alias": "Browser - Conditional OTP",
+      "description": "Flow to determine if the OTP is required for participants who configured it",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": true,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "flow-direct-grant",
+      "alias": "direct grant",
+      "description": "OpenID Connect Resource Owner Grant with conditional MFA",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": true,
+      "authenticationExecutions": [
+        {
+          "authenticator": "direct-grant-validate-username",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-password",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "autheticatorFlow": true,
+          "flowAlias": "Direct Grant - Staff and Admin OTP",
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 40,
+          "autheticatorFlow": true,
+          "flowAlias": "Direct Grant - Conditional OTP",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "flow-direct-grant-staff-admin-otp",
+      "alias": "Direct Grant - Staff and Admin OTP",
+      "description": "Force OTP in direct grant for employer-admin and internal-staff roles",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorConfig": "require-mfa-roles",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "flow-direct-grant-conditional-otp",
+      "alias": "Direct Grant - Conditional OTP",
+      "description": "Direct Grant OTP if user configured it",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": true,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "user-participant",
+      "username": "participant.user",
+      "enabled": true,
+      "email": "participant@example.com",
+      "emailVerified": true,
+      "firstName": "Participant",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "participant_pass123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "participant"
+      ]
+    },
+    {
+      "id": "user-employer-admin",
+      "username": "employer.admin",
+      "enabled": true,
+      "email": "admin@example.com",
+      "emailVerified": true,
+      "firstName": "Employer",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin_pass123",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "MyTOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXP\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ],
+      "realmRoles": [
+        "employer-admin",
+        "mfa-enforced"
+      ]
+    },
+    {
+      "id": "user-internal-staff",
+      "username": "internal.staff",
+      "enabled": true,
+      "email": "staff@example.com",
+      "emailVerified": true,
+      "firstName": "Internal",
+      "lastName": "Staff",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "staff_pass123",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "MyTOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXP\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ],
+      "realmRoles": [
+        "internal-staff",
+        "mfa-enforced"
+      ]
+    },
+    {
+      "id": "user-svc-internal-services",
+      "username": "service-account-internal-services",
+      "enabled": true,
+      "serviceAccountClientId": "internal-services",
+      "realmRoles": [
+        "internal-service"
+      ]
+    }
+  ]
+}

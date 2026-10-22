@@ -1,0 +1,34 @@
+# Task 11.1. Single-binary local-dev mode: one process is every Tempo
+# component, storing blocks on local disk (./data/tempo, docker-compose.yml).
+# The Collector is the only writer (otlp_grpc/tempo exporter,
+# otel-collector/config.yaml) -- no service ever sends a span to Tempo directly.
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  trace_idle_period: 10s
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # Retention. Short on purpose for local development -- long enough to
+    # demo a trace minutes after it was created, never meant to be a durable
+    # trace archive. TEMPO_RETENTION documents the same number in .env.example.
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal

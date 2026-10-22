@@ -1,0 +1,87 @@
+name: Weekly projection rebuild
+
+# phase-05 Task 5.8 — prove the projection is disposable: truncate every projection
+# table, replay the whole CDC log from offset 0, and assert the rebuilt state is
+# byte-identical to the original. Also records the rebuild rate so a regression in
+# projection throughput shows up as a drop in the published number.
+#
+# Runs weekly (and on demand). Not in the PR loop: it publishes ~100,000 change
+# events through real containers twice, which is minutes, not seconds. Was nightly;
+# moved to weekly in 2026-09 to stay inside the Actions minute budget (ADR-0023) —
+# a throughput regression is not urgent, and workflow_dispatch covers a pre-release
+# check.
+
+on:
+  schedule:
+    # 07:10 UTC Monday — a little after midnight in America/Mexico_City, off the top
+    # of the hour to avoid the cron stampede.
+    - cron: '10 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      transferCount:
+        description: 'Transfers to replay (default 100000)'
+        required: false
+        default: '100000'
+
+concurrency:
+  group: nightly-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Truncate and rebuild the projection from offset 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Same reason as the verify job: a green run must prove the suite works from
+      # nothing, including container format-on-first-start.
+      TESTCONTAINERS_REUSE_ENABLE: 'false'
+      REBUILD_TRANSFERS: ${{ github.event.inputs.transferCount || '100000' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Rebuild the projection and assert an exact match
+        run: make rebuild-projection
+
+      - name: Publish the rebuild rate to the run summary
+        if: always()
+        run: |
+          METRICS=services/projection-worker/target/rebuild-metrics.prom
+          if [ -f "$METRICS" ]; then
+            {
+              echo '### Projection rebuild rate'
+              echo ''
+              echo '```'
+              cat "$METRICS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No rebuild-metrics.prom produced — the rebuild did not complete.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the rebuild rate as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: projection-rebuild-metrics
+          path: services/projection-worker/target/rebuild-metrics.prom
+          if-no-files-found: warn
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuild-surefire-reports
+          path: '**/target/surefire-reports/'
+
+# When Phase 11's collector stack exists (Task 11.2), a step here can push
+# rebuild-metrics.prom to the Pushgateway so projection_rebuild_transfers_per_second
+# is graphed and alertable rather than only visible in this run's summary.

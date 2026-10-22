@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  serviceName: valkey
+  # One standalone node, not a cluster. Every consumer (contribution-api's
+  # response cache, valuation-api's NAV cache, statement-worker,
+  # projection-worker's trace links) is a Lettuce RedisClient -- a standalone
+  # client that cannot follow cluster-mode MOVED redirects -- and each of them
+  # treats an outage as a cache miss, never a fault. A cluster here would be
+  # both incompatible and unnecessary.
+  replicas: 1
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/component: cache
+        app.kubernetes.io/part-of: fondaria
+      annotations:
+        # ADR-0029's storage amendment: meshed now that the real
+        # meshed-to-meshed blocker (networkpolicies/allow-mesh-proxy.yaml) is
+        # fixed. 6379 is Valkey's own RESP wire protocol, not HTTP --
+        # opaque-ports skips Linkerd's L7 protocol sniffing. envoy-ratelimit
+        # (envoy-gateway-system, Task 10.3) is a real, necessary caller this
+        # tree cannot give a mesh identity to -- linkerd-policy/'s
+        # AuthorizationPolicy for this Server names both the app tier's
+        # MeshTLSAuthentication and a cluster-CIDR NetworkAuthentication
+        # fallback, so that one caller keeps exactly the access it had
+        # before meshing rather than being silently cut off.
+        linkerd.io/inject: enabled
+        config.linkerd.io/opaque-ports: "6379"
+    spec:
+      priorityClassName: fondaria-cache-high
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: valkey/valkey@sha256:752ba000a58bc8925d11ee863a39b5225617cd2cb3dbc9ec8ac65268b65ebb6d
+          imagePullPolicy: IfNotPresent
+          command:
+            - valkey-server
+            - /etc/valkey/valkey.conf
+            - --requirepass
+            - $(VALKEY_PASSWORD)
+          # The same password every consumer presents (compose: REDIS_PASSWORD).
+          # REDISCLI_AUTH lets the probes' valkey-cli authenticate without
+          # putting the password on a command line.
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: valkey-credentials
+                  key: password
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: valkey-credentials
+                  key: password
+          ports:
+            - name: client
+              containerPort: 6379
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            exec:
+              command:
+                - valkey-cli
+                - ping
+            periodSeconds: 5
+            timeoutSeconds: 2
+          readinessProbe:
+            exec:
+              command:
+                - valkey-cli
+                - ping
+            periodSeconds: 5
+            timeoutSeconds: 2
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/valkey
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: valkey
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      volumes:
+        - name: config
+          configMap:
+            name: valkey-config
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: valkey
+          app.kubernetes.io/component: cache
+          app.kubernetes.io/part-of: fondaria
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: tigerbeetle-nvme
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: valkey-config
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: fondaria
+data:
+  valkey.conf: |
+    port 6379
+    cluster-enabled no
+    appendonly yes
+    protected-mode no
+    dir /data

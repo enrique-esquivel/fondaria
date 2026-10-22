@@ -1,0 +1,56 @@
+{
+  "title": "Collector health (Task 11.1)",
+  "uid": "collector-health",
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Collector uptime (seconds)",
+      "description": "otelcol_process_uptime -- the Collector's own self-telemetry, present from the moment it starts, independent of any service being instrumented (Task 11.2).",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "otelcol_process_uptime",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Collector process memory (RSS)",
+      "description": "otelcol_process_memory_rss -- self-telemetry, live from the moment the Collector starts. otelcol_exporter_sent_* / otelcol_receiver_accepted_* only appear once a pipeline carries real traffic, which starts with Task 11.2's instrumentation -- not plotted here to avoid a panel that reads as broken until then.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "otelcol_process_memory_rss",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Scrape targets up",
+      "description": "Every static_configs target in prometheus.yml -- 2 as of Task 11.1 (the Collector's self-telemetry port and its app fan-out port), both up regardless of service instrumentation.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(up)",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

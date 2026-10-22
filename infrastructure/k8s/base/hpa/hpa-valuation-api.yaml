@@ -1,0 +1,24 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: valuation-api
+  labels:
+    app.kubernetes.io/name: valuation-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: fondaria
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: valuation-api
+  minReplicas: 2
+  # ADR-0033: sized against TigerBeetle's 32-client limit, together with every other
+  # ledger client's maximum and rollout surge (LedgerClientBudgetValidationTest).
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

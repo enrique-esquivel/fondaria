@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tigerbeetle
+  labels:
+    app.kubernetes.io/name: tigerbeetle
+    app.kubernetes.io/component: ledger
+    app.kubernetes.io/part-of: fondaria
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tigerbeetle

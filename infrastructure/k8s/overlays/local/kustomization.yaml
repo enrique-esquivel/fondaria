@@ -1,0 +1,639 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Everything lands in one namespace; bootstrap/up.sh creates it and makes it
+# the kubeconfig default.
+namespace: fondaria
+
+resources:
+  - ../../base
+  - storageclass.yaml
+
+# Local credentials -- the k8s counterpart of the `${VAR:-value}` defaults in
+# infrastructure/compose/docker-compose.yml, with the same values as
+# .env.example. The six ExternalSecrets in the base are deleted below and
+# replaced by these Secrets of the same names, so nothing downstream --
+# Deployments' secretKeyRefs, CloudNativePG's barmanObjectStore -- knows the
+# difference. Postgres and RabbitMQ credentials are not here at all: their
+# operators generate them in both environments.
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  - name: object-store-credentials
+    literals:
+      - OBJECT_STORE_ROOT_ACCESS_KEY=funds
+      - OBJECT_STORE_ROOT_SECRET_KEY=funds_dev_pass
+  - name: grafana-admin-secret
+    literals:
+      - admin-user=admin
+      - admin-password=admin_dev_pass
+  - name: balance-api-secret
+    literals:
+      - QUERY_CURSOR_SECRET=local_dev_cursor_signing_key_not_for_production
+  - name: contribution-api-secret
+    literals:
+      - PARTICIPANT_IDENTITY_MASTER_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  - name: valkey-credentials
+    literals:
+      - password=funds_dev_pass
+  - name: keycloak-admin-secret
+    literals:
+      - admin-user=admin
+      - admin-password=admin_dev_pass
+  # Demo values for the realm's two confidential clients (base/keycloak/
+  # configmap.yaml placeholders), the same ones infrastructure/keycloak/
+  # realm.json carries for compose and Testcontainers.
+  - name: keycloak-client-secrets
+    literals:
+      - employer-portal=employer-portal-secret
+      - internal-services=internal-services-secret
+  # Task 10.1: self-signed dev TLS for fondaria-gateway's listeners. Same name
+  # as overlays/prod/certificates.yaml's Certificate produces, so
+  # gateway.yaml's certificateRefs needs no per-environment patch. The pair is
+  # not committed: bootstrap/local-secrets.sh generates it into generated/
+  # (gitignored) on first run -- `make local-secrets`, which `make k8s-up`,
+  # `make skaffold-run` and `make verify` all run first.
+  - name: fondaria-gateway-tls
+    type: kubernetes.io/tls
+    files:
+      - tls.crt=generated/gateway-tls.crt
+      - tls.key=generated/gateway-tls.key
+
+# The demo realm users (participant.user, employer.admin, internal.staff) with
+# their passwords and OTP seeds -- local only; the base/prod realm has no
+# human users at all. Mounted beside the realm by the patch on the keycloak
+# Deployment below; Keycloak's directory import attaches fondaria-users-0.json
+# to the fondaria realm.
+configMapGenerator:
+  - name: keycloak-demo-users
+    files:
+      - keycloak/fondaria-users-0.json
+
+patches:
+  # No External Secrets Operator locally -- see secretGenerator above.
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: object-store-credentials
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: grafana-admin-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: balance-api-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: valkey-credentials
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: contribution-api-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: keycloak-admin-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: keycloak-client-secrets
+
+  # Demo users for the local realm (configMapGenerator above), added to the
+  # base's projected realm-import volume.
+  - target:
+      kind: Deployment
+      name: keycloak
+    patch: |-
+      - op: add
+        path: /spec/template/spec/volumes/0/projected/sources/-
+        value:
+          configMap:
+            name: keycloak-demo-users
+
+  # One pod is enough for a demo cluster; the HPAs may still scale up from it.
+  # Task D.3: Cap maxReplicas at 3 and add a 300s scaleUp stabilization window
+  # to prevent cold-start metric gaps from triggering runaway scale-up (10 replicas)
+  # that exhausts TigerBeetle connections. The exit 137 that followed was not OOM: with
+  # every client slot taken the replica stops accepting connections, and its liveness
+  # probe kills it (row 26p, ADR-0033; LedgerClientBudgetValidationTest now sizes this).
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+      - op: add
+        path: /spec/behavior
+        value:
+          scaleUp:
+            stabilizationWindowSeconds: 300
+            policies:
+              - type: Pods
+                value: 1
+                periodSeconds: 60
+            selectPolicy: Min
+
+  # Local replica count of 1 across all workloads, replaced in place: a rolling
+  # update of a single replica would need room for two pods of every service at
+  # once, which a laptop-sized node does not have.
+  - target:
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ignored
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+          rollingUpdate: null
+
+  # ADR-0032 / row 26g: projection-worker is the exception to the one-pod rule. The
+  # scale-out (competing consumers, per-consumer checkpoints, cluster-wide halt) is only
+  # exercised with several replicas. 3 is a starting point for the demo rehearsal, to be
+  # measured against the Docker VM's memory and adjusted.
+  - target:
+      kind: Deployment
+      name: projection-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: StatefulSet
+      name: tigerbeetle
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: tigerbeetle
+      spec:
+        replicas: 1
+
+  - target:
+      kind: Cluster
+      name: postgres
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: postgres
+      spec:
+        instances: 1
+        minSyncReplicas: 0
+        maxSyncReplicas: 0
+        # Row 26j: a restart (`make skaffold-run` re-applying a changed Cluster) left the pod
+        # in Terminating for the operator default of 1800 s while every service crash-looped.
+        # One instance has no replica to hand over to, so the long window buys nothing locally:
+        # 15 s of smart shutdown, then a fast one within the remaining 45 s. Prod keeps the
+        # defaults.
+        stopDelay: 60
+        smartShutdownTimeout: 15
+        postgresql:
+          parameters:
+            # The operator refuses a memory request below shared_buffers.
+            shared_buffers: "64MB"
+            # Row 26o: per-statement timings for the allotment database breakdown. Setting any
+            # pg_stat_statements.* parameter makes CNPG preload the library and create the
+            # extension itself. Local only; production has not decided to carry its overhead.
+            pg_stat_statements.track: "top"
+            pg_stat_statements.max: "5000"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+
+  - target:
+      kind: RabbitmqCluster
+      name: rabbitmq
+    patch: |-
+      apiVersion: rabbitmq.com/v1beta1
+      kind: RabbitmqCluster
+      metadata:
+        name: rabbitmq
+      spec:
+        replicas: 1
+        # Row 26j: the operator's preStop hook waits for quorum-plus-one and a drain with a
+        # timeout of terminationGracePeriodSeconds, default 604800 (one week), and a single
+        # node sat in Terminating for it. The operator derives both the hook's timeout and the
+        # pod's grace period from this one field. Prod keeps the default.
+        terminationGracePeriodSeconds: 60
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+
+  # Lower resource requests for local lightweight cluster. Requests, not limits:
+  # a JVM still gets its 1Gi ceiling, the scheduler just stops reserving it.
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+
+  - target:
+      kind: StatefulSet
+      name: tigerbeetle
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 256Mi
+      # Task D.3: the base 4Gi limit OOM-killed the replica (exit 137, repeatedly)
+      # under a single 60,000-row contribution batch -- sized before the
+      # ~300,000-participant demo (Task D.2) existed. Raised for the demo's
+      # actual working set; the base/prod limit is untouched.
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 6Gi
+
+  - target:
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+
+  # Relaxed PDBs for single-replica local operation
+  - target:
+      kind: PodDisruptionBudget
+    patch: |-
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: ignored
+      spec:
+        minAvailable: 0
+
+  - target:
+      kind: PodDisruptionBudget
+      name: projection-worker
+    patch: |-
+      - op: remove
+        path: /spec/maxUnavailable
+
+  - target:
+      kind: PodDisruptionBudget
+      name: tigerbeetle-cdc
+    patch: |-
+      - op: remove
+        path: /spec/maxUnavailable
+
+  - target:
+      kind: PodDisruptionBudget
+      name: tigerbeetle
+    patch: |-
+      - op: remove
+        path: /spec/maxUnavailable
+
+  # Task 10.1: contribution-api, balance-api and valuation-api no longer get
+  # their own NodePort. fondaria-gateway (infrastructure/k8s/base/gateway/) is
+  # now the one external entry point -- valuation-api is the internal API and
+  # was never supposed to be reachable from outside the cluster at all (it
+  # had a NodePort only because no gateway existed yet). Demo tooling that
+  # called these three NodePorts directly needs to move to the gateway's
+  # hostnames/NodePort below; tracked in BACKLOG.md "Where we are", not fixed
+  # here -- Task 10.1's file list does not include libs/demo-tools.
+  #
+  # Local hostnames for fondaria-gateway's two listeners (gateway.yaml); prod
+  # keeps api.fondaria.example/auth.fondaria.example unpatched.
+  - target:
+      kind: Gateway
+      name: fondaria-gateway
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/hostname
+        value: api.fondaria.local
+      - op: replace
+        path: /spec/listeners/1/hostname
+        value: auth.fondaria.local
+
+  # Task 10.2 -- confirmed defect, found applying Task 10.1's gateway to a
+  # live cluster for the first time (BACKLOG.md row 29.1's two "unverified"
+  # ACs): the Gateway's own listener hostname patch above was never
+  # accompanied by a matching patch on each HTTPRoute's `spec.hostnames`.
+  # Gateway API requires a route's hostnames to intersect the listener's
+  # hostname to bind at all; with the listener patched to *.fondaria.local and
+  # every route still declaring *.fondaria.example, every route's own status
+  # reported "no hostname intersections between the HTTPRoute and this
+  # parent ref's Listener(s)" -- none of them served traffic locally. Prod
+  # is unaffected (gateway.yaml's *.fondaria.example is what every route already
+  # declares; nothing to patch there).
+  - target:
+      kind: HTTPRoute
+      name: participant-api
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: api.fondaria.local
+  - target:
+      kind: HTTPRoute
+      name: employer-api
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: api.fondaria.local
+  - target:
+      kind: HTTPRoute
+      name: employer-api-org-summary
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: api.fondaria.local
+  # Task 10.3: caught live -- forgetting this patch for a new HTTPRoute is
+  # exactly the defect Task 10.2 found for the original four routes
+  # (TASK-LOG.md). Same NoMatchingListenerHostname failure, confirmed here
+  # before this fix.
+  - target:
+      kind: HTTPRoute
+      name: employer-api-contributions
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: api.fondaria.local
+  - target:
+      kind: HTTPRoute
+      name: keycloak
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: auth.fondaria.local
+
+  # Task 10.2: securitypolicy-jwt.yaml's issuer must match the token Keycloak
+  # actually issues, which tracks KC_HOSTNAME -- already patched to
+  # auth.fondaria.local below alongside keycloak-config's own patch. The
+  # remoteJWKS URI is untouched: it is an in-cluster Service call, not the
+  # public hostname, so it does not vary by environment.
+  - target:
+      kind: SecurityPolicy
+      name: fondaria-edge-jwt
+    patch: |-
+      - op: replace
+        path: /spec/jwt/providers/0/issuer
+        value: "https://auth.fondaria.local/realms/fondaria"
+
+  # Task 10.3: one gateway replica is enough for a demo cluster, same
+  # reasoning as every other "one pod locally" patch in this file -- and
+  # unlike a Deployment this tree renders itself, the generated Envoy proxy
+  # Deployment isn't reachable by the blanket `kind: Deployment` patch above,
+  # so it needs this explicit override.
+  - target:
+      kind: EnvoyProxy
+      name: fondaria-gateway-proxy-config
+    patch: |-
+      - op: replace
+        path: /spec/provider/kubernetes/envoyDeployment/replicas
+        value: 1
+
+  # kind has no cloud LoadBalancer controller, so the Service Envoy Gateway
+  # generates for fondaria-gateway needs to be NodePort instead (matching the
+  # NodePort pattern this file already uses for grafana below), with an
+  # explicit node port so bootstrap/kind-config.yaml can map it to the host.
+  # `envoyService.patch` is Envoy Gateway's own documented mechanism for
+  # this (EnvoyProxyKubernetesProvider.EnvoyService.Patch, a
+  # KubernetesPatchSpec applied by its controller to the Service it
+  # generates, not a kustomize patch on a resource this tree owns). The merge
+  # targets corev1.Service.spec.ports by `port` (its strategic-merge key),
+  # not by `name`, so this attaches to the generated 443 entry regardless of
+  # what Envoy Gateway names it.
+  #
+  # Task 10.3 -- confirmed defect, found live: `targetPort: 443` was wrong.
+  # The proxy container runs non-root (this platform's own security
+  # baseline; envoyproxy.yaml declares no capabilities), so it cannot bind
+  # the privileged port 443 at all -- Envoy Gateway's own translator shifts
+  # every well-known listener port it configures by +10000 internally for
+  # exactly this reason (443 -> 10443, matching the "downstream 10443"
+  # Task 10.2's own access-log evidence already showed, unremarked at the
+  # time). `port-forward`ing the generated Service at targetPort 443 failed
+  # inside the pod's own network namespace with a plain connection refused
+  # (nothing listens there); the identical request against the pod's 10443
+  # succeeded (401, correctly, for a request with no bearer token). This had
+  # never been exercised through the Service before now -- Task 10.1/10.2
+  # verified the pod and its routes directly, not the path a real client
+  # (or this task's own "three replicas, one shared entry point" test)
+  # actually uses.
+  - target:
+      kind: EnvoyProxy
+      name: fondaria-gateway-proxy-config
+    patch: |-
+      - op: replace
+        path: /spec/provider/kubernetes/envoyService/type
+        value: NodePort
+      - op: add
+        path: /spec/provider/kubernetes/envoyService/patch
+        value:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - name: https-443
+                  port: 443
+                  targetPort: 10443
+                  nodePort: 30443
+                  protocol: TCP
+
+  # Single-replica TigerBeetle endpoint in local development. No TIGERBEETLE_DEVELOPMENT:
+  # row 26q ran the replica without --development on this kind node's volume (ext4, Direct
+  # IO available), so locally it starts with production's batch size, client limit and
+  # caches (ADR-0033, 2026-10-03 amendment). The grid cache stays shrunk to fit the node next to the JVMs.
+  - target:
+      kind: ConfigMap
+      name: tigerbeetle-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_REPLICA_COUNT
+        value: "1"
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+      - op: add
+        path: /data/TIGERBEETLE_CACHE_GRID
+        value: "512MiB"
+
+  - target:
+      kind: ConfigMap
+      name: contribution-api-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+
+  - target:
+      kind: ConfigMap
+      name: allotment-job-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+
+  - target:
+      kind: ConfigMap
+      name: balance-api-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+
+  - target:
+      kind: ConfigMap
+      name: eod-job-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+
+  - target:
+      kind: ConfigMap
+      name: valuation-api-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+
+  - target:
+      kind: ConfigMap
+      name: tigerbeetle-cdc-config
+    patch: |-
+      - op: replace
+        path: /data/CDC_TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000"
+
+  # Task 10.1: matches the auth-https listener's local hostname patch above.
+  - target:
+      kind: ConfigMap
+      name: keycloak-config
+    patch: |-
+      - op: replace
+        path: /data/KC_HOSTNAME
+        value: "https://auth.fondaria.local"
+
+  # Task D.1 -- the demo's accelerated clock. Only the local overlay ever sets
+  # this; the base ConfigMaps default to "false" and prod never patches it, so
+  # a production deployment structurally cannot read reference.demo_clock.
+  - target:
+      kind: ConfigMap
+      name: contribution-api-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+
+  - target:
+      kind: ConfigMap
+      name: allotment-job-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+
+  - target:
+      kind: ConfigMap
+      name: valuation-api-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+
+  - target:
+      kind: ConfigMap
+      name: eod-job-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+
+  - target:
+      kind: ConfigMap
+      name: statement-worker-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+
+  - target:
+      kind: ConfigMap
+      name: balance-api-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+
+  # Observability local overrides: lower requests and short retention
+  - target:
+      kind: StatefulSet
+      name: prometheus
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 256Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/args/2
+        value: --storage.tsdb.retention.time=1d
+
+  - target:
+      kind: StatefulSet
+      name: tempo
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+
+  - target:
+      kind: StatefulSet
+      name: loki
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+
+  # NodePort access for local Grafana dashboard inspection (port 30001)
+  - target:
+      kind: Service
+      name: grafana
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30001

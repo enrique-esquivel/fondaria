@@ -1,0 +1,85 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # 3 nodes across 3 AZs (ADR-0022 and DESIGN.md §13)
+  replicas: 3
+  image: rabbitmq@sha256:06a0503a86bfcc66317eebc47254789616c657852c7cfb82799481a3312156d5
+
+  rabbitmq:
+    additionalPlugins:
+      # Mandatory: enables consistent hash exchange routing by account_id to preserve per-account FIFO ordering (ADR-0022 §2a)
+      - rabbitmq_consistent_hash_exchange
+      - rabbitmq_management
+      - rabbitmq_prometheus
+    additionalConfig: |
+      cluster_partition_handling = pause_minority
+      # NOT default_queue_type = quorum: TigerBeetle's CDC connector declares its
+      # internal progress/locker queues without a type and reads them with
+      # basic_get, which a quorum queue refuses (RESOURCE_LOCKED) -- verified on
+      # this cluster. The platform's own queues are classic until the three
+      # declaring services ask for x-queue-type=quorum explicitly; until then a
+      # node loss does interrupt them (BACKLOG.md "Known gaps").
+
+  persistence:
+    storageClassName: tigerbeetle-nvme
+    storage: 20Gi
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1024Mi
+    limits:
+      cpu: 1000m
+      memory: 2048Mi
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: rabbitmq
+            topologyKey: kubernetes.io/hostname
+
+  # Pod-spec fields the RabbitmqCluster schema has no first-class knob for go
+  # through the operator's StatefulSet override.
+  override:
+    statefulSet:
+      spec:
+        template:
+          metadata:
+            annotations:
+              # ADR-0029's storage amendment: meshed now that the real
+              # meshed-to-meshed blocker (networkpolicies/allow-mesh-proxy.yaml)
+              # is fixed. Only 5672 (AMQP, the actual application-facing
+              # port) is opaque-mesh-gated -- RabbitMQ's own inter-node
+              # clustering (4369 epmd, 25672 Erlang distribution), the
+              # management HTTP API (15672), and unmeshed Prometheus's own
+              # scrape (15692) all keep real unmeshed callers this tree does
+              # not control (RabbitMQ's peers, the rabbitmq-topology Job,
+              # Prometheus), so they stay on skip-inbound-ports exactly as
+              # before meshing -- deliberately not extending mesh identity
+              # to the cluster's own peer-to-peer protocol in this pass.
+              linkerd.io/inject: enabled
+              config.linkerd.io/opaque-ports: "5672"
+              config.linkerd.io/skip-inbound-ports: "4369,15672,15692,25672"
+          spec:
+            # Required by the override schema; an empty list changes nothing.
+            containers: []
+            priorityClassName: fondaria-broker-critical
+            topologySpreadConstraints:
+              - maxSkew: 1
+                topologyKey: topology.kubernetes.io/zone
+                whenUnsatisfiable: ScheduleAnyway
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: rabbitmq

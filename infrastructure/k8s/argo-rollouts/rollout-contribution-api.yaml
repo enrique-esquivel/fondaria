@@ -1,0 +1,119 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: contribution-api
+  labels:
+    app.kubernetes.io/name: contribution-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: contribution-api
+  strategy:
+    canary:
+      canaryService: contribution-api-canary
+      stableService: contribution-api
+      trafficRouting:
+        nginx:
+          stableIngress: contribution-api
+      steps:
+        # Step 1: Initial 20% canary traffic
+        - setWeight: 20
+        - pause:
+            duration: 2m
+        # Step 2: Automated Prometheus analysis checking transfer rejection rate and p99 latency
+        - analysis:
+            templates:
+              - templateName: payment-api-success-rate
+        # Step 3: Advance to 50% canary traffic
+        - setWeight: 50
+        - pause:
+            duration: 5m
+        # Step 4: Final verification before 100% full promotion
+        - analysis:
+            templates:
+              - templateName: payment-api-success-rate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: contribution-api
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: fondaria
+    spec:
+      priorityClassName: fondaria-stateless-default
+      serviceAccountName: contribution-api
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: contribution-api
+      containers:
+        - name: contribution-api
+          image: fondaria/contribution-api@sha256:7e37784d94dccbf5ccb195c73b295f5ad00cd266512dfbac12eb9c3c28f8077d
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: contribution-api-config
+            - secretRef:
+                name: contribution-api-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

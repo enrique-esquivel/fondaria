@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fondaria-local
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: fondaria-local
+    app.kubernetes.io/part-of: fondaria
+    environment: local
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/enrique-esquivel/fondaria.git
+    targetRevision: HEAD
+    path: infrastructure/k8s/overlays/local
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fondaria
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,560 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: fondaria
+data:
+  prometheus.yml: |
+    # Task 11.1. Retention is a startup flag (--storage.tsdb.retention.time), set
+    # in docker-compose.yml's PROMETHEUS_RETENTION (.env.example), not here --
+    # this file is scrape targets and rule files only.
+    #
+    # Adopts infrastructure/observability/alerts/*.rules.yml as its rule files
+    # rather than re-deriving them: eod-close.rules.yml (Task 7.6) was written and
+    # promtool-checked ahead of this stack existing, on the understanding that
+    # Phase 11 would add the scrape config and routing around it (see that file's
+    # own header comment). It is still not scrapable end to end -- the metrics it
+    # reads are registered on eod-job's MeterRegistry, but eod-job has no
+    # micrometer-registry-prometheus dependency or /actuator/prometheus endpoint,
+    # and instrumenting services is Task 11.2's, not this task's.
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      # *.rules.yml only -- infrastructure/observability/alerts/ also holds
+      # *.tests.yml files (promtool unit tests, e.g. eod-close.tests.yml), which
+      # are not rule files and fail to parse as one.
+      - /etc/prometheus/rules/*.rules.yml
+
+    # Scrape jobs that exist in only one environment -- Kubernetes service
+    # discovery for the CloudNativePG instances, for example -- live in files here
+    # rather than in this shared config, which compose and the k8s ConfigMap carry
+    # byte-for-byte (KustomizeBaseValidationTest). Empty under compose.
+    scrape_config_files:
+      - /etc/prometheus/scrape.d/*.yml
+
+    scrape_configs:
+      # The Collector's own health: spans/metrics/logs received and exported,
+      # queue depth, refused points. Independent of every pipeline in
+      # otel-collector/config.yaml -- has data before any service is instrumented.
+      - job_name: otel-collector-self
+        static_configs:
+          - targets: ["otel-collector:8888"]
+
+      # Application metrics fanned out through the Collector's `prometheus`
+      # exporter (otel-collector/config.yaml). Empty until Task 11.2 instruments a
+      # service to export OTLP metrics -- the target is up and scraped either way.
+      - job_name: otel-collector-app
+        honor_labels: true
+        static_configs:
+          - targets: ["otel-collector:8889"]
+
+      # Task F.2: RabbitMQ Prometheus metrics endpoint (port 15692).
+      # Scrapes queue coarse metrics (total queue messages, ready, unacked)
+      # used by the `dlq_depth` recording rule.
+      - job_name: rabbitmq
+        metrics_path: /metrics/detailed
+        params:
+          family: ["queue_coarse_metrics"]
+        static_configs:
+          - targets: ["rabbitmq:15692"]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: fondaria
+data:
+  eod-close.rules.yml: |
+    # Task 7.6 -- alert rules for the daily close (services/eod-job).
+    #
+    # Phase 11 (Task 11.1) has not built the Prometheus/Grafana stack yet -- this file is not
+    # wired into a running Prometheus, and there is no scrape config, service discovery or
+    # Alertmanager route to go with it. It exists now, ahead of that stack, because Tasks
+    # 7.2-7.5a already emit the meters these rules read (see ReconciliationMetrics,
+    # CustodianReconciliationMetrics, SnapshotMetrics and SignoffMetrics, each of which says
+    # "the alert rule and its runbook are Task 7.6's and Phase 11's to write") and because a
+    # rule can be written, syntax-checked and rehearsed against a synthetic metric series
+    # (eod-close.tests.yml) entirely with promtool, independent of a live server. Phase 11
+    # adopts this file rather than re-deriving it, and adds scrape config and routing around it.
+    #
+    # NOT YET SCRAPABLE. `services/eod-job` registers these meters on a Micrometer
+    # MeterRegistry, but the service has no `micrometer-registry-prometheus` dependency and
+    # `management.endpoints.web.exposure.include` is `health` only (application.yaml) -- there
+    # is no `/actuator/prometheus` endpoint today. The metric names below are therefore
+    # verified against the registration call sites (ReconciliationMetrics etc.), not against a
+    # real scrape; adding the Prometheus registry and exposing the endpoint is Phase 11's, not
+    # this task's.
+    #
+    # Five alerts, one per docs/RUNBOOKS.md page named in phase-07-eod.md Task 7.6. Every alert
+    # is `severity: page` -- each names a condition that blocks the daily close or leaves
+    # participants' money unproved for a business date, the same bar AGENTS.md Sec 7 and
+    # Task 11.4 set for a page ("page-level alerts are limited to things that are actually
+    # urgent"). No alert carries a fund, organization or participant label, for the same
+    # reason the meters it reads do not (AGENTS.md Sec 7): a label is as much a log line as a
+    # message is, and an alert only has to say *that* something is wrong. Which fund or
+    # account is wrong is in the workflow.* row behind authentication, and every runbook's
+    # first diagnostic command is the query that finds it.
+    groups:
+      - name: eod-close
+        rules:
+          - alert: EODInternalReconciliationDrift
+            expr: eod_reconciliation_blocked == 1
+            # 5m: the gauge also starts at 1 on process boot, before the first pass of a
+            # process has run (ReconciliationMetrics). A `for` this short absorbs a restart
+            # without absorbing a real break, whose pass completes and re-raises the gauge
+            # every poll interval (fondaria.reconciliation.poll-interval) until it is fixed.
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Internal reconciliation is blocked -- the ledger and the projection disagree, or the pass itself did not finish."
+              description: "eod_reconciliation_blocked has been 1 for at least 5 minutes. The daily close cannot proceed past Task 7.2 while this holds: the snapshot (7.4) and statements (7.5b) both refuse to run for a business date reconciliation has not passed. At risk: participants' recorded units may not match what the ledger actually holds."
+              runbook_url: "docs/RUNBOOKS.md#internal-reconciliation-drift"
+    
+          - alert: EODCustodianBreak
+            # A real (non-timing) break open or re-confirmed. CustodianReconciliationResult
+            # documents breaksTouched() as breaks this pass "opened OR RE-CONFIRMED" -- an
+            # unresolved break increments this counter on every pass that still finds it, not
+            # only the pass that first opened it. increase() over a window wider than the poll
+            # interval (fondaria.custodian-reconciliation.poll-interval, default 1h) so one slow
+            # scrape does not miss a pass, but the page means "a real break is open", not "a
+            # new break just appeared" -- the runbook's first diagnostic is what tells the two
+            # apart (an existing row vs. no matching row).
+            expr: increase(eod_custodian_breaks_total[2h]) > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "A real custodian-reconciliation break is open -- the custodian's own records disagree with this platform's."
+              description: "eod_custodian_breaks_total increased. This fires for a break's first pass and for every later pass that still finds it open, so it does not by itself mean the break is new. Not a timing difference (those are counted separately, on eod_custodian_timing_differences_total, and are not page-worthy alone) -- a break the custodian's pending-trade figure does not explain. At risk: the counterparty of record disagrees with what participants are shown they hold."
+              runbook_url: "docs/RUNBOOKS.md#custodian-break"
+    
+          - alert: EODCustodianStatementLate
+            expr: increase(eod_custodian_statements_late_total[2h]) > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "A provider account had no custodian statement when today's reconciliation pass ran."
+              description: "eod_custodian_statements_late_total increased. Task 7.3's posture is fail closed: a missing statement blocks the custodian-reconciliation gate exactly as a real break does, because an unreconciled position is exactly as unproved as a wrongly reconciled one. At risk: the close cannot prove the custodian agrees, for however many provider accounts are missing a file."
+              runbook_url: "docs/RUNBOOKS.md#late-custodian-file"
+    
+          - alert: EODSnapshotTieOutFailure
+            expr: increase(eod_snapshot_untied_total[2h]) > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "A fund's daily snapshot did not tie: the file's unit total does not equal units_in_issue."
+              description: "eod_snapshot_untied_total increased. This is the one check that proves the dense snapshot complete (Task 7.4) -- a fund failing it means the file is wrong about participants' money, not merely inconsistent with an earlier pass. Nothing is stored for a run that fails this check. At risk: statements (7.5b) would render from a wrong position file if this were not blocking."
+              runbook_url: "docs/RUNBOOKS.md#snapshot-tie-out-failure"
+    
+          - alert: EODMissedSignoff
+            # An earlier draft gated this on `hour() >= 2` (UTC), meant to give a grace window
+            # right after cutoff before paging. It was wrong: `hour()` wraps to 0 every 24
+            # hours regardless of how long the gauge has actually been raised, so a close
+            # blocked for, say, 25 hours straight would have gone quiet from 00:00-02:00 UTC
+            # the *next* day too -- Alertmanager would resolve a still-broken page and refire
+            # it two hours later, which is the opposite of what a sustained-outage page should
+            # do. Caught by rehearsing the alert past a 24-hour boundary in eod-close.tests.yml
+            # before this was corrected. `for: 2h`, measured from whenever the gauge actually
+            # went to 1, gives the same grace period without the wraparound: right after
+            # cutoff, "not signed off yet" stays quiet for up to two hours (SignoffMetrics's
+            # javadoc: "a time-of-day window in the rule ... because 'not signed off yet' is
+            # normal until the close runs"), and once it fires it keeps firing continuously for
+            # as long as the gauge stays up, with no periodic reset.
+            expr: eod_signoff_blocked == 1
+            for: 2h
+            labels:
+              severity: page
+            annotations:
+              summary: "The daily close has not signed off for at least two hours."
+              description: "eod_signoff_blocked has been 1 continuously for at least two hours. Statement generation (7.5b) refuses to run without a sign-off. At risk: reporting for the business date is stalled behind whichever upstream gate (7.2, 7.3 or 7.4) has not passed -- or, if this fires for a date already believed signed off, the sign-off itself needs to be re-examined (see the runbook's second scenario)."
+              runbook_url: "docs/RUNBOOKS.md#missed-signoff"
+  financial-control.rules.yml: |
+    # Task 11.4 -- financial control alerts and SLO error budget rules.
+    #
+    # Follows docs/DESIGN-DECISIONS.md and docs/ai-tasks/phase-11-fix.md Task 11F.1:
+    # - Financial control metrics: CDC lag (warn 30s, page 300s, broker idle discrimination),
+    #   projection drift (any non-zero -> page), EOD hash chain valid (0 -> page),
+    #   DLQ depth (> 0 -> page), idempotency conflicts (spike -> investigate).
+    # - SLOs with error budgets: payment initiation p99 < 250ms, balance read p99 < 50ms,
+    #   CDC lag p99 < 5s, availability 99.95%.
+    # - Service down alerts: absent(jvm_memory_used_bytes{job=...}) for each service (page / warning).
+    # - RabbitMQ scrape missing: absent(rabbitmq_detailed_queue_messages) -> page.
+    #
+    # Every alert specifies:
+    # - severity (page or warning)
+    # - description written for someone woken at 3am
+    # - runbook_url pointing to an existing file in docs/RUNBOOKS.md
+    #
+    # In accordance with AGENTS.md §4 and §7:
+    # - No PII, customer, or account identifiers in labels
+    # - Financial drift values are signed; any non-zero drift trips the alert
+    # - Idle pipeline does not fire false CDC lag alerts
+
+    groups:
+      - name: financial-control
+        rules:
+          # Task F.2 & 11F.1: Projects RabbitMQ per-DLQ message counts down to dlq_depth.
+          - record: dlq_depth
+            expr: sum(rabbitmq_detailed_queue_messages{queue=~".*\\.dlq"})
+
+          - alert: RabbitMqScrapeMissing
+            expr: absent(rabbitmq_detailed_queue_messages)
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "RabbitMQ metrics scrape is missing or failing"
+              description: "rabbitmq_detailed_queue_messages is absent. Prometheus is unable to scrape RabbitMQ metrics endpoint on port 15692. DLQ depth and queue backlog monitoring is blind."
+              runbook_url: "docs/RUNBOOKS.md#dead-letter-queue"
+
+          - alert: CDCLagWarning
+            expr: (max by (group) (ledger_cdc_lag_seconds) > 30) and on() (sum(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}) > 0)
+            for: 30s
+            labels:
+              severity: warning
+            annotations:
+              summary: "CDC projection consumer lag is elevated (> 30s) while events are pending"
+              description: "ledger_cdc_lag_seconds exceeds 30s and new events have been received in RabbitMQ queues. The projection pipeline is falling behind real-time. Check projection-worker logs and consumer throughput."
+              runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+          - alert: CDCLagPage
+            expr: (max by (group) (ledger_cdc_lag_seconds) > 300) and on() (sum(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}) > 0)
+            for: 1m
+            labels:
+              severity: page
+            annotations:
+              summary: "CDC projection pipeline is severely stalled (> 300s) with pending events"
+              description: "ledger_cdc_lag_seconds exceeds 300s and incoming ledger events are pending in RabbitMQ. The projection worker has stalled, crashed, or encountered poison messages. Projection is materially stale; inspect worker readiness probe and consider replay."
+              runbook_url: "docs/RUNBOOKS.md#cdc-replay"
+
+          # ADR-0032 §2/§4: a poison message halts every replica through workflow.projection_halt.
+          # The gauge is per pod; max() pages once for the cluster. DLQMessagesPresent also fires --
+          # "something was dead-lettered" versus "the projection is stopped".
+          - alert: ProjectionHalted
+            expr: max(projection_halted) > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "The projection worker is halted on a message it could not process"
+              description: "projection_halted is 1 on at least one projection-worker pod. A poison message was dead-lettered and the cluster-wide halt flag (workflow.projection_halt) stops every replica. Nothing new is being projected, so balances and statements read from the projection are going stale. Find the active halt row, fix the cause, then clear it and restart per the runbook."
+              runbook_url: "docs/RUNBOOKS.md#cdc-replay"
+
+          # ADR-0032 §4: a consumer that is stuck drops out of the lag head after the active window, so
+          # the backlog signal is queue depth. Fires per queue when it holds messages and has not fallen.
+          - alert: ProjectionQueueNotDraining
+            expr: (min_over_time(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}[10m]) > 0) and (delta(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}[10m]) >= 0)
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "A projection queue has held messages for 10 minutes without shrinking"
+              description: "rabbitmq_detailed_queue_messages for a projection queue has been non-zero and has not fallen for 10m. Consumers on that queue are stuck, starved of database connections, or the worker is halted. Check projection_halted, the pool size against consumers, and worker logs."
+              runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+          - alert: ProjectionDrift
+            expr: sum(abs(projection_drift_minor)) > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "Financial balance drift detected between ledger and projection"
+              description: "projection_drift_minor is non-zero. The projection store balance differs from TigerBeetle's authoritative ledger. Participants may see inaccurate balances. Investigate immediately."
+              runbook_url: "docs/RUNBOOKS.md#projection-drift"
+
+          - alert: EODHashChainInvalid
+            expr: eod_hash_chain_valid == 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "End-of-day reconciliation cryptographic hash chain verification failed"
+              description: "eod_hash_chain_valid is 0. The daily close SHA-256 cryptographic hash chain has detected corruption or record alteration. Audit integrity is broken; halt close operations."
+              runbook_url: "docs/RUNBOOKS.md#eod-hash-chain"
+
+          - alert: DLQMessagesPresent
+            expr: dlq_depth > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "Dead-letter queue has unprocessed poison or rejected messages"
+              description: "dlq_depth is greater than zero. Financial events failed parsing, schema validation, or projection and were sent to the DLQ. A financial movement has not been recorded in PostgreSQL."
+              runbook_url: "docs/RUNBOOKS.md#dead-letter-queue"
+
+          - alert: IdempotencyConflictSpike
+            expr: sum(rate(idempotency_conflict_total[5m])) > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Elevated idempotency conflict rate detected on incoming requests"
+              description: "idempotency_conflict_total is rising. External clients or batch jobs are resubmitting duplicate idempotency keys with different payloads. Identify calling client and investigate integration."
+              runbook_url: "docs/RUNBOOKS.md#idempotency-conflicts"
+
+          # Break-glass alert (Task 9.4)
+          - alert: BreakGlassAccessActive
+            expr: break_glass_active_count > 0
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "Break-glass emergency access is active"
+              description: "break_glass_active_count is greater than zero. A privileged staff action was requested or executed using emergency break-glass procedure, bypassing dual approval. Review reason and control totals immediately."
+              runbook_url: "docs/RUNBOOKS.md#break-glass"
+
+          # Service-down alerts (Task 11F.1 Requirement 5)
+          - alert: ServiceDownProjectionWorker
+            expr: absent(jvm_memory_used_bytes{job="projection-worker"})
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Service projection-worker is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"projection-worker\"} is absent for 5m. The projection worker process has stopped exporting metrics. CDC ledger projection is halted."
+              runbook_url: "docs/RUNBOOKS.md#cdc-replay"
+
+          - alert: ServiceDownAmqpFanout
+            expr: absent(jvm_memory_used_bytes{job="amqp-fanout"})
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Service amqp-fanout is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"amqp-fanout\"} is absent for 5m. The amqp-fanout router has stopped exporting metrics. Ledger event fanout to consistent hash queues is halted."
+              runbook_url: "docs/RUNBOOKS.md#rabbitmq-node-failure"
+
+          - alert: ServiceDownEodJob
+            expr: absent(jvm_memory_used_bytes{job="eod-job"})
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Service eod-job is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"eod-job\"} is absent for 5m. The daily close and reconciliation worker has stopped exporting metrics. EOD sign-off cannot proceed."
+              runbook_url: "docs/RUNBOOKS.md#internal-reconciliation-drift"
+
+          - alert: ServiceDownContributionApi
+            expr: absent(jvm_memory_used_bytes{job="contribution-api"})
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Service contribution-api is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"contribution-api\"} is absent for 5m. The payment initiation and batch ingress API has stopped exporting metrics."
+              runbook_url: "docs/RUNBOOKS.md#slo-payment-latency"
+
+          - alert: ServiceDownBalanceApi
+            expr: absent(jvm_memory_used_bytes{job="balance-api"})
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Service balance-api is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"balance-api\"} is absent for 5m. The balance query and holding API has stopped exporting metrics."
+              runbook_url: "docs/RUNBOOKS.md#slo-balance-latency"
+
+          - alert: ServiceDownValuationApi
+            expr: absent(jvm_memory_used_bytes{job="valuation-api"})
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Service valuation-api is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"valuation-api\"} is absent for 5m. Valuation ingestion and NAV publishing service is unavailable."
+              runbook_url: "docs/RUNBOOKS.md#late-custodian-file"
+
+          - alert: ServiceDownAllotmentJob
+            expr: absent(jvm_memory_used_bytes{job="allotment-job"})
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Service allotment-job is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"allotment-job\"} is absent for 5m. The batch allotment worker is unavailable."
+              runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+          - alert: ServiceDownStatementWorker
+            expr: absent(jvm_memory_used_bytes{job="statement-worker"})
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Service statement-worker is down or not emitting metrics"
+              description: "jvm_memory_used_bytes{job=\"statement-worker\"} is absent for 5m. Statement generation worker pool is unavailable."
+              runbook_url: "docs/RUNBOOKS.md#missed-signoff"
+
+      - name: slos
+        rules:
+          # SLO Error Budget Alerts (Task 11F.1 Requirement 3: exact bucket ratios)
+          - alert: PaymentInitiationLatencyBudgetBurn
+            expr: >-
+              1 - ( sum(rate(http_server_requests_milliseconds_bucket{job="contribution-api",uri="/v1/organizations/{organizationId}/cash-receipts",le="250"}[5m]))
+                  / sum(rate(http_server_requests_milliseconds_count{job="contribution-api",uri="/v1/organizations/{organizationId}/cash-receipts"}[5m])) ) > 0.01
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Payment initiation latency p99 exceeds SLO threshold (250ms)"
+              description: "More than 1% of payment initiations exceed 250ms over the last 5m. The payment initiation error budget is burning rapidly. Downstream ledger calls, database writes, or thread exhaustion may be occurring."
+              runbook_url: "docs/RUNBOOKS.md#slo-payment-latency"
+
+          - alert: BalanceReadLatencyBudgetBurn
+            expr: >-
+              1 - ( sum(rate(http_server_requests_milliseconds_bucket{job="balance-api",uri="/v1/participants/{participantId}/balance",le="50"}[5m]))
+                  / sum(rate(http_server_requests_milliseconds_count{job="balance-api",uri="/v1/participants/{participantId}/balance"}[5m])) ) > 0.01
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Balance read latency p99 exceeds SLO threshold (50ms)"
+              description: "More than 1% of balance reads exceed 50ms over the last 5m. Participant queries and portal lookups are degraded. Check Redis cache hit ratio and PostgreSQL query performance."
+              runbook_url: "docs/RUNBOOKS.md#slo-balance-latency"
+
+          - alert: CDCLagSLOBudgetBurn
+            expr: (max by (group) (ledger_cdc_lag_seconds) > 5) and on() (sum(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}) > 0)
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "CDC projection lag p99 exceeds SLO threshold (5s)"
+              description: "CDC lag has exceeded the 5s SLO target for 5m while events are waiting to be processed. The pipeline is running behind commitments. Check worker concurrency and broker consumer lag."
+              runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+          - alert: PlatformAvailabilityBudgetBurn
+            expr: >-
+              ( sum(rate(http_server_requests_milliseconds_count{status=~"5.."}[5m]))
+              / sum(rate(http_server_requests_milliseconds_count[5m])) ) > 0.0005
+              and (sum(rate(http_server_requests_milliseconds_count[5m])) > 1)
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Platform availability is below the 99.95% SLO threshold"
+              description: "5xx HTTP error rate exceeds the 0.05% error budget over the last 5m. Service availability target (99.95%) is breached. Check service health, unhandled exceptions, and upstream dependencies."
+              runbook_url: "docs/RUNBOOKS.md#slo-availability"
+
+          # Database backup freshness alert (Task 12.4)
+          - alert: PostgresBackupAgeTooHigh
+            expr: (time() - max(cnpg_collector_last_available_backup_timestamp)) > 86400
+            for: 15m
+            labels:
+              severity: page
+            annotations:
+              summary: "PostgreSQL continuous backup is stale (> 24h since last successful backup)"
+              description: "cnpg_collector_last_available_backup_timestamp is more than 24 hours in the past. Scheduled daily backups or continuous WAL archiving may be failing. RPO is at severe risk; inspect CloudNativePG operator logs, barmanObjectStore status, and object store (S3 API) connectivity."
+              runbook_url: "docs/RUNBOOKS.md#postgres-backup-age"
+  edge-security.rules.yml: |
+    # Task 10.2 (phase-10-edge.md) -- "JWKS unreachable -> fail closed and alert" is the task's own
+    # acceptance criterion. Fail-closed itself needs no code: Envoy's jwt_authn filter has no key to
+    # verify against until its first successful JWKS fetch, and rejects every request needing that
+    # provider until then (source/extensions/filters/http/jwt_authn, verified this session against a
+    # live Envoy Gateway 1.3.0 instance -- see TASK-LOG.md). This file is the other half: the alert.
+    #
+    # `envoy_http_jwt_authn_jwks_fetch_failed` is not a Micrometer/OTel metric this platform emits --
+    # it is Envoy's own jwt_authn filter counter (ALL_JWT_AUTHN_FILTER_STATS,
+    # source/extensions/filters/http/jwt_authn/stats.h), exposed by Envoy's built-in /stats/prometheus
+    # endpoint and scraped by infrastructure/k8s/base/observability/prometheus/configmap.yaml's
+    # `envoy-gateway.yml` job. Confirmed against the real metric name and label this session (a fresh
+    # proxy pod logged one transient jwks_fetch_failed during its first async pre-fetch race, before
+    # xDS config had converged, then four consecutive jwks_fetch_success) -- the `> 3` threshold below
+    # is chosen specifically so that a single, ordinary startup blip like the one just observed does
+    # not page, while Envoy's fast retry (JwksAsyncFetch's default 1s failed-refetch interval) means a
+    # genuine, sustained JWKS outage racks up far more than three failures inside the window.
+    #
+    # severity: page, matching AGENTS.md Sec 7 and Task 11.4's own bar: an unreachable JWKS is not a
+    # capacity or latency problem, it is every application route this policy protects going dark
+    # (fail-closed means 401 for everyone, not just forged tokens) until Keycloak or the network path
+    # to it is restored.
+    groups:
+      - name: edge-security
+        rules:
+          - alert: EdgeJwksFetchFailing
+            expr: increase(envoy_http_jwt_authn_jwks_fetch_failed[5m]) > 3
+            for: 1m
+            labels:
+              severity: page
+            annotations:
+              summary: "The edge gateway cannot fetch Keycloak's signing keys -- every protected route is failing closed."
+              description: "envoy_http_jwt_authn_jwks_fetch_failed has increased more than 3 times in 5m. Envoy's jwt_authn filter (securitypolicy-jwt.yaml) has no valid, current key set and is rejecting every request to the participant and employer APIs with 401, correctly (Task 10.2's fail-closed posture) but indiscriminately -- this is not limited to forged tokens. Check Keycloak's own health and the in-cluster path to keycloak.fondaria.svc.cluster.local:8080."
+              runbook_url: "docs/RUNBOOKS.md#jwks-outage"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-scrape-k8s
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: fondaria
+data:
+  # Kubernetes-only scrape jobs (prometheus.yml `scrape_config_files`). The
+  # CloudNativePG instance manager serves the cnpg_collector_* metrics --
+  # among them cnpg_collector_last_available_backup_timestamp, which the
+  # PostgresBackupAgeTooHigh alert reads -- on every instance pod's port 9187.
+  cnpg.yml: |
+    scrape_configs:
+      - job_name: cloudnative-pg
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_cluster]
+            regex: postgres
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
+  # Task 10.2 (phase-10-edge.md): the Envoy proxy Deployment Envoy Gateway
+  # manages for fondaria-gateway lives in envoy-gateway-system -- the
+  # controller's own install namespace (ENVOY_GATEWAY_MANIFEST,
+  # bootstrap/versions.env), fixed by Envoy Gateway itself and outside this
+  # tree's `namespace:` transformer, unlike every other workload here. Not
+  # own_namespace like cnpg.yml above; prometheus-pod-discovery is a
+  # ClusterRole for exactly this (serviceaccount.yaml). Envoy Gateway
+  # annotates its own proxy pods `prometheus.io/{scrape,path,port}` itself
+  # (envoyproxy/gateway internal/infrastructure/kubernetes/proxy/
+  # resource_provider.go, v1.3.0) -- the standard annotation-scrape
+  # convention, not something this file invents. `jwt_authn.jwks_fetch_failed`
+  # (EdgeJwksFetchFailing, edge-security.rules.yml) is the metric this job
+  # exists for; the owning-gateway label additionally scopes it to this
+  # platform's one Gateway, not any other tenant of the same controller.
+  envoy-gateway.yml: |
+    scrape_configs:
+      - job_name: envoy-gateway-proxy
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["envoy-gateway-system"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_gateway_envoyproxy_io_owning_gateway_name]
+            regex: fondaria-gateway
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            regex: "true"
+            action: keep
+          - source_labels:
+              [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: "([^:]+):\\d+;(\\d+)"
+            replacement: "$1:$2"
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance

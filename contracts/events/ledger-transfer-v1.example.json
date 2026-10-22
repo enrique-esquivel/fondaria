@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "v1",
+  "eventType": "single_phase",
+  "ledger": 484,
+  "timestamp": "1700000000000000000",
+  "transferId": "900000000000000001",
+  "amount": "125000",
+  "pendingId": "0",
+  "transferCode": 1,
+  "transferFlags": 0,
+  "transferTimestamp": "1700000000000000000",
+  "userData128": "0",
+  "userData64": "0",
+  "userData32": 0,
+  "debitAccountId": "700000000000000010",
+  "creditAccountId": "700000000000000020",
+  "debitAccountCode": 1,
+  "creditAccountCode": 2
+}

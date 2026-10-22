@@ -1,0 +1,54 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fondaria-ledger-critical
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+value: 1000000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Mission-critical TigerBeetle financial ledger. Highest priority; never evicted before other services."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fondaria-broker-critical
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+value: 900000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "RabbitMQ message broker holding durable event streams and CDC queues. Higher priority than stateless applications."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fondaria-database-critical
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+value: 800000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "PostgreSQL master, reference, and workflow database via CloudNativePG."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fondaria-cache-high
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+value: 700000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Valkey cluster caching NAV and operational rate limiters."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fondaria-stateless-default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+value: 100000000
+globalDefault: true
+preemptionPolicy: PreemptLowerPriority
+description: "Default priority for stateless APIs, workers, and background jobs. Evicted first under node pressure."

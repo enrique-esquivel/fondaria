@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: object-store
+  labels:
+    app.kubernetes.io/name: object-store
+    app.kubernetes.io/component: object-store
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # Only the S3 API (ADR-0031). SeaweedFS's master, volume and filer ports
+  # listen on the pod's loopback and are never exposed -- the filer's gRPC
+  # port carries an unauthenticated IAM service.
+  ports:
+    - name: s3
+      port: 8333
+      targetPort: 8333
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: object-store

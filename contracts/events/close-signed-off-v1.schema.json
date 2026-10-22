@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fondaria.mx/contracts/events/close-signed-off-v1.schema.json",
+  "title": "close.signed-off.v1",
+  "description": "One message on the Redpanda topic close.signed-off.v1, produced by services/eod-job when a business date's daily close has been signed off: internal reconciliation (Task 7.2), custodian reconciliation (Task 7.3) and the dense snapshot (Task 7.4) have all passed. Keyed by businessDate. Derived from the workflow.close_signoff row (ADR-0021); the row is the system of record. Consumers are idempotent on businessDate -- the event may be re-published if a prior publish was not confirmed. See contracts/events/README.md for the versioning rule.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "businessDate",
+    "signedOffAt",
+    "reconciliationRunId",
+    "custodianRunId",
+    "snapshotRunId",
+    "snapshotObjectKey",
+    "snapshotManifestKey",
+    "snapshotPositionCount",
+    "lastBusinessDayOfMonth"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "v1",
+      "description": "The event schema version. A consumer that does not recognise this value must route the message to its dead-letter handling, never attempt a best-effort parse. A backwards-incompatible change is a new version (v2) on a new topic, not an edit here."
+    },
+    "businessDate": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+      "description": "The business date whose close was signed off, ISO-8601 (YYYY-MM-DD), from BusinessCalendar. The Redpanda partition key for this topic."
+    },
+    "signedOffAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When workflow.close_signoff was written, UTC, microsecond precision (StorableClock)."
+    },
+    "reconciliationRunId": {
+      "$ref": "#/$defs/uuid",
+      "description": "The workflow.reconciliation_run (Task 7.2) that was PASSED for this date when sign-off ran."
+    },
+    "custodianRunId": {
+      "$ref": "#/$defs/uuid",
+      "description": "The workflow.custodian_reconciliation_run (Task 7.3) that was PASSED for this date when sign-off ran."
+    },
+    "snapshotRunId": {
+      "$ref": "#/$defs/uuid",
+      "description": "The workflow.snapshot_run (Task 7.4) that was the COMPLETED snapshot of record for this date when sign-off ran."
+    },
+    "snapshotObjectKey": {
+      "type": "string",
+      "description": "The object-storage key of the dense snapshot's positions file for this date, e.g. snapshots/dt=2026-08-31/positions.ndjson.gz. Gzipped NDJSON (ADR-0020)."
+    },
+    "snapshotManifestKey": {
+      "type": "string",
+      "description": "The object-storage key of the dense snapshot's manifest for this date, e.g. snapshots/dt=2026-08-31/manifest.json."
+    },
+    "snapshotPositionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "workflow.snapshot_run.position_count for the snapshot of record -- open participant positions on this date. Task 7.5b's statement fan-out must generate exactly this many statements when this date is a month-end; carried here so the scheduler needs no second read."
+    },
+    "lastBusinessDayOfMonth": {
+      "type": "boolean",
+      "description": "Whether businessDate is the last business day of its calendar month, per BusinessCalendar. Task 7.5b's statement scheduler fans out a month's statements only when this is true; every other day's event is still published (for other consumers -- employer reports, tax) but triggers no statement run."
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "A lowercase-hex RFC 4122 UUID."
+    }
+  }
+}

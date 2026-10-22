@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle-cdc
+  labels:
+    app.kubernetes.io/name: tigerbeetle-cdc
+    app.kubernetes.io/component: cdc
+    app.kubernetes.io/part-of: fondaria
+spec:
+  clusterIP: None
+  ports:
+    - name: amqp
+      port: 5672
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tigerbeetle-cdc

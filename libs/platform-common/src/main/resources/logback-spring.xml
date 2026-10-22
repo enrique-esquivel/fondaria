@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="SERVICE_NAME" source="spring.application.name" defaultValue="fondaria-service"/>
+
+    <appender name="CONSOLE" class="dev.fondaria.common.logging.RedactingConsoleAppender">
+        <service>${SERVICE_NAME}</service>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

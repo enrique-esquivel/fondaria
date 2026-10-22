@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>services</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>contribution-api</artifactId>
+    <packaging>jar</packaging>
+
+    <name>contribution-api</name>
+    <description>Contribution ingestion service — employer remittances and contribution files (Phase 3)</description>
+
+    <properties>
+        <!--
+            Task 11.2: the OTel Java agent, fetched at build time (not curl/wget in
+            the Dockerfile — the final image is distroless, no shell) and baked into
+            this service's image only (see BACKLOG.md's scope note: only this
+            service has a Dockerfile at all). Declared locally, matching
+            libs/ledger-tigerbeetle's tigerbeetle.version precedent for a
+            single-module external-tool pin.
+        -->
+        <opentelemetry-javaagent.version>2.31.1</opentelemetry-javaagent.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: real spans/metrics to the OTel Collector. Version
+            managed by the root pom's spring-boot-dependencies BOM (Spring
+            Boot 3.5's Micrometer Tracing / OTel bridge), the same convention
+            already used for lettuce-core below.
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <exclusions>
+                <!--
+                    Spring Framework 6's spring-aop jar bundles these same
+                    org.aopalliance classes directly; the standalone jar
+                    micrometer-tracing still pulls duplicates them, which
+                    the root pom's banDuplicateClasses enforcer rule catches.
+                -->
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!--
+            The one LedgerPort implementation (ADR-0008). Brings ledger-client
+            and platform-common transitively; both are used directly here, so
+            they are declared explicitly rather than relied on transitively.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-tigerbeetle</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            Plan-rule evaluation (matching ratio, vesting) — step 5, BACKLOG.md.
+            Vendor-neutral, like ledger-client; JdbcPlanVersionRepository here
+            is the one persistence adapter for its PlanVersionRepository port.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>rules-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            The platform's migration tree. Shared rather than owned: the four
+            schemas of ADR-0011 are one database, and Task 20.3's valuation-api
+            reads reference.fund from it too. Resources only — it contributes
+            db/migration to the classpath and nothing else.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>db-migrations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            Version deliberately not pinned here: spring-boot-dependencies
+            manages Flyway (11.7.2 for Boot 3.5.16), and a second local pin is
+            what split the reactor once already — see libs/testing/pom.xml.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+            Lettuce directly, not spring-boot-starter-data-redis. Task 3.3 uses
+            Redis for one GET and one SETEX, and a template, serializer stack and
+            repository abstraction over two commands is scaffolding, not design.
+            Version managed by spring-boot-dependencies, for the reason above.
+        -->
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+        </dependency>
+
+        <!--
+            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            provider SDKs and carves out exactly this. It talks to SeaweedFS (the
+            pinned object store), never to AWS; the endpoint is configuration.
+            Task 3.4 owns presigned-URL issuance (ADR-0009), which is why it
+            arrives here and not in Task 3.2.
+
+            Version managed by the root pom's AWS SDK BOM, so this module and
+            libs/testing's object-store fixture can never resolve different versions.
+
+            Both default HTTP clients are excluded and url-connection-client
+            supplied instead. apache-client drags in commons-logging, whose
+            classes are also in Spring's spring-jcl — precisely what the root
+            pom's banDuplicateClasses rule exists to catch — and netty-nio-client
+            is an async transport this service has no use for in a blocking,
+            virtual-threaded runtime (AGENTS.md §4).
+        -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: the "no PII in a span attribute" acceptance criterion, asserted over the
+            exporter. InMemorySpanExporter, registered as this test context's SpanExporter bean,
+            replaces the real OTLP one. Version managed by spring-boot-dependencies (Spring Boot
+            3.5's OTel bridge already resolves an opentelemetry-bom).
+        -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Shared Testcontainers fixtures: integration tests never hand-run a database. -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <!--
+                    Arrives via the object-store fixture's S3 client. Its classes are
+                    also in Spring's spring-jcl, and two jars shipping
+                    org.apache.commons.logging.Log is exactly what the root pom's
+                    banDuplicateClasses rule exists to catch. The main-scope S3
+                    client above excludes apache-client for the same reason.
+                -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                The runnable jar is `<artifact>-exec.jar`; the plain
+                                jar stays the module's main artifact. Without a
+                                classifier, repackage REPLACES the main artifact with
+                                the executable one, whose classes live under
+                                BOOT-INF/classes and are therefore invisible to any
+                                module that depends on this one - which libs/e2e-tests
+                                does, at test scope (ADR-0016).
+                            -->
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Task 11.2: fetches the OTel Java agent jar to target/otel-javaagent.jar
+                during `package`, alongside the exec jar above, so the Dockerfile can
+                COPY it in without a shell (the final image is distroless).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-otel-javaagent</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>io.opentelemetry.javaagent</groupId>
+                                    <artifactId>opentelemetry-javaagent</artifactId>
+                                    <version>${opentelemetry-javaagent.version}</version>
+                                    <destFileName>otel-javaagent.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

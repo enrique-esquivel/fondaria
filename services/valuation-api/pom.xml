@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.fondaria</groupId>
+        <artifactId>services</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>valuation-api</artifactId>
+    <packaging>jar</packaging>
+
+    <name>valuation-api</name>
+    <description>Valuation ingestion and NAV strike — external investment platform valuations, validated, recorded and struck into a price per unit (Tasks 20.3, 20.4)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            Task 11.2: real spans/metrics to the OTel Collector. Version
+            managed by the root pom's spring-boot-dependencies BOM (Spring
+            Boot 3.5's Micrometer Tracing / OTel bridge), the same convention
+            already used for lettuce-core below.
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <exclusions>
+                <!--
+                    Spring Framework 6's spring-aop jar bundles these same
+                    org.aopalliance classes directly; the standalone jar
+                    micrometer-tracing still pulls duplicates them, which
+                    the root pom's banDuplicateClasses enforcer rule catches.
+                -->
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!--
+            Money, Nav, FundId, BusinessCalendar (Task 7.1), NameBasedUuid.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The Fund record and FundStatus, for resolving a fund as of a
+            valuation date (Task 20.1). Only the read half is used here:
+            publishing a fund is contribution-api's, and this service holds a
+            narrower FundDirectory port over the same two tables.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>rules-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            ReportedBalanceSource — the seam Task 20.2 left for this task. The
+            Model B adapter strikes a NAV from whatever this service accepted;
+            StoredReportedBalanceSource is the implementation its javadoc
+            anticipates.
+
+            Brings ledger-client transitively; declared explicitly below because
+            Task 20.4 uses it directly — units in issue are read at STRIKE time,
+            not at ingestion time, and a valuation file has no opinion about them.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>valuation</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The one LedgerPort implementation (ADR-0008), for Task 20.4's strike:
+            units in issue is read through LedgerPort#lookupAccount, never summed
+            from PostgreSQL. This service never writes to the ledger.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>ledger-tigerbeetle</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            The platform's shared Flyway tree. reference.fund is created there by
+            Task 20.1's V10 and read here; workflow.valuation_batch is added
+            there by this task's V12.
+        -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>db-migrations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            Version deliberately not pinned here: spring-boot-dependencies
+            manages Flyway, and a second local pin is what split the reactor
+            once already — see libs/testing/pom.xml.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+            Lettuce directly, not spring-boot-starter-data-redis, matching
+            contribution-api's reasoning. Task 20.6 uses Redis as a warm-start
+            convenience for the NAV cache: SMEMBERS, HGETALL and one Lua script
+            that makes "never overwrite a newer snapshot" atomic. A template and
+            serializer stack over that would be scaffolding, not design.
+            Version managed by spring-boot-dependencies.
+        -->
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+        </dependency>
+
+        <!--
+            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            provider SDKs and carves out exactly this. It talks to the object store, never
+            to AWS; the endpoint is configuration. Both default HTTP clients are
+            excluded and url-connection-client supplied instead, for the reasons
+            contribution-api's pom records: apache-client duplicates
+            commons-logging classes against spring-jcl, and netty-nio-client is
+            an async transport a blocking, virtual-threaded runtime has no use
+            for.
+        -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Shared Testcontainers fixtures: integration tests never hand-run a database. -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <!--
+                    Arrives via the object-store fixture's S3 client. Its classes are
+                    also in Spring's spring-jcl, and two jars shipping
+                    org.apache.commons.logging.Log is exactly what the root pom's
+                    banDuplicateClasses rule exists to catch.
+                -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                The runnable jar is `<artifact>-exec.jar`; the plain
+                                jar stays the module's main artifact. Without a
+                                classifier, repackage REPLACES the main artifact with
+                                the executable one, whose classes live under
+                                BOOT-INF/classes and are therefore invisible to any
+                                module that depends on this one - which libs/e2e-tests
+                                does, at test scope (ADR-0016).
+                            -->
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

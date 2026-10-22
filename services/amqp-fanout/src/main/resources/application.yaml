@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: amqp-fanout
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+  rabbitmq:
+    # Single broker architecture (ADR-0022). Connects to RabbitMQ for both consuming
+    # bridge.ledger and publishing to ledger.transfers.v1 / ledger.entries.v1.
+    host: ${BRIDGE_AMQP_HOST:}
+    port: ${BRIDGE_AMQP_PORT:5672}
+    username: ${BRIDGE_AMQP_USERNAME:}
+    password: ${BRIDGE_AMQP_PASSWORD:}
+    virtual-host: ${BRIDGE_AMQP_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        # Competing consumers on bridge.ledger. 1 keeps the feed a single ordered stream; more
+        # trades that for throughput, which is safe because the projection is order-independent
+        # (ADR-0024). See ADR-0032 / row 26g.
+        concurrency: ${BRIDGE_AMQP_CONCURRENCY:1}
+        max-concurrency: ${BRIDGE_AMQP_CONCURRENCY:1}
+        prefetch: ${BRIDGE_AMQP_PREFETCH:64}
+        missing-queues-fatal: true
+    observation-enabled: true
+
+server:
+  tomcat:
+    basedir: ${TOMCAT_BASEDIR:/tmp/amqp-fanout}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      # Never render component details: they would expose broker hostnames (AGENTS.md §7).
+      show-details: never
+      show-components: never
+
+  opentelemetry:
+    resource-attributes:
+      # Row 26n (as projection-worker, ADR-0032 §4, and contribution-api, row 26k): the Collector's
+      # Prometheus exporter turns service.instance.id into the `instance` label. Without it every
+      # replica's counters (rabbitmq_publish_errors_total and the rest) are one series the pods
+      # overwrite, and rate()/increase() read each swing between them as a counter reset.
+      "[service.instance.id]": ${HOSTNAME:local}
+
+  # Task 11.2: real spans and domain metrics to the OTel Collector (Task 11.1).
+  # This service never names Prometheus, Tempo or Loki directly -- the
+  # Collector is the only address configured (Task 11.1's own acceptance
+  # criterion).
+  tracing:
+    sampling:
+      # Every span is exported, not a probabilistic sample. Task 11.2's
+      # acceptance criteria ("every ledger call is a span", "a single trace
+      # spans HTTP -> ledger -> CDC -> projection") need the trace that
+      # actually happened, not a 10%-of-the-time one.
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+      transport: http
+    metrics:
+      export:
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+fondaria:
+  bridge:
+    amqp-host: ${BRIDGE_AMQP_HOST:}
+    prefetch: ${BRIDGE_AMQP_PREFETCH:64}
+    producer-confirm-timeout: ${BRIDGE_PRODUCER_CONFIRM_TIMEOUT:30s}
+    producer-retry-backoff: ${BRIDGE_PRODUCER_RETRY_BACKOFF:1s}

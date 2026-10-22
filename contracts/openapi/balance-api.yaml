@@ -1,0 +1,976 @@
+openapi: 3.0.3
+info:
+  title: Query API
+  version: "1.0.0"
+  description: |
+    Balance and history reads that scale to millions of participants without
+    touching PostgreSQL on the hot path (`phase-06-query-api.md`).
+
+    **The balance is a multiplication, not a query** (`AGENTS.md` §2). Units
+    come from the ledger (`LedgerPort.lookupAccount`, O(1), sub-millisecond);
+    NAV per unit comes from an in-memory cache, one number per fund. Value is
+    `units × NAV`, computed on read and never stored. `getParticipantBalance`
+    and `getParticipantPositions` never touch PostgreSQL: with the database
+    stopped, both keep working. Every other operation here reads the
+    CDC-fed `projection` schema (`ADR-0011`) — history, a historical as-of
+    price, and aggregates — never the authority for a live balance.
+
+    **Every monetary amount is an integer of minor units (MXN cents), every
+    unit quantity and every NAV is an integer at scale 1e-8, all in a JSON
+    number.** Never a decimal, never a float, never a string (`AGENTS.md`
+    §4). A ledger transfer id is the one exception: it is a 128-bit
+    TigerBeetle identifier that does not fit a JSON number's safe integer
+    range, so it travels as a canonical unsigned-decimal string, the same
+    convention `libs/ledger-client`'s CDC decoder already uses.
+
+    **Every priced figure in every response carries the `navVersionId` that
+    produced it** — the surrogate key of the `reference.fund_nav` row
+    (Task 20.4) — so a later NAV correction (Task 20.5) can identify exactly
+    what a participant or employer was shown. A response with figures from
+    more than one fund carries one `navVersionId` per fund, not one for the
+    whole response, because each fund is priced independently.
+
+    **A stale NAV is served marked stale, never silently.** Once a fund's
+    live price is older than the platform's configured age, every figure it
+    prices carries `stale: true` alongside the `navVersionId` — the reader
+    decides what to do with an old price; this API never hides that a price
+    is old.
+
+    **`participantId` is an opaque, platform-issued identifier — never
+    `participant_internal_ref` or a payroll reference.** Neither of those
+    appears anywhere in this contract, in a path, a query parameter or a
+    response body: `AGENTS.md` §7 already keeps a tax identifier out of
+    every URL for the same reason (an access log, a proxy log and a trace
+    all see a URL), and an internal ref identifies a person exactly as a tax
+    identifier does. How `participantId` is produced from
+    `master.participant`'s own key is Task 6.2's concern, not this
+    contract's.
+
+    **This API ships unauthenticated in v1 and must not be exposed outside
+    the cluster** — the same position as every other internal-facing
+    contract in this platform. Authorization (an employer confined to their
+    own organization, a participant confined to their own record) is
+    Phase 9's and Phase 10's; the `401`/`403` responses below are declared
+    now so the shape does not change when enforcement lands.
+servers:
+  - url: "/"
+    description: Path is environment-specific; provided by deployment configuration, never hardcoded here.
+
+tags:
+  - name: participants
+    description: A participant's own balance, positions, movement history and statements.
+  - name: organizations
+    description: Aggregates across an organization's participants.
+
+paths:
+  /v1/participants/{participantId}/balance:
+    get:
+      operationId: getParticipantBalance
+      tags: [participants]
+      summary: A participant's current balance — units they hold, valued at the live NAV.
+      description: |
+        `investedValueCents` is `Σ units × NAV` across every fund the
+        participant holds, computed from `LedgerPort.lookupAccounts` and the
+        NAV cache — vested and unvested units both, since both are issued and
+        both mark to market; vesting only governs entitlement, never whether
+        a unit is priced (`ADR-0004`). The two are reported separately per
+        fund so a participant can see which is which.
+
+        **Cash awaiting allotment is deliberately not reported here**
+        (amended by Task 6.2, on the platform owner's decision; this endpoint
+        originally carried `pendingContributionsCents`, `pendingContributions`
+        and `totalCents`). Money an employer has wired but whose dispersion
+        file has not yet arrived has no per-participant split at all — it is
+        one lump sum in `EMPLOYER_COLLECTIONS` — and once the file arrives but
+        before the reconciliation gate passes, the per-participant amounts are
+        *declared*, not confirmed. A provisional figure that can still change
+        is worse than none, so a participant sees units they actually hold and
+        nothing else. The employer-facing view of money in flight already
+        exists on the contribution batch's own status resource
+        (`awaitingAllotment` and `dealingDate` — `contracts/openapi/
+        contribution-api.yaml`).
+
+        PostgreSQL is not in this path. `positions[].nav` carries the
+        `navVersionId` and `stale` flag priced this response; `stale: true`
+        at the top level means at least one fund's price is stale.
+      parameters:
+        - $ref: "#/components/parameters/ParticipantId"
+      responses:
+        "200":
+          description: The participant's current balance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantBalance"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/LedgerUnavailable"
+
+  /v1/participants/{participantId}/positions:
+    get:
+      operationId: getParticipantPositions
+      tags: [participants]
+      summary: A participant's holdings, broken out per fund.
+      description: |
+        The per-fund detail `getParticipantBalance` aggregates. Same source
+        (`LedgerPort.lookupAccounts` + the NAV cache), same freedom from
+        PostgreSQL, vested and unvested units both reported since vesting
+        governs entitlement, not pricing.
+      parameters:
+        - $ref: "#/components/parameters/ParticipantId"
+      responses:
+        "200":
+          description: The participant's positions, one entry per fund held.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantPositions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/LedgerUnavailable"
+
+  /v1/participants/{participantId}/movements:
+    get:
+      operationId: listParticipantMovements
+      tags: [participants]
+      summary: A participant's unit-ledger movement history, newest first.
+      description: |
+        Keyset pagination on `(ledger_timestamp, transfer_id)` descending
+        (Task 6.3) — never `OFFSET`, which degrades at depth and skews under
+        concurrent inserts. `cursor` is opaque and tamper-checked: a client
+        must treat it as a token, never construct or edit one, and a
+        tampered cursor is refused with `400` rather than silently
+        misinterpreted. The signature also binds a cursor to the
+        participant and the filters it was issued for, so one cannot be
+        replayed against a different query.
+
+        Every movement here is a unit-ledger entry on one of the
+        participant's own holding accounts (`PARTICIPANT_HOLDINGS_VESTED` /
+        `_UNVESTED`) — a participant holds no cash account of their own, so
+        no cash movement is ever returned by this endpoint.
+
+        **A movement is a leg, not a transfer** *(clarified by Task 6.3's
+        implementation, 2026-09-01)*. A contribution allotment credits the
+        participant's holding and debits `UNITS_IN_ISSUE`, which is nobody's
+        account, so it is one movement. A `VESTING` transfer moves units
+        between the participant's own two accounts, so it is **two** — a
+        debit on unvested and a credit on vested, sharing one `transferId`
+        and one `ledgerTimestamp`. The cursor therefore carries the leg as
+        well as the two-part key above; it stays opaque, and `DEBIT`
+        precedes `CREDIT` within a transfer, so a page boundary can fall
+        between the two legs without repeating or skipping either.
+
+        Newly projected movements arriving while a client is paging are
+        newer than the position the first page fixed, so they appear in a
+        fresh listing rather than in the pass under way — never as a
+        duplicate, and never displacing a row past an unsuspecting reader.
+      parameters:
+        - $ref: "#/components/parameters/ParticipantId"
+        - name: from
+          in: query
+          required: false
+          description: Inclusive lower bound on `valueDate`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Inclusive upper bound on `valueDate`.
+          schema:
+            type: string
+            format: date
+        - name: fundId
+          in: query
+          required: false
+          description: Restrict to one fund.
+          schema:
+            type: string
+            format: uuid
+        - name: transferCode
+          in: query
+          required: false
+          description: Restrict to one kind of movement.
+          schema:
+            $ref: "#/components/schemas/MovementTransferCode"
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque continuation token from a previous page's `nextCursor`. Absent on the first page.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: One page of movements, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementPage"
+        "400":
+          description: Malformed query parameters, or a cursor that fails its tamper check.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: |
+            The movement projection could not be read. Never an empty page —
+            "no movements" is a claim about a participant's history, not about
+            a database. Retrying is safe: a read changes nothing.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /v1/participants/{participantId}/balance-as-of/{date}:
+    get:
+      operationId: getParticipantBalanceAsOf
+      tags: [participants]
+      summary: A participant's balance on a past business date.
+      description: |
+        Reads the sparse `participant_units` projection for the latest
+        holding at or before `date`, per fund, times that fund's NAV on
+        `date` (Task 6.4) — the one balance read that is allowed to touch
+        PostgreSQL, because it is a batch, low-volume query the live ledger
+        cannot answer (the ledger has no concept of "as of").
+
+        A gap date (no activity that day) correctly returns the last holding
+        before it. A date before the participant's very first contribution
+        returns `404`, never a zero balance — zero is a different claim
+        (the participant existed and held nothing) from "there is no record
+        this far back" (`phase-06-query-api.md` Task 6.4).
+
+        If the NAV struck for `date` was later corrected (Task 20.5), this
+        endpoint returns the **live** (corrected) value and sets
+        `positions[].nav.corrected: true` — it never silently serves a
+        superseded price.
+
+        A fund the participant held nothing in on `date` is absent from
+        `positions`, not reported as zero, and needs no price. A fund they
+        *did* hold with no NAV on record for `date` fails the whole request
+        with `404` rather than dropping that fund from the total: a figure
+        silently missing a fund is worse than no figure. No price is ever
+        carried forward from an earlier day — that would invent a valuation
+        nobody struck.
+      parameters:
+        - $ref: "#/components/parameters/ParticipantId"
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The participant's balance as of the requested date.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantBalanceAsOf"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: |
+            One of three, distinguished by `type`: no such participant
+            (`participant-not-found`); `date` is before the participant's
+            first contribution to every fund they have ever held
+            (`no-holding-on-record`); or a fund they held on `date` has no
+            NAV on record for it (`price-not-on-record`). None is ever
+            returned as a zero balance.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: |
+            The fund registry or the projection could not be read, or no fund is
+            registered at all — a fact about the platform, never about the
+            participant's records, and therefore never answered as `404` or as a
+            zero balance. Retry: nothing was changed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /v1/participants/{participantId}/statements/{period}:
+    get:
+      operationId: getParticipantStatement
+      tags: [participants]
+      summary: A participant's monthly statement — a waterfall, not a total.
+      description: |
+        docs/DOMAIN.md's waterfall: opening balance,
+        contributions by source, withdrawals, fees, `ISR` withholding and
+        market movement, reconciling exactly to the closing balance. Employee
+        and employer contributions are kept separate because their tax
+        treatment and vesting differ (`ADR-0004`). Cost basis, unrealised
+        gain/loss and real (inflation-adjusted) return are deliberately
+        **not** in this response — docs/DOMAIN.md
+        leaves the cost-basis method (`O-26`) and whether to show real return
+        (`O-30`) as open decisions, and Phase 24 (participant experience)
+        owns that display once they are settled.
+      parameters:
+        - $ref: "#/components/parameters/ParticipantId"
+        - name: period
+          in: path
+          required: true
+          description: Calendar month, `YYYY-MM`.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          example: "2026-08"
+      responses:
+        "200":
+          description: The statement for that period.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantStatement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No such participant, or no statement exists yet for that period (not yet closed, or before the participant's first contribution).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /v1/organizations/{organizationId}/summary:
+    get:
+      operationId: getOrganizationSummary
+      tags: [organizations]
+      summary: Aggregates across one organization's participants.
+      description: |
+        Total participants, total units and value by fund, and contributions
+        received this period. An employer sees its own organization's
+        aggregates only — never another organization's, and never an
+        individual participant's detail beyond what the plan permits
+        (`phase-06-query-api.md` Task 6.5); enforced by Phase 9/10's
+        authorization once it lands, `403` here.
+
+        `totalValueCents` ties exactly to the sum of every participant's own
+        `investedValueCents` — the same `units × NAV` computation, run over
+        each participant's own lots and then added up.
+
+        **The units come from the ledger, in batched `lookupAccounts` calls,
+        and the value is computed exactly as `getParticipantBalance` computes
+        it** — so the tie is structural, not a coincidence of rounding. It is
+        a **quiescent-ledger** tie: `asOf` is when the read began, the roster
+        is walked in slices, and a transfer committed mid-walk is counted for
+        a late participant and missed for an early one. An employer's book
+        moves in batches at the strike, not continuously. The consequence of
+        the rounding rule, accepted in `ADR-0015`:
+        multiplying a fund's rendered `totalUnitsScaled` by its rendered
+        `navScaled` lands *within* a centavo per participant lot of
+        `totalValueCents`, not exactly on it. An employer's summary is a
+        control total for the balances underneath it, and it is those it must
+        agree with.
+
+        **`contributionsThisPeriodCents` covers the calendar month named by
+        `periodStart`/`periodEnd`** (Task 6.5 added both fields; Phase 7 owns
+        statement periods and, until it defines one, a calendar month on the
+        *value date* is what this reports — the boundary taken in the
+        platform's own time zone). It is the sum of the
+        `CONTRIBUTION_ALLOTMENT` legs debiting this employer's
+        `EMPLOYER_COLLECTIONS` account, read from the `projection` schema:
+        the ledger cannot answer it, because that account is back at zero once
+        a batch has allotted.
+
+        Two caveats, stated rather than left to be found. **In v1 the value
+        date equals the booking date** on every projected row — the CDC event
+        carries no explicit value date yet — so this is currently an
+        *allotment*-date total: an August payroll batch allotted on
+        2 September falls in September. And it is **gross of corrections**: a
+        `CORRECTION` transfer is not netted off, because reversals are a later
+        phase and nothing posts one yet.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      responses:
+        "200":
+          description: The organization's summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/SummaryUnavailable"
+
+components:
+  parameters:
+    ParticipantId:
+      name: participantId
+      in: path
+      required: true
+      description: |
+        Opaque, platform-issued identifier for the participant. Never
+        `participant_internal_ref` or a payroll reference — see this
+        document's top-level description.
+      schema:
+        type: string
+        format: uuid
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      description: |
+        Stable internal identifier of the client organization (tenant),
+        derived from its tax identifier at registration. Never the tax
+        identifier itself (`AGENTS.md` §7).
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Caller is not authorized for this participant or organization.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: No such participant or organization.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    LedgerUnavailable:
+      description: |
+        The ledger could not be reached. Retry: nothing here depends on
+        PostgreSQL, so a database outage never produces this response, only
+        a ledger one does.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    SummaryUnavailable:
+      description: |
+        The summary could not be read: the ledger was unreachable, no
+        valuation was available, or the roster could not be queried. Retry —
+        nothing was changed.
+
+        **Never a zero-filled summary.** An employer seeing zero across every
+        fund would read it as their fund being empty and an operator would
+        read it as a working system; both are worse than an error. Unlike the
+        participant balance, this operation reads PostgreSQL on every call
+        (the roster and the contributions figure), so a database outage does
+        produce this response.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details (`AGENTS.md` §7). Never carries an exception message, stack trace, SQL fragment, or hostname.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+
+    FundNavComponent:
+      type: object
+      description: The price behind one fund's contribution to a response, and everything needed to trace it back to a specific `reference.fund_nav` row.
+      required: [fundId, navScaled, navVersionId, valuationDate, publishedAt, stale]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+        navScaled:
+          type: integer
+          format: int64
+          description: NAV per unit, scale 1e-8 (`Nav.SCALE`). Always positive.
+          example: 1473830000
+        navVersionId:
+          type: integer
+          format: int64
+          description: The `reference.fund_nav` row this price came from. Carried so a later correction can identify exactly what was shown.
+          example: 48213
+        valuationDate:
+          type: string
+          format: date
+        publishedAt:
+          type: string
+          format: date-time
+          description: When this price became live in the cache. Staleness (below) is measured from here, not from `valuationDate`.
+        stale:
+          type: boolean
+          description: |
+            `true` when `publishedAt` is older than the platform's
+            configured staleness age. A stale price is still returned —
+            never withheld — but every figure it prices is marked, never
+            served silently. Always `false` on
+            `getParticipantBalanceAsOf`, which reads `reference.fund_nav`
+            directly rather than a cache: a historical price is final for
+            its valuation date and can only be overtaken by a correction,
+            which `corrected` reports.
+        corrected:
+          type: boolean
+          description: |
+            `true` when the NAV originally struck for `valuationDate` has
+            since been superseded (Task 20.5) and this figure reflects the
+            corrected, live price rather than the one originally struck.
+            Present only on `getParticipantBalanceAsOf`, where "the price on
+            that date" and "the current live price for that date" can
+            genuinely differ; absent elsewhere, where they cannot.
+
+    FundBalance:
+      type: object
+      required: [fundId, vestedUnitsScaled, unvestedUnitsScaled, nav, vestedValueCents, unvestedValueCents, valueCents]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+        vestedUnitsScaled:
+          type: integer
+          format: int64
+          description: Units held in `PARTICIPANT_HOLDINGS_VESTED`, scale 1e-8. Never negative.
+          example: 321488256100
+        unvestedUnitsScaled:
+          type: integer
+          format: int64
+          description: Units held in `PARTICIPANT_HOLDINGS_UNVESTED`, scale 1e-8 — issued, priced, but not yet the participant's entitlement (`ADR-0004`). Never negative.
+          example: 5000000000
+        nav:
+          $ref: "#/components/schemas/FundNavComponent"
+        vestedValueCents:
+          type: integer
+          format: int64
+          example: 4738215
+        unvestedValueCents:
+          type: integer
+          format: int64
+          example: 73691
+        valueCents:
+          type: integer
+          format: int64
+          description: The sum of the two above — this fund's total contribution to the participant's invested value.
+          example: 4811906
+
+    ParticipantBalance:
+      type: object
+      required: [participantId, asOf, investedValueCents, positions, stale]
+      properties:
+        participantId:
+          type: string
+          format: uuid
+        asOf:
+          type: string
+          format: date-time
+          description: The instant this response was computed. Not a business date — units and NAV are both read live.
+        investedValueCents:
+          type: integer
+          format: int64
+          description: |
+            Σ `positions[].valueCents` — every fund, vested and unvested units
+            both, and nothing else. No cash awaiting allotment and no declared
+            but unreconciled contribution is included; see this operation's
+            description.
+          example: 4811906
+        positions:
+          type: array
+          description: One entry per fund the participant holds units in. A fund they hold nothing in is absent, not reported as zero.
+          items:
+            $ref: "#/components/schemas/FundBalance"
+        stale:
+          type: boolean
+          description: '`true` when any `positions[].nav.stale` is `true`.'
+
+    ParticipantPositions:
+      type: object
+      required: [participantId, asOf, positions]
+      properties:
+        participantId:
+          type: string
+          format: uuid
+        asOf:
+          type: string
+          format: date-time
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FundBalance"
+
+    MovementTransferCode:
+      type: string
+      description: |
+        The subset of `LedgerCodes.TransferCode` that can post to a
+        participant's own unit-ledger holding account. `CASH_RECEIPT` and
+        the other cash-ledger-only codes never appear here — a participant
+        holds no cash account of their own.
+      enum:
+        - CONTRIBUTION_ALLOTMENT
+        - VESTING
+        - REDEMPTION
+        - FUND_SWITCH
+        - CORRECTION
+        - NAV_ERROR_COMPENSATION
+
+    MovementDirection:
+      type: string
+      description: Whether the participant's holding account was credited (units received) or debited (units removed).
+      enum: [DEBIT, CREDIT]
+
+    HoldingAccount:
+      type: string
+      description: Which of the participant's two per-fund accounts this movement posted to.
+      enum: [VESTED, UNVESTED]
+
+    Movement:
+      type: object
+      required: [transferId, fundId, holdingAccount, direction, unitsScaled, transferCode, bookingDate, valueDate, ledgerTimestamp]
+      properties:
+        transferId:
+          type: string
+          pattern: "^[0-9]+$"
+          description: Canonical unsigned-decimal TigerBeetle u128 transfer id — a string because it exceeds a JSON number's safe integer range, the same convention `libs/ledger-client`'s CDC decoder uses.
+          example: "193428719834719834719834719834"
+        fundId:
+          type: string
+          format: uuid
+        holdingAccount:
+          $ref: "#/components/schemas/HoldingAccount"
+        direction:
+          $ref: "#/components/schemas/MovementDirection"
+        unitsScaled:
+          type: integer
+          format: int64
+          description: Positive magnitude, scale 1e-8. Direction is carried separately, never the sign of this field.
+          example: 1000000000
+        transferCode:
+          $ref: "#/components/schemas/MovementTransferCode"
+        navVersionId:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            Which `reference.fund_nav` row priced this movement. `null` for a
+            movement no NAV strikes — e.g. `VESTING`, which moves already-priced
+            units between the participant's own two accounts.
+
+            **Reserved: currently always `null`** *(corrected 2026-09-01, Task
+            6.3)*. The CDC change event carries no NAV version, so
+            `projection-worker` leaves `projection.transfer.nav_version_id`
+            unset on every row it writes (`JdbcProjectionSink`, Task 5.4) — the
+            column exists and this field reads it, but nothing populates it yet.
+            A client must not depend on it being present on an allotment until
+            the allotment chain carries the version in its user data. The
+            authoritative "which NAV priced this" record meanwhile is
+            `workflow.allotment.nav_version_id` (Task 21.2).
+        bookingDate:
+          type: string
+          format: date
+        valueDate:
+          type: string
+          format: date
+        ledgerTimestamp:
+          type: string
+          pattern: "^[0-9]+$"
+          description: TigerBeetle's u64 nanosecond commit timestamp, as a decimal string for the same reason `transferId` is one. Part of the keyset cursor's ordering key.
+          example: "1735689600123456789"
+
+    MovementPage:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movement"
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque continuation token for the next page. `null` when `hasMore` is `false`.
+        hasMore:
+          type: boolean
+
+    ParticipantBalanceAsOfPosition:
+      type: object
+      required: [fundId, unitsScaled, valueCents, nav]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+        unitsScaled:
+          type: integer
+          format: int64
+          description: The latest `participant_units` row at or before the requested date, vested and unvested combined. Never negative.
+          example: 326488256100
+        valueCents:
+          type: integer
+          format: int64
+          example: 4811906
+        nav:
+          $ref: "#/components/schemas/FundNavComponent"
+
+    ParticipantBalanceAsOf:
+      type: object
+      required: [participantId, date, valueCents, positions]
+      properties:
+        participantId:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+          description: Echoes the requested date.
+        valueCents:
+          type: integer
+          format: int64
+          description: Σ `positions[].valueCents`.
+          example: 4811906
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParticipantBalanceAsOfPosition"
+
+    ParticipantStatement:
+      type: object
+      required:
+        - participantId
+        - period
+        - openingBalanceCents
+        - contributionsEmployeeCents
+        - contributionsEmployerCents
+        - contributionsVoluntaryCents
+        - withdrawalsCents
+        - feesCents
+        - taxWithheldCents
+        - marketMovementCents
+        - closingBalanceCents
+        - generatedAt
+        - footerDisclosure
+      properties:
+        participantId:
+          type: string
+          format: uuid
+        period:
+          type: string
+          pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          example: "2026-08"
+        openingBalanceCents:
+          type: integer
+          format: int64
+          example: 4510000
+        contributionsEmployeeCents:
+          type: integer
+          format: int64
+          example: 90000
+        contributionsEmployerCents:
+          type: integer
+          format: int64
+          example: 90000
+        contributionsVoluntaryCents:
+          type: integer
+          format: int64
+          example: 0
+        withdrawalsCents:
+          type: integer
+          format: int64
+          example: 0
+        feesCents:
+          type: integer
+          format: int64
+          example: 3500
+        taxWithheldCents:
+          type: integer
+          format: int64
+          example: 3420
+        marketMovementCents:
+          type: integer
+          format: int64
+          description: |
+            The plug: `closingBalanceCents − openingBalanceCents −
+            contributions + withdrawals + fees + tax`. Signed — a falling
+            NAV produces a negative value here, and nothing in this contract
+            or its implementation may clamp it at zero
+            (docs/DOMAIN.md).
+          example: 55135
+        closingBalanceCents:
+          type: integer
+          format: int64
+          example: 4738215
+        generatedAt:
+          type: string
+          format: date-time
+        footerDisclosure:
+          type: string
+          description: |
+            Names `docs/rounding-policy.md` as the source of the unit-rounding
+            rule (Task 21.3) — a sub-tick remainder is never issued to a
+            participant and is folded into the fund's NAV at the next strike
+            instead. Authored text, never a template string built from raw
+            figures (`AGENTS.md` §7).
+          example: "El remanente de redondeo de unidades no se asigna a los participantes; ver docs/rounding-policy.md."
+
+    OrganizationFundSummary:
+      type: object
+      required: [fundId, totalUnitsScaled, totalValueCents, nav]
+      properties:
+        fundId:
+          type: string
+          format: uuid
+        totalUnitsScaled:
+          type: integer
+          format: int64
+          description: |
+            Σ every participant's units in this fund, vested and unvested,
+            this organization only. Not broken out by lot: which units are
+            yet to vest is a per-participant entitlement question, answered
+            on that participant's own balance. A fund this organization holds
+            nothing in is absent from `funds`, never a zero row.
+          example: 48213774829100
+        totalValueCents:
+          type: integer
+          format: int64
+          description: |
+            Σ each participant's own rounded lot values in this fund — the
+            identical arithmetic `getParticipantBalance` performs, added up.
+            **Deliberately not `totalUnitsScaled × navScaled` rounded**, which
+            is a different number and is the one that would fail to tie to the
+            balances this platform actually served (`ADR-0015`).
+          example: 710482913
+        nav:
+          $ref: "#/components/schemas/FundNavComponent"
+
+    OrganizationSummary:
+      type: object
+      required:
+        [
+          organizationId,
+          asOf,
+          totalParticipants,
+          totalValueCents,
+          contributionsThisPeriodCents,
+          periodStart,
+          periodEnd,
+          funds,
+          stale,
+        ]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        asOf:
+          type: string
+          format: date-time
+          description: |
+            When the read began — not a snapshot instant. See the operation
+            description: the tie to individual balances is a quiescent-ledger
+            property.
+        totalParticipants:
+          type: integer
+          format: int32
+          description: |
+            How many participants the totals were computed over — every
+            enrolled participant of this organization whatever their status,
+            because a closed participant may still hold units and a count
+            describing a different population than the totals beside it would
+            be worse than a coarse one.
+          example: 8342
+        totalValueCents:
+          type: integer
+          format: int64
+          description: Σ every participant's `investedValueCents` in this organization. Ties exactly to the sum of individual balances (Task 6.5).
+          example: 710482913
+        contributionsThisPeriodCents:
+          type: integer
+          format: int64
+          description: |
+            Σ contributions allotted for this organization over
+            `periodStart`..`periodEnd` inclusive, on the value date, across
+            every source. Counted once per allotment — the leg that debits
+            this employer's `EMPLOYER_COLLECTIONS` account.
+          example: 16200000
+        periodStart:
+          type: string
+          format: date
+          description: First day `contributionsThisPeriodCents` covers, inclusive.
+          example: "2026-09-01"
+        periodEnd:
+          type: string
+          format: date
+          description: |
+            Last day `contributionsThisPeriodCents` covers, inclusive. Carried
+            so the figure is auditable rather than merely labelled: a period
+            total whose window is invisible cannot be checked against
+            anything.
+          example: "2026-09-30"
+        funds:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationFundSummary"
+        stale:
+          type: boolean
+          description: |
+            `true` when at least one fund's price is older than the platform's
+            configured age. Lifted to the top so a reader of the headline
+            total alone cannot miss it; `funds[].nav.stale` says which.
+          example: false

@@ -1,0 +1,41 @@
+# Task 11.1. Single-process local-dev mode, filesystem storage
+# (./data/loki, docker-compose.yml). The Collector is the only writer
+# (otlp_http/loki exporter, otel-collector/config.yaml, Loki's native OTLP
+# ingestion endpoint) -- no service ever sends a log line to Loki directly.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Retention. Short on purpose for local development, matching Tempo's
+  # TEMPO_RETENTION -- long enough to demo, never a durable log archive.
+  # LOKI_RETENTION documents the same number in .env.example.
+  retention_period: 24h
+  allow_structured_metadata: true
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem

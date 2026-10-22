@@ -1,0 +1,196 @@
+{
+  "title": "Business Overview & Fund Performance",
+  "uid": "business-overview",
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Operational Notice",
+      "description": "Non-authoritative notice",
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [],
+      "options": {
+        "mode": "markdown",
+        "content": "⚠️ **Operational Notice**: *This dashboard displays lagging operational telemetry for visualization and monitoring purposes. The authoritative store of record for participant units is TigerBeetle (`UNITS_IN_ISSUE`); authoritative valuation is `reference.fund_nav`.*"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Platform AUM",
+      "description": "Lagging operational snapshot — non-authoritative. Total AUM across all funds in Mexican pesos.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 3 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(max by (fund_id) (fondaria_fund_aum_pesos))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyMXN"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Units in Issue",
+      "description": "Lagging operational snapshot — non-authoritative. Sum of units in issue across all funds from TigerBeetle UNITS_IN_ISSUE.",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 3 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(max by (fund_id) (fondaria_fund_units_in_issue))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Participants Enrolled (selected range)",
+      "description": "New participants enrolled by contribution files during the dashboard's time range, across funds (contribution-api counter, row 26k). Not a headcount: the counter is per pod and restarts at zero, which increase() absorbs.",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 3 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(fondaria_participants_enrolled_total[$__range]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Telemetry Snapshot Age",
+      "description": "Age in seconds of the latest completed business snapshot sweep. Warn > 45s, Error > 120s.",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 3 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "time() - max(fondaria_business_metrics_snapshot_timestamp_seconds)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 45 },
+              { "color": "red", "value": 120 }
+            ]
+          },
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Fund NAV Per Unit (MXN)",
+      "description": "Struck NAV per unit over time, tracking market movements, gains, and falls.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max by (fund_id, fund_name, vehicle_type) (fondaria_fund_nav_pesos)",
+          "legendFormat": "{{fund_name}} ({{vehicle_type}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyMXN"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Units in Issue by Fund",
+      "description": "Total units in issue per fund from TigerBeetle UNITS_IN_ISSUE contra account.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max by (fund_id, fund_name, vehicle_type) (fondaria_fund_units_in_issue)",
+          "legendFormat": "{{fund_name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "AUM by Fund (MXN)",
+      "description": "Total AUM per fund in pesos (units in issue × live NAV).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max by (fund_id, fund_name, vehicle_type) (fondaria_fund_aum_pesos)",
+          "legendFormat": "{{fund_name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyMXN"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "piechart",
+      "title": "AUM Distribution by Vehicle Type",
+      "description": "AUM breakdown by vehicle type (e.g. CAJA_DE_AHORRO vs RETIREMENT_FUND).",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (vehicle_type) (max by (fund_id, vehicle_type) (fondaria_fund_aum_pesos))",
+          "legendFormat": "{{vehicle_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyMXN"
+        }
+      }
+    }
+  ]
+}

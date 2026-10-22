@@ -1,0 +1,231 @@
+name: CI
+
+# GitHub-hosted minutes are a fixed monthly budget (2,000 on this plan). This
+# pipeline is tuned to stay under it while keeping the one thing hosted CI is
+# uniquely good for: a Linux build on every change, which has already caught a
+# money bug invisible on macOS (the StorableClock defect). See ADR-0023.
+#
+# What runs where:
+#
+#   pull_request  -> verify + migrations           (~7 billed min, the feedback loop)
+#   push to main  -> verify + migrations           (post-merge smoke)
+#   schedule Tu/Fr-> integration suite             (the heavy suite, was every push to main)
+#   schedule Mon  -> dependency-scan               (was every pull request)
+#   workflow_dispatch -> integration and/or dependency-scan, on demand before a release
+#
+# Docs-only changes (docs/**, **/*.md) skip the workflow entirely -- see paths-ignore.
+#
+# What changed and why (2026-09, "fall under budget"):
+#   - integration moved off `push: main` to a Tue/Fri schedule. It publishes ~100k
+#     transfers through real containers and a crash/replay harness -- ~40 min a run,
+#     and it was running on every one of ~100 merges a month (~4,000 min, most of the
+#     budget). The post-merge defect window widens from minutes to at most ~3 days;
+#     `make verify-all` before a merge and this schedule are the cover. Run it on
+#     demand (workflow_dispatch) before anything that ships.
+#   - dependency-scan moved off the PR loop to a weekly schedule. NVD data changes
+#     slowly and the scan is slow and rate-limit-flaky; weekly is enough pre-release.
+#   - docs-only pushes and PRs no longer start a run.
+#
+# If a month still runs over, the knobs, cheapest first: widen the integration cron
+# (e.g. Fri only), then drop `verify` from `push: main` (the PR already ran it on the
+# branch head). Watch usage at Settings -> Billing -> Actions.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  schedule:
+    # Integration suite, Tuesday and Friday 07:40 UTC (a little after midnight in
+    # America/Mexico_City, half an hour after the weekly rebuild).
+    - cron: '40 7 * * 2,5'
+    # Dependency scan, Monday 08:30 UTC.
+    - cron: '30 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      integration:
+        description: 'Run the integration-tagged suite'
+        type: boolean
+        default: true
+      dependencyScan:
+        description: 'Run the OWASP dependency scan'
+        type: boolean
+        default: false
+
+concurrency:
+  # Include the schedule expression so the two crons never cancel each other, and
+  # keep push/PR separate (push is limited to main; PR ref is refs/pull/<n>/merge).
+  group: ci-${{ github.ref }}-${{ github.event_name }}-${{ github.event.schedule }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Run verification and format checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    env:
+      # Fixtures declare withReuse(true) so a developer's local loop keeps
+      # containers warm between builds. CI must not: a green run has to prove
+      # the suite works from nothing, including container format-on-first-start
+      # and the TigerBeetle wait strategy.
+      TESTCONTAINERS_REUSE_ENABLE: 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Install reactor modules
+        # JibBuildSimulationIntegrationTest runs `mvn jib:_skaffold-sync-map -pl services/balance-api`
+        # without -am (Jib's goal fails on modules with no main class), so balance-api's sibling
+        # modules must already be in ~/.m2. A local machine usually has them; a fresh runner does not.
+        run: mvn install -DskipTests -Dspotless.check.skip=true
+
+      - name: Run system verification (make verify)
+        run: make verify
+
+      - name: Check code formatting (mvn spotless:check)
+        run: mvn spotless:check
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+
+  integration:
+    name: Run the integration-tagged suite (-Pintegration)
+    runs-on: ubuntu-latest
+    # Scheduled (Tue/Fri) or dispatched on demand. Never on a pull request or a
+    # push -- see the header. Row 33: platform owner's call.
+    #
+    # The heavy half of the suite: real Postgres, RabbitMQ, SeaweedFS, Redis and
+    # TigerBeetle containers, a 100,000-transfer projection rebuild, and a
+    # crash/replay harness that kills a worker twenty times per run. ~40 min,
+    # against a PR-loop target of under five. Two classes are 53% of it and the
+    # single heaviest cannot be split.
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '40 7 * * 2,5') ||
+      (github.event_name == 'workflow_dispatch' && inputs.integration)
+    timeout-minutes: 120
+    env:
+      TESTCONTAINERS_REUSE_ENABLE: 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # `make verify` excludes every test tagged `integration` (root pom's
+      # excluded.test.groups). `make verify-all` is `mvn verify -Pintegration` --
+      # the same command a developer runs, so CI cannot drift from the local loop.
+      - name: Install reactor modules
+        # JibBuildSimulationIntegrationTest runs `mvn jib:_skaffold-sync-map -pl services/balance-api`
+        # without -am (Jib's goal fails on modules with no main class), so balance-api's sibling
+        # modules must already be in ~/.m2. A local machine usually has them; a fresh runner does not.
+        run: mvn install -DskipTests -Dspotless.check.skip=true
+
+      - name: Run every test, including integration-tagged (make verify-all)
+        run: make verify-all
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+
+  migrations:
+    name: Validate the Flyway migration tree
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: funds
+          POSTGRES_USER: funds
+          POSTGRES_PASSWORD: funds_dev_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U funds"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # phase-05 Task 5.1: "flyway validate passes in CI". migrate proves the whole
+      # tree (ADR-0011's four schemas) applies from an empty database; validate proves
+      # no merged migration has drifted from its recorded checksum (AGENTS.md §4 -- a
+      # versioned migration is never edited after merge).
+      - name: Apply and validate migrations
+        run: >-
+          mvn -pl libs/db-migrations
+          org.flywaydb:flyway-maven-plugin:migrate
+          org.flywaydb:flyway-maven-plugin:validate
+
+  dependency-scan:
+    name: Run OWASP dependency vulnerability check
+    runs-on: ubuntu-latest
+    # Weekly (Monday) or dispatched on demand. Moved off the PR loop to save minutes;
+    # NVD data changes slowly and the scan is slow and rate-limit-flaky.
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '30 8 * * 1') ||
+      (github.event_name == 'workflow_dispatch' && inputs.dependencyScan)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Cache NVD Data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ github.run_id }}
+          restore-keys: nvd-
+
+      - name: Install reactor modules
+        # dependency-check-maven:check below is a single-goal invocation, not a lifecycle phase,
+        # so it never builds+installs sibling modules for the reactor to hand to each other. On a
+        # fresh checkout that leaves internal cross-module dependencies (e.g. ledger-client ->
+        # platform-common) unresolvable. Installing the reactor first, with tests and formatting
+        # skipped, fixes that.
+        run: mvn install -DskipTests -Dspotless.check.skip=true
+
+      - name: Dependency check
+        run: mvn org.owasp:dependency-check-maven:check -DnvdApiKey=${{ secrets.NVD_APIKEY }}

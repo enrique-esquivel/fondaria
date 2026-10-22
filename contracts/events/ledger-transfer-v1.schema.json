@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fondaria.mx/contracts/events/ledger-transfer-v1.schema.json",
+  "title": "ledger.transfers.v1",
+  "description": "One message on the Redpanda topic ledger.transfers.v1, produced by services/amqp-redpanda-bridge for exactly one TigerBeetle CDC change event, keyed by transferId. Every field is derived, unchanged, from the `tigerbeetle amqp` 0.17.4 change-event payload (src/cdc/runner.zig, `pub const Message`). See contracts/events/README.md for the field-by-field provenance and the versioning rule. The consumer-side decoder is dev.fondaria.ledger.event.LedgerEventDecoder in libs/ledger-client.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventType",
+    "ledger",
+    "timestamp",
+    "transferId",
+    "amount",
+    "pendingId",
+    "transferCode",
+    "transferFlags",
+    "transferTimestamp",
+    "userData128",
+    "userData64",
+    "userData32",
+    "debitAccountId",
+    "creditAccountId",
+    "debitAccountCode",
+    "creditAccountCode"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "v1",
+      "description": "The event schema version. A consumer that does not recognise this value must route the message to its dead-letter topic, never attempt a best-effort parse. A backwards-incompatible change is a new version (v2) on a new topic, not an edit here."
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "single_phase",
+        "two_phase_pending",
+        "two_phase_posted",
+        "two_phase_voided",
+        "two_phase_expired"
+      ],
+      "description": "The TigerBeetle change-event type (`@tagName` of src/tigerbeetle.zig ChangeEventType), lower snake_case."
+    },
+    "ledger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "The TigerBeetle ledger id (u32). 484 is the single MXN cash ledger; a value >= 1001 is a per-fund unit ledger. The decoder routes on this: 484 -> Money, >= 1001 -> Units; any other value is a hard decode error."
+    },
+    "timestamp": { "$ref": "#/$defs/uint128", "description": "The change event's ledger commit timestamp, u64 nanoseconds since the Unix epoch." },
+    "transferId": { "$ref": "#/$defs/uint128", "description": "The transfer id (u128). The Redpanda partition key for this topic." },
+    "amount": {
+      "$ref": "#/$defs/uint128",
+      "description": "The transfer amount (u128), an unsigned base-10 integer. On the cash ledger it is MXN cents; on a unit ledger it is units scaled by 1e8. A fractional value in any form is rejected by the decoder, never coerced."
+    },
+    "pendingId": { "$ref": "#/$defs/uint128", "description": "The originating pending transfer id on a two-phase post/void; \"0\" otherwise." },
+    "transferCode": { "$ref": "#/$defs/uint16", "description": "The transfer's user-defined code (u16); maps to LedgerCodes.TransferCode." },
+    "transferFlags": { "$ref": "#/$defs/uint16", "description": "The transfer's TigerBeetle flags bitfield (u16)." },
+    "transferTimestamp": { "$ref": "#/$defs/uint128", "description": "The transfer's own commit timestamp, u64 nanoseconds since the Unix epoch." },
+    "userData128": { "$ref": "#/$defs/uint128", "description": "The transfer's user_data_128 (u128), verbatim." },
+    "userData64": { "$ref": "#/$defs/uint128", "description": "The transfer's user_data_64 (u64), verbatim." },
+    "userData32": { "$ref": "#/$defs/uint32", "description": "The transfer's user_data_32 (u32), verbatim." },
+    "debitAccountId": { "$ref": "#/$defs/uint128", "description": "The debited account id (u128)." },
+    "creditAccountId": { "$ref": "#/$defs/uint128", "description": "The credited account id (u128)." },
+    "debitAccountCode": { "$ref": "#/$defs/uint16", "description": "The debited account's code (u16); maps to LedgerCodes.AccountCode." },
+    "creditAccountCode": { "$ref": "#/$defs/uint16", "description": "The credited account's code (u16); maps to LedgerCodes.AccountCode." }
+  },
+  "$defs": {
+    "uint128": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "An unsigned integer of up to 128 bits, carried as a canonical base-10 string (no leading zeros, no sign, no decimal point) because the connector emits values that a JSON number cannot hold exactly as strings and the bridge normalises every such field to this form."
+    },
+    "uint32": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "uint16": { "type": "integer", "minimum": 0, "maximum": 65535 }
+  }
+}

@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eod-job
+  labels:
+    app.kubernetes.io/name: eod-job
+    app.kubernetes.io/component: eod
+    app.kubernetes.io/part-of: fondaria
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eod-job

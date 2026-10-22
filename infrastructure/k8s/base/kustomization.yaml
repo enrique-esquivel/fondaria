@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - contribution-api
+  - allotment-job
+  - amqp-fanout
+  - projection-worker
+  - balance-api
+  - eod-job
+  - valuation-api
+  - statement-worker
+  - tigerbeetle-cdc
+  - tigerbeetle
+  - postgres
+  - rabbitmq
+  - valkey
+  - object-store
+  - keycloak
+  - gateway
+  - priority
+  - networkpolicies
+  - linkerd-policy
+  - observability
+  - hpa

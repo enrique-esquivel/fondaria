@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: fondaria
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/component: identity
+        app.kubernetes.io/part-of: fondaria
+      annotations:
+        # Task 10.4 (ADR-0029): mesh mTLS for the edge -> keycloak call
+        # path. automountServiceAccountToken: false below does not block
+        # this -- the injector gives its own proxy container a separate
+        # projected token volume for identity, verified live.
+        linkerd.io/inject: enabled
+    spec:
+      priorityClassName: fondaria-stateless-default
+      serviceAccountName: keycloak
+      automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      securityContext:
+        # The upstream quay.io/keycloak/keycloak image runs as UID/GID 1000
+        # (its own Dockerfile's `USER keycloak`), unlike this platform's own
+        # distroless/Jib images (nonroot, 65532).
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.1.0@sha256:c0675d484530e65446f38b28ea2e7854915c33afb0de5356899794410caf03be
+          imagePullPolicy: IfNotPresent
+          args: ["start", "--import-realm"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: keycloak-config
+          env:
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: admin-user
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: admin-password
+            # Confidential clients' secrets, resolved into the realm's
+            # `${...}` placeholders at import (configmap.yaml). Not optional:
+            # without the Secret the pod does not start, rather than serving
+            # a client whose secret is the literal placeholder.
+            - name: EMPLOYER_PORTAL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: employer-portal
+            - name: INTERNAL_SERVICES_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: internal-services
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 1500m
+              memory: 1536Mi
+          # Startup probe: DB migration, realm import and Quarkus augmentation
+          # all happen on first boot. Up to 120s (40 * 3s) before failing.
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            initialDelaySeconds: 10
+            periodSeconds: 3
+            failureThreshold: 40
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        # Projected so the local overlay can add its demo users file
+        # (fondaria-users-0.json) next to the realm in the same import directory.
+        - name: realm-import
+          projected:
+            sources:
+              - configMap:
+                  name: keycloak-realm

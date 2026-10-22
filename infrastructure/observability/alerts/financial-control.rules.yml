@@ -1,0 +1,275 @@
+# Task 11.4 -- financial control alerts and SLO error budget rules.
+#
+# Follows docs/DESIGN-DECISIONS.md and docs/ai-tasks/phase-11-fix.md Task 11F.1:
+# - Financial control metrics: CDC lag (warn 30s, page 300s, broker idle discrimination),
+#   projection drift (any non-zero -> page), EOD hash chain valid (0 -> page),
+#   DLQ depth (> 0 -> page), idempotency conflicts (spike -> investigate).
+# - SLOs with error budgets: payment initiation p99 < 250ms, balance read p99 < 50ms,
+#   CDC lag p99 < 5s, availability 99.95%.
+# - Service down alerts: absent(jvm_memory_used_bytes{job=...}) for each service (page / warning).
+# - RabbitMQ scrape missing: absent(rabbitmq_detailed_queue_messages) -> page.
+#
+# Every alert specifies:
+# - severity (page or warning)
+# - description written for someone woken at 3am
+# - runbook_url pointing to an existing file in docs/RUNBOOKS.md
+#
+# In accordance with AGENTS.md §4 and §7:
+# - No PII, customer, or account identifiers in labels
+# - Financial drift values are signed; any non-zero drift trips the alert
+# - Idle pipeline does not fire false CDC lag alerts
+
+groups:
+  - name: financial-control
+    rules:
+      # Task F.2 & 11F.1: Projects RabbitMQ per-DLQ message counts down to dlq_depth.
+      - record: dlq_depth
+        expr: sum(rabbitmq_detailed_queue_messages{queue=~".*\\.dlq"})
+
+      - alert: RabbitMqScrapeMissing
+        expr: absent(rabbitmq_detailed_queue_messages)
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "RabbitMQ metrics scrape is missing or failing"
+          description: "rabbitmq_detailed_queue_messages is absent. Prometheus is unable to scrape RabbitMQ metrics endpoint on port 15692. DLQ depth and queue backlog monitoring is blind."
+          runbook_url: "docs/RUNBOOKS.md#dead-letter-queue"
+
+      - alert: CDCLagWarning
+        expr: (max by (group) (ledger_cdc_lag_seconds) > 30) and on() (sum(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}) > 0)
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "CDC projection consumer lag is elevated (> 30s) while events are pending"
+          description: "ledger_cdc_lag_seconds exceeds 30s and new events have been received in RabbitMQ queues. The projection pipeline is falling behind real-time. Check projection-worker logs and consumer throughput."
+          runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+      - alert: CDCLagPage
+        expr: (max by (group) (ledger_cdc_lag_seconds) > 300) and on() (sum(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}) > 0)
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "CDC projection pipeline is severely stalled (> 300s) with pending events"
+          description: "ledger_cdc_lag_seconds exceeds 300s and incoming ledger events are pending in RabbitMQ. The projection worker has stalled, crashed, or encountered poison messages. Projection is materially stale; inspect worker readiness probe and consider replay."
+          runbook_url: "docs/RUNBOOKS.md#cdc-replay"
+
+      # ADR-0032 §2/§4: a poison message halts every replica through workflow.projection_halt.
+      # The gauge is per pod; max() pages once for the cluster. DLQMessagesPresent also fires --
+      # "something was dead-lettered" versus "the projection is stopped".
+      - alert: ProjectionHalted
+        expr: max(projection_halted) > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "The projection worker is halted on a message it could not process"
+          description: "projection_halted is 1 on at least one projection-worker pod. A poison message was dead-lettered and the cluster-wide halt flag (workflow.projection_halt) stops every replica. Nothing new is being projected, so balances and statements read from the projection are going stale. Find the active halt row, fix the cause, then clear it and restart per the runbook."
+          runbook_url: "docs/RUNBOOKS.md#cdc-replay"
+
+      # ADR-0032 §4: a consumer that is stuck drops out of the lag head after the active window, so
+      # the backlog signal is queue depth. Fires per queue when it holds messages and has not fallen.
+      - alert: ProjectionQueueNotDraining
+        expr: (min_over_time(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}[10m]) > 0) and (delta(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}[10m]) >= 0)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A projection queue has held messages for 10 minutes without shrinking"
+          description: "rabbitmq_detailed_queue_messages for a projection queue has been non-zero and has not fallen for 10m. Consumers on that queue are stuck, starved of database connections, or the worker is halted. Check projection_halted, the pool size against consumers, and worker logs."
+          runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+      - alert: ProjectionDrift
+        expr: sum(abs(projection_drift_minor)) > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "Financial balance drift detected between ledger and projection"
+          description: "projection_drift_minor is non-zero. The projection store balance differs from TigerBeetle's authoritative ledger. Participants may see inaccurate balances. Investigate immediately."
+          runbook_url: "docs/RUNBOOKS.md#projection-drift"
+
+      - alert: EODHashChainInvalid
+        expr: eod_hash_chain_valid == 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "End-of-day reconciliation cryptographic hash chain verification failed"
+          description: "eod_hash_chain_valid is 0. The daily close SHA-256 cryptographic hash chain has detected corruption or record alteration. Audit integrity is broken; halt close operations."
+          runbook_url: "docs/RUNBOOKS.md#eod-hash-chain"
+
+      - alert: DLQMessagesPresent
+        expr: dlq_depth > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "Dead-letter queue has unprocessed poison or rejected messages"
+          description: "dlq_depth is greater than zero. Financial events failed parsing, schema validation, or projection and were sent to the DLQ. A financial movement has not been recorded in PostgreSQL."
+          runbook_url: "docs/RUNBOOKS.md#dead-letter-queue"
+
+      - alert: IdempotencyConflictSpike
+        expr: sum(rate(idempotency_conflict_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated idempotency conflict rate detected on incoming requests"
+          description: "idempotency_conflict_total is rising. External clients or batch jobs are resubmitting duplicate idempotency keys with different payloads. Identify calling client and investigate integration."
+          runbook_url: "docs/RUNBOOKS.md#idempotency-conflicts"
+
+      # Break-glass alert (Task 9.4)
+      - alert: BreakGlassAccessActive
+        expr: break_glass_active_count > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "Break-glass emergency access is active"
+          description: "break_glass_active_count is greater than zero. A privileged staff action was requested or executed using emergency break-glass procedure, bypassing dual approval. Review reason and control totals immediately."
+          runbook_url: "docs/RUNBOOKS.md#break-glass"
+
+      # Service-down alerts (Task 11F.1 Requirement 5)
+      - alert: ServiceDownProjectionWorker
+        expr: absent(jvm_memory_used_bytes{job="projection-worker"})
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Service projection-worker is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"projection-worker\"} is absent for 5m. The projection worker process has stopped exporting metrics. CDC ledger projection is halted."
+          runbook_url: "docs/RUNBOOKS.md#cdc-replay"
+
+      - alert: ServiceDownAmqpFanout
+        expr: absent(jvm_memory_used_bytes{job="amqp-fanout"})
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Service amqp-fanout is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"amqp-fanout\"} is absent for 5m. The amqp-fanout router has stopped exporting metrics. Ledger event fanout to consistent hash queues is halted."
+          runbook_url: "docs/RUNBOOKS.md#rabbitmq-node-failure"
+
+      - alert: ServiceDownEodJob
+        expr: absent(jvm_memory_used_bytes{job="eod-job"})
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Service eod-job is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"eod-job\"} is absent for 5m. The daily close and reconciliation worker has stopped exporting metrics. EOD sign-off cannot proceed."
+          runbook_url: "docs/RUNBOOKS.md#internal-reconciliation-drift"
+
+      - alert: ServiceDownContributionApi
+        expr: absent(jvm_memory_used_bytes{job="contribution-api"})
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Service contribution-api is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"contribution-api\"} is absent for 5m. The payment initiation and batch ingress API has stopped exporting metrics."
+          runbook_url: "docs/RUNBOOKS.md#slo-payment-latency"
+
+      - alert: ServiceDownBalanceApi
+        expr: absent(jvm_memory_used_bytes{job="balance-api"})
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Service balance-api is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"balance-api\"} is absent for 5m. The balance query and holding API has stopped exporting metrics."
+          runbook_url: "docs/RUNBOOKS.md#slo-balance-latency"
+
+      - alert: ServiceDownValuationApi
+        expr: absent(jvm_memory_used_bytes{job="valuation-api"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service valuation-api is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"valuation-api\"} is absent for 5m. Valuation ingestion and NAV publishing service is unavailable."
+          runbook_url: "docs/RUNBOOKS.md#late-custodian-file"
+
+      - alert: ServiceDownAllotmentJob
+        expr: absent(jvm_memory_used_bytes{job="allotment-job"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service allotment-job is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"allotment-job\"} is absent for 5m. The batch allotment worker is unavailable."
+          runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+      - alert: ServiceDownStatementWorker
+        expr: absent(jvm_memory_used_bytes{job="statement-worker"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service statement-worker is down or not emitting metrics"
+          description: "jvm_memory_used_bytes{job=\"statement-worker\"} is absent for 5m. Statement generation worker pool is unavailable."
+          runbook_url: "docs/RUNBOOKS.md#missed-signoff"
+
+  - name: slos
+    rules:
+      # SLO Error Budget Alerts (Task 11F.1 Requirement 3: exact bucket ratios)
+      - alert: PaymentInitiationLatencyBudgetBurn
+        expr: >-
+          1 - ( sum(rate(http_server_requests_milliseconds_bucket{job="contribution-api",uri="/v1/organizations/{organizationId}/cash-receipts",le="250"}[5m]))
+              / sum(rate(http_server_requests_milliseconds_count{job="contribution-api",uri="/v1/organizations/{organizationId}/cash-receipts"}[5m])) ) > 0.01
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Payment initiation latency p99 exceeds SLO threshold (250ms)"
+          description: "More than 1% of payment initiations exceed 250ms over the last 5m. The payment initiation error budget is burning rapidly. Downstream ledger calls, database writes, or thread exhaustion may be occurring."
+          runbook_url: "docs/RUNBOOKS.md#slo-payment-latency"
+
+      - alert: BalanceReadLatencyBudgetBurn
+        expr: >-
+          1 - ( sum(rate(http_server_requests_milliseconds_bucket{job="balance-api",uri="/v1/participants/{participantId}/balance",le="50"}[5m]))
+              / sum(rate(http_server_requests_milliseconds_count{job="balance-api",uri="/v1/participants/{participantId}/balance"}[5m])) ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Balance read latency p99 exceeds SLO threshold (50ms)"
+          description: "More than 1% of balance reads exceed 50ms over the last 5m. Participant queries and portal lookups are degraded. Check Redis cache hit ratio and PostgreSQL query performance."
+          runbook_url: "docs/RUNBOOKS.md#slo-balance-latency"
+
+      - alert: CDCLagSLOBudgetBurn
+        expr: (max by (group) (ledger_cdc_lag_seconds) > 5) and on() (sum(rabbitmq_detailed_queue_messages{queue=~"projection\\..*"}) > 0)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CDC projection lag p99 exceeds SLO threshold (5s)"
+          description: "CDC lag has exceeded the 5s SLO target for 5m while events are waiting to be processed. The pipeline is running behind commitments. Check worker concurrency and broker consumer lag."
+          runbook_url: "docs/RUNBOOKS.md#slo-cdc-lag"
+
+      - alert: PlatformAvailabilityBudgetBurn
+        expr: >-
+          ( sum(rate(http_server_requests_milliseconds_count{status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_milliseconds_count[5m])) ) > 0.0005
+          and (sum(rate(http_server_requests_milliseconds_count[5m])) > 1)
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Platform availability is below the 99.95% SLO threshold"
+          description: "5xx HTTP error rate exceeds the 0.05% error budget over the last 5m. Service availability target (99.95%) is breached. Check service health, unhandled exceptions, and upstream dependencies."
+          runbook_url: "docs/RUNBOOKS.md#slo-availability"
+
+      # Database backup freshness alert (Task 12.4)
+      - alert: PostgresBackupAgeTooHigh
+        expr: (time() - max(cnpg_collector_last_available_backup_timestamp)) > 86400
+        for: 15m
+        labels:
+          severity: page
+        annotations:
+          summary: "PostgreSQL continuous backup is stale (> 24h since last successful backup)"
+          description: "cnpg_collector_last_available_backup_timestamp is more than 24 hours in the past. Scheduled daily backups or continuous WAL archiving may be failing. RPO is at severe risk; inspect CloudNativePG operator logs, barmanObjectStore status, and object store (S3 API) connectivity."
+          runbook_url: "docs/RUNBOOKS.md#postgres-backup-age"

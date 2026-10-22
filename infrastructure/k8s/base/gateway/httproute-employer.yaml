@@ -1,0 +1,59 @@
+# Employer API: organization-scoped resources on contribution-api (plans,
+# cash receipts, contribution batches, participant lookup, delegated admin
+# creation).
+#
+# Known, deliberate residual exposure, not a gap: this PathPrefix also
+# reaches two sub-paths contribution-api itself restricts to internal
+# staff/service callers -- the bare `/v1/organizations` list and
+# `.../participants/{id}/identity` DELETE (crypto-shred). Gateway API's
+# PathPrefix/Exact matching cannot express "this prefix except one method on
+# one variable-segment sub-path" without a RegularExpression carve-out on
+# every affected method, so AuthorisationEnforcer's existing default-deny
+# checks (Task 9.3) remain the actual control for those two cases -- this
+# route only decides which Service the request reaches. See ADR-0028.
+#
+# What this prefix does NOT reach, structurally, because the paths simply
+# don't start with /v1/organizations: /v1/funds and /v1/staff/actions (both
+# internal staff/service only) and all of valuation-api (no route at all,
+# gateway.yaml). Those are unreachable from outside the cluster by omission,
+# not by a rule that could be misconfigured.
+#
+# Task 10.2: securitypolicy-jwt.yaml targets this route by name for JWT
+# validation. The header strip below is defense-in-depth alongside that --
+# `X-Caller-Identity` is the identity header Task 9.2 removed from
+# IdentityContextFilter for exactly this spoofing risk (TASK-LOG.md); nothing
+# reads it today, but a client should not be able to inject it either.
+#
+# Task 10.3: the three contribution-submission POST endpoints
+# (cash-receipts, contribution-batches, contribution-batches/upload-url) are
+# carved out of this PathPrefix into httproute-employer-contributions.yaml so
+# they can carry a tighter rate limit than the reads and other writes left
+# here -- see that file's own comment for why a separate route was needed.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: employer-api
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: fondaria
+spec:
+  parentRefs:
+    - name: fondaria-gateway
+      sectionName: api-https
+  hostnames:
+    - "api.fondaria.example"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/organizations
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove:
+              - X-Caller-Identity
+              - X-Edge-RateLimit-Subject
+              - X-Edge-RateLimit-Org
+      backendRefs:
+        - name: contribution-api
+          port: 80

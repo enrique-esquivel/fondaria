@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: allotment-job-config
+  labels:
+    app.kubernetes.io/name: allotment-job
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: fondaria
+data:
+  SERVER_PORT: "8080"
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  TOMCAT_BASEDIR: "/tmp/allotment-job"
+  POSTGRES_URL: "jdbc:postgresql://postgres-rw:5432/funds?sslmode=disable"
+  TIGERBEETLE_ADDRESSES: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000,10.96.100.103:3000,10.96.100.104:3000,10.96.100.105:3000"
+  TIGERBEETLE_CLUSTER_ID: "0"
+  LEDGER_ID_NAMESPACE: "00000000-0000-0000-0000-000000000002"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  DEMO_CLOCK_ENABLED: "false"
+  FONDARIA_ALLOTMENT_BATCH_SIZE: "200"

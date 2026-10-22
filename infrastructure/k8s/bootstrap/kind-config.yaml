@@ -1,0 +1,29 @@
+# The local demo cluster (Phase 12 fix, 2026-09-12). One control-plane node is
+# enough: every stateful workload runs one replica in the local overlay, and the
+# point of the cluster is to run the platform the way prod does -- operators,
+# NetworkPolicies, HPAs -- not to survive node loss.
+#
+# The default CNI (kindnet) does not enforce NetworkPolicy, so it is disabled
+# and Calico is installed by up.sh; without that, base/networkpolicies would be
+# applied but inert, and "default-deny" would be a claim rather than a fact.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: fondaria
+networking:
+  disableDefaultCNI: true
+  # Calico's default pool. Kept explicit so the two files agree.
+  podSubnet: 192.168.0.0/16
+nodes:
+  - role: control-plane
+    # Kubernetes 1.31 -- the version KubeconformIntegrationTest validates against.
+    image: kindest/node:v1.31.9@sha256:b94a3a6c06198d17f59cca8c6f486236fa05e2fb359cbd75dabbfc348a10b211
+    # NodePorts the local overlay exposes (overlays/local/kustomization.yaml):
+    # fondaria-gateway's single HTTPS entry point (Task 10.1 -- replaces the
+    # three separate API NodePorts 30080-30082 that predated the gateway) and
+    # Grafana. Same host ports the compose stack would use, so `make up` and
+    # `make k8s-up` cannot run at once -- deliberate.
+    extraPortMappings:
+      - containerPort: 30443
+        hostPort: 30443
+      - containerPort: 30001
+        hostPort: 30001

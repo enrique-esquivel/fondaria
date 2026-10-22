@@ -1,0 +1,60 @@
+# Task 10.4 (ADR-0029), root cause found: every meshed-to-meshed call in this
+# cluster failed -- confirmed live via tcpdump on the calling pod's own
+# interface -- because the mesh does not connect proxy-to-proxy on the
+# application's own port. A meshed caller's outbound proxy always dials the
+# destination's Linkerd inbound proxy port, 4143 (`linkerd-init`'s own
+# PROXY_INIT_REDIRECT rule: "redirect ALL incoming tcp to 4143", regardless of
+# the packet's original destination port). Every per-service NetworkPolicy in
+# this directory only ever allowed the application's own port (8080, 9000,
+# ...) -- none named 4143, so `default-deny-all` silently dropped every
+# proxy-to-proxy SYN before it ever reached the destination's proxy. Two
+# earlier sessions (Tasks 10.4, 10.9, 10.10) misattributed this to a Docker
+# Desktop/kind environment quirk; it was this gap the whole time, reproduces
+# identically on any cluster, and does not depend on which two services are
+# talking -- podSelector: {} (the same shape allow-dns-and-telemetry.yaml and
+# allow-linkerd-control-plane.yaml already use), not a per-service rule,
+# because any meshed pod can be a mesh call's destination.
+#
+# Task 29.12, row 29.12's regression root-caused: this file only ever fixed
+# the INGRESS half. Every per-service NetworkPolicy's own `egress` list
+# (`services-network-policies.yaml`) names only the pre-mesh application port
+# per destination -- RabbitMQ 5672, Valkey 6379, object store 8333 -- never 4143.
+# Meshing the storage tier (Task 10.4's storage amendment) made every NEW
+# caller-to-storage connection dial 4143 outbound, which `default-deny` on
+# egress silently dropped before it ever left the calling pod's own veth --
+# confirmed live via tcpdump on both ends simultaneously (a SYN leaving
+# amqp-fanout's eth0 for rabbitmq:4143 never arrived at rabbitmq's interface
+# at all) and via the exact iptables counters on the node (the calling pod's
+# own Calico egress chain, not the destination's ingress chain, never
+# incremented across repeated retries). A pod's PRE-EXISTING connection (open
+# before this gap mattered, or opened in the brief window before
+# `linkerd-init`'s redirect fully engages after a restart) keeps working via
+# conntrack ESTABLISHED, which is what made this look intermittent rather
+# than a deterministic, always-reproducible gap -- WireGuard (row 29.12's
+# original, wrong leading hypothesis) was never in the path even in theory,
+# since this is a single-node cluster and WireGuard only ever encrypts
+# node-to-node links (`ADR-0030`). Same shape as the ingress fix: one
+# `podSelector: {}` egress rule for port 4143 to any destination, unioned
+# additively with every pod's own narrower egress list rather than a
+# per-service edit.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mesh-proxy
+  labels:
+    app.kubernetes.io/name: allow-mesh-proxy
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 4143
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 4143

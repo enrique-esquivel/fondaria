@@ -1,0 +1,179 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-topology-script
+  labels:
+    app.kubernetes.io/name: rabbitmq-topology
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: fondaria
+data:
+  # Verbatim copy of infrastructure/compose/rabbitmq/declare-topology.sh --
+  # KustomizeBaseValidationTest asserts they are identical. Declares the CDC
+  # input topology (`tigerbeetle` exchange, `bridge.ledger` quorum queue and
+  # its DLQ) that `tigerbeetle amqp` validates on start and never creates.
+  declare-topology.sh: |
+    #!/bin/sh
+    # RabbitMQ topology for Phase 4 (CDC), Task 4.1.
+    #
+    # Declares only the objects the platform owns. `tigerbeetle.internal.locker.*`
+    # and `tigerbeetle.internal.progress.*` are declared by the `tigerbeetle amqp`
+    # CDC job itself (Task 4.2) and are never touched here — see README.md in this
+    # directory for why the names differ from earlier drafts of this task.
+    #
+    # Idempotent: reapplying with the same arguments is a no-op (RabbitMQ answers
+    # 204/201). Reapplying with DIFFERENT arguments is a hard failure (RabbitMQ
+    # answers 400 "inequivalent arg") — this script does not catch or retry that,
+    # so a topology drift fails the deploy instead of silently coexisting.
+    set -eu
+
+    : "${RABBITMQ_MANAGEMENT_URL:=http://rabbitmq:15672}"
+    : "${RABBITMQ_DEFAULT_USER:?RABBITMQ_DEFAULT_USER is required}"
+    : "${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS is required}"
+    : "${RABBITMQ_VHOST:=/}"
+    : "${RABBITMQ_BRIDGE_LEDGER_DELIVERY_LIMIT:=5}"
+
+    # RFC 3986 path-encode the vhost the way the management API requires: "/"
+    # becomes %2F. This deployment only ever uses the default vhost, but the
+    # encoding is correct for any single-segment vhost name.
+    vhost_encoded=$(printf '%s' "$RABBITMQ_VHOST" | sed 's#/#%2F#g')
+
+    response_body="$(mktemp)"
+    trap 'rm -f "$response_body"' EXIT
+
+    # declare_object METHOD PATH BODY DESCRIPTION
+    declare_object() {
+      method="$1"
+      path="$2"
+      body="$3"
+      description="$4"
+
+      status=$(curl -sS -o "$response_body" -w '%{http_code}' \
+        -u "${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}" \
+        -X "$method" \
+        -H 'content-type: application/json' \
+        -d "$body" \
+        "${RABBITMQ_MANAGEMENT_URL}${path}")
+
+      case "$status" in
+        200 | 201 | 204)
+          echo "OK   ($status) $description"
+          ;;
+        *)
+          echo "FAIL ($status) $description" >&2
+          cat "$response_body" >&2
+          echo >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    # The CDC job's publish target (phase-04-cdc.md Task 4.1). Must exist before
+    # `tigerbeetle amqp` starts (Task 4.2) — the job does not declare it itself.
+    # Fanout: the only bound queue is bridge.ledger, so routing keys add nothing.
+    declare_object PUT "/api/exchanges/${vhost_encoded}/tigerbeetle" \
+      '{"type":"fanout","durable":true,"auto_delete":false,"internal":false,"arguments":{}}' \
+      "exchange tigerbeetle (fanout, durable)"
+
+    # Declared before bridge.ledger: the latter's dead-letter-routing-key names
+    # this queue via the default exchange, so it must already exist to receive
+    # anything that exceeds the delivery limit below.
+    declare_object PUT "/api/queues/${vhost_encoded}/bridge.ledger.dlq" \
+      '{"durable":true,"auto_delete":false,"arguments":{"x-queue-type":"quorum"}}' \
+      "queue bridge.ledger.dlq (quorum, durable)"
+
+    # The bridge's only input (Task 4.3). x-delivery-limit is the quorum queue's
+    # built-in poison-message handling: a message redelivered more than this many
+    # times is dead-lettered automatically, no consumer-side retry counting
+    # needed. x-dead-letter-exchange="" (explicit, not omitted — RabbitMQ rejects
+    # x-dead-letter-routing-key with no x-dead-letter-exchange at all as
+    # "routing_key_but_no_dlx_defined") routes through the default exchange,
+    # which delivers by queue name — no separate dead-letter exchange to declare.
+    declare_object PUT "/api/queues/${vhost_encoded}/bridge.ledger" \
+      "{\"durable\":true,\"auto_delete\":false,\"arguments\":{\"x-queue-type\":\"quorum\",\"x-dead-letter-exchange\":\"\",\"x-dead-letter-routing-key\":\"bridge.ledger.dlq\",\"x-delivery-limit\":${RABBITMQ_BRIDGE_LEDGER_DELIVERY_LIMIT}}}" \
+      "queue bridge.ledger (quorum, durable, delivery-limit=${RABBITMQ_BRIDGE_LEDGER_DELIVERY_LIMIT})"
+
+    declare_object POST "/api/bindings/${vhost_encoded}/e/tigerbeetle/q/bridge.ledger" \
+      '{"routing_key":"","arguments":{}}' \
+      "binding tigerbeetle -> bridge.ledger"
+
+    echo "RabbitMQ topology applied."
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rabbitmq-topology
+  labels:
+    app.kubernetes.io/name: rabbitmq-topology
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # The k8s counterpart of compose's `rabbitmq-topology` one-shot. Idempotent:
+  # every declaration is a PUT that RabbitMQ answers 204 for on repeat.
+  backoffLimit: 30
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rabbitmq-topology
+        app.kubernetes.io/component: broker
+        app.kubernetes.io/part-of: fondaria
+    spec:
+      restartPolicy: OnFailure
+      priorityClassName: fondaria-stateless-default
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: declare
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /scripts/declare-topology.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: RABBITMQ_MANAGEMENT_URL
+              value: http://rabbitmq:15672
+            - name: RABBITMQ_BRIDGE_LEDGER_DELIVERY_LIMIT
+              value: "5"
+            # The operator-generated default user (see rabbitmq-cluster.yaml).
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: username
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: scripts
+          configMap:
+            name: rabbitmq-topology-script
+        - name: tmp
+          emptyDir:
+            sizeLimit: 8Mi

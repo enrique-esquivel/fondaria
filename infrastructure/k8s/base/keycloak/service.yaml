@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # ClusterIP only: no NodePort. Reached from outside the cluster (demo-tools,
+  # an operator's shell) the same way allotment-job/eod-job/statement-worker
+  # already are -- a transient `kubectl port-forward svc/keycloak 8080:8080`
+  # -- until Phase 10's edge gateway is the thing that actually terminates
+  # traffic to it.
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: management
+      port: 9000
+      targetPort: management
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: keycloak

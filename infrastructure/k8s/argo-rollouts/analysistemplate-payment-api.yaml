@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: payment-api-success-rate
+  labels:
+    app.kubernetes.io/name: contribution-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: fondaria
+spec:
+  metrics:
+    # 1. Transfer rejection rate: percentage of non-idempotent rejections over created transfers
+    - name: transfer-rejection-rate
+      interval: 30s
+      count: 3
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-k8s.monitoring.svc:9090
+          query: |
+            (
+              sum(rate(transfer_rejected_total{service_name="contribution-api",reason!="UNKNOWN"}[2m])) or vector(0)
+            )
+            /
+            (
+              (sum(rate(transfer_created_total{service_name="contribution-api"}[2m])) > 0)
+              or vector(1)
+            )
+      successCondition: result[0] <= 0.02
+
+    # 2. Payment initiation p99 latency SLO: must be under 250ms per DESIGN.md §12 and Task 11.4
+    - name: payment-latency-p99
+      interval: 30s
+      count: 3
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-k8s.monitoring.svc:9090
+          query: |
+            histogram_quantile(
+              0.99,
+              sum(rate(http_server_requests_seconds_bucket{service_name="contribution-api"}[2m])) by (le)
+            ) or vector(0.05)
+      successCondition: result[0] <= 0.25
