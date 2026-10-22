@@ -25,11 +25,11 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  * a real {@code LedgerPort}, not ingestion.
  *
  * <p><b>The bucket and the ledger namespace are random per JVM.</b> Fixtures are reused across
- * local runs and TigerBeetle cannot be reset at all (AGENTS.md §4). A fixed namespace would mean a
- * second run derives the same account ids as the first, so a test could pass on an account a
- * previous run opened — intermittently, and about money. Every test also generates its own fund ids
- * and asserts only over those — never a count over {@code workflow.valuation} or {@code
- * reference.fund_nav} as a whole, which would pass or fail on what earlier runs left behind.
+ * local runs and TigerBeetle cannot be reset at all (docs/ENGINEERING-RULES.md §4). A fixed
+ * namespace would mean a second run derives the same account ids as the first, so a test could pass
+ * on an account a previous run opened — intermittently, and about money. Every test also generates
+ * its own fund ids and asserts only over those — never a count over {@code workflow.valuation} or
+ * {@code reference.fund_nav} as a whole, which would pass or fail on what earlier runs left behind.
  */
 @Tag("integration")
 public abstract class ValuationIntegrationTest {

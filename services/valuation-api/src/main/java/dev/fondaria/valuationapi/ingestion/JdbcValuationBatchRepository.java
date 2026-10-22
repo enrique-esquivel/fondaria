@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link ValuationBatchRepository} over {@code workflow.valuation_batch}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  */
 @Repository
 public class JdbcValuationBatchRepository implements ValuationBatchRepository {

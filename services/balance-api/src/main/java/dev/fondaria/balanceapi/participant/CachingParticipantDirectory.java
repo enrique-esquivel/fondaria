@@ -25,9 +25,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * cannot go out of date, only out of memory. <b>Absence is deliberately not cached</b> — a
  * participant enrolled a moment ago must not be denied for the life of the process.
  *
- * <p>{@link ReentrantLock}, never {@code synchronized} (AGENTS.md §4). The lock is held only across
- * map operations and never across the delegate's database call, so a slow query cannot block
- * readers of already-cached entries.
+ * <p>{@link ReentrantLock}, never {@code synchronized} (docs/ENGINEERING-RULES.md §4). The lock is
+ * held only across map operations and never across the delegate's database call, so a slow query
+ * cannot block readers of already-cached entries.
  */
 public class CachingParticipantDirectory implements ParticipantDirectory {
 

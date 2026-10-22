@@ -95,10 +95,10 @@ data:
     #
     # Five alerts, one per docs/RUNBOOKS.md page named in phase-07-eod.md Task 7.6. Every alert
     # is `severity: page` -- each names a condition that blocks the daily close or leaves
-    # participants' money unproved for a business date, the same bar AGENTS.md Sec 7 and
+    # participants' money unproved for a business date, the same bar docs/ENGINEERING-RULES.md Sec 7 and
     # Task 11.4 set for a page ("page-level alerts are limited to things that are actually
     # urgent"). No alert carries a fund, organization or participant label, for the same
-    # reason the meters it reads do not (AGENTS.md Sec 7): a label is as much a log line as a
+    # reason the meters it reads do not (docs/ENGINEERING-RULES.md Sec 7): a label is as much a log line as a
     # message is, and an alert only has to say *that* something is wrong. Which fund or
     # account is wrong is in the workflow.* row behind authentication, and every runbook's
     # first diagnostic command is the query that finds it.
@@ -196,7 +196,7 @@ data:
     # - description written for someone woken at 3am
     # - runbook_url pointing to an existing file in docs/RUNBOOKS.md
     #
-    # In accordance with AGENTS.md §4 and §7:
+    # In accordance with docs/ENGINEERING-RULES.md §4 and §7:
     # - No PII, customer, or account identifiers in labels
     # - Financial drift values are signed; any non-zero drift trips the alert
     # - Idle pipeline does not fire false CDC lag alerts
@@ -473,7 +473,7 @@ data:
     # not page, while Envoy's fast retry (JwksAsyncFetch's default 1s failed-refetch interval) means a
     # genuine, sustained JWKS outage racks up far more than three failures inside the window.
     #
-    # severity: page, matching AGENTS.md Sec 7 and Task 11.4's own bar: an unreachable JWKS is not a
+    # severity: page, matching docs/ENGINEERING-RULES.md Sec 7 and Task 11.4's own bar: an unreachable JWKS is not a
     # capacity or latency problem, it is every application route this policy protects going dark
     # (fail-closed means 401 for everyone, not just forged tokens) until Keycloak or the network path
     # to it is restored.

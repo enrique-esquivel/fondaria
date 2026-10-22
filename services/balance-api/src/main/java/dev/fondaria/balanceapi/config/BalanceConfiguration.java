@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-/** Wires the balance read (Task 6.2). Constructor injection only (AGENTS.md §4). */
+/** Wires the balance read (Task 6.2). Constructor injection only (docs/ENGINEERING-RULES.md §4). */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ParticipantDirectoryProperties.class)
 public class BalanceConfiguration {

@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Structured JSON layout enforcing the format specified in {@code AGENTS.md} §7:
+ * Structured JSON layout enforcing the format specified in {@code docs/ENGINEERING-RULES.md} §7:
  *
  * <ul>
  *   <li>{@code timestamp}: ISO-8601 UTC timestamp
@@ -116,7 +116,7 @@ public class RedactingJsonLayout extends LayoutBase<ILoggingEvent> {
       gen.writeStringField("logger", event.getLoggerName());
       gen.writeStringField("thread", event.getThreadName());
 
-      // 5. Transfer & correlation IDs (explicitly preserved per AGENTS.md §7)
+      // 5. Transfer & correlation IDs (explicitly preserved per docs/ENGINEERING-RULES.md §7)
       if (mdc != null) {
         String transferId = mdc.get("transfer_id");
         if (transferId != null) {

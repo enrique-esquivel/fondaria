@@ -7,8 +7,8 @@ package dev.fondaria.contribution.batch;
  * <p>Per-row (plan-rule) rejection is Task 3.5's contract and is not expressed here: both {@link
  * #PLAN_VERSION_NOT_FOUND} and {@link #EMPLOYER_MATCH_RATIO_BREACH} are whole-batch, same as every
  * code above them. A batch carrying one of these codes staged nothing, enrolled nobody and allotted
- * nothing: whole-batch rejection is what AGENTS.md §1's "never a partial allotment" means in
- * practice.
+ * nothing: whole-batch rejection is what docs/ENGINEERING-RULES.md §1's "never a partial allotment"
+ * means in practice.
  */
 public enum BatchRejectionCode {
   /** The stored object's SHA-256 is not the checksum that was submitted, or nothing is stored. */

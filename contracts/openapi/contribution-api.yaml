@@ -36,7 +36,7 @@ info:
     **A tax identifier (`RFC`) appears in exactly one place in this
     contract: the registration request body.** It is never a path segment,
     a query parameter or a response field — anything in a URL reaches an
-    access log, a proxy log and a trace (`AGENTS.md` §7). Callers use the
+    access log, a proxy log and a trace (`docs/ENGINEERING-RULES.md` §7). Callers use the
     derived `organizationId` everywhere else.
 servers:
   - url: "/"
@@ -606,7 +606,7 @@ paths:
         Exactly one of `internalRef` or `payrollRef` must be supplied. A
         paged listing without a filter is out of scope for this endpoint.
         The response carries nothing else — no name, no `RFC`, no employment
-        dates (`AGENTS.md` §7).
+        dates (`docs/ENGINEERING-RULES.md` §7).
       parameters:
         - $ref: '#/components/parameters/OrganizationId'
         - name: internalRef
@@ -649,7 +649,7 @@ components:
         Stable internal identifier of the client organization (tenant),
         derived from its tax identifier at registration. Never the tax
         identifier itself — a path segment reaches an access log, a proxy log
-        and a trace (`AGENTS.md` §7).
+        and a trace (`docs/ENGINEERING-RULES.md` §7).
       schema:
         type: string
         format: uuid
@@ -841,7 +841,7 @@ components:
             on every retry, and the one value the ledger, the logs and the
             receipt record all agree on. The `Idempotency-Key` that produced it
             is deliberately not echoed — keys are on the never-log list
-            (`AGENTS.md` §7) and a response body reaches logs.
+            (`docs/ENGINEERING-RULES.md` §7) and a response body reaches logs.
         amountMinorUnits:
           type: integer
           format: int64
@@ -1071,7 +1071,7 @@ components:
           $ref: '#/components/schemas/ContributionBatchRejectionCode'
         message:
           type: string
-          description: Human-readable, safe to show the employer. Never a raw exception message (`AGENTS.md` §7).
+          description: Human-readable, safe to show the employer. Never a raw exception message (`docs/ENGINEERING-RULES.md` §7).
         details:
           type: object
           description: Code-specific structured detail, e.g. expected vs. actual totals for `DECLARED_TOTAL_MISMATCH`. Amounts here are always integer cents, never a float or decimal string.
@@ -1264,7 +1264,7 @@ components:
 
     Problem:
       type: object
-      description: RFC 9457 problem details (`AGENTS.md` §7). Never carries an exception message, stack trace, SQL fragment, or hostname.
+      description: RFC 9457 problem details (`docs/ENGINEERING-RULES.md` §7). Never carries an exception message, stack trace, SQL fragment, or hostname.
       required: [type, title, status]
       properties:
         type:
@@ -1319,7 +1319,7 @@ components:
         launchNavScaled:
           type: integer
           format: int64
-          description: The opening price a new fund's first contribution buys at, 1e-8 scaled. Never a decimal (`AGENTS.md` §4).
+          description: The opening price a new fund's first contribution buys at, 1e-8 scaled. Never a decimal (`docs/ENGINEERING-RULES.md` §4).
 
     Fund:
       type: object
@@ -1419,7 +1419,7 @@ components:
 
     ParticipantLookup:
       type: object
-      description: Nothing but the reference resolution — no name, no `RFC`, no employment dates (`AGENTS.md` §7).
+      description: Nothing but the reference resolution — no name, no `RFC`, no employment dates (`docs/ENGINEERING-RULES.md` §7).
       required: [participantId, internalRef, payrollRef]
       properties:
         participantId:

@@ -7,8 +7,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * The one {@link SnapshotObjectStore} implementation, speaking the S3 API to the object store
- * (AGENTS.md §5). The S3 API client is the single cloud-provider SDK AGENTS.md §4 permits, and only
- * for this.
+ * (docs/ENGINEERING-RULES.md §5). The S3 API client is the single cloud-provider SDK
+ * docs/ENGINEERING-RULES.md §4 permits, and only for this.
  *
  * <p>This class does not create the bucket, matching contribution-api's {@code S3ObjectStore}: the
  * bucket is provisioned by the deployment, so the close's credentials never need {@code
@@ -47,7 +47,8 @@ public class S3SnapshotObjectStore implements SnapshotObjectStore {
       metrics.requestCompleted("put", System.nanoTime() - start, false);
     } catch (SdkException e) {
       metrics.requestCompleted("put", System.nanoTime() - start, true);
-      // The key is safe to name — it is a date and a filename, never a participant (AGENTS.md §7).
+      // The key is safe to name — it is a date and a filename, never a participant
+      // (docs/ENGINEERING-RULES.md §7).
       throw new ObjectStoreUnavailableException("could not store the object " + objectKey, e);
     }
   }

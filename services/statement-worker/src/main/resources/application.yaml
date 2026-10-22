@@ -106,7 +106,7 @@ fondaria:
     counter-ttl: ${STATEMENT_COUNTER_TTL:45d}
 
   statement-object-store:
-    # No defaults for the secrets (AGENTS.md §4). The same object store every other service reads;
+    # No defaults for the secrets (docs/ENGINEERING-RULES.md §4). The same object store every other service reads;
     # only the buckets differ.
     endpoint: ${OBJECT_STORE_ENDPOINT:}
     access-key: ${OBJECT_STORE_ACCESS_KEY:}

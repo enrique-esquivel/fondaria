@@ -20,7 +20,7 @@
 -- publishes the event, then sets announced_at when Redpanda confirms. A process that dies
 -- between the write and the publish leaves a row that says "signed off, not yet
 -- announced", and the next sweep re-publishes -- the platform's standard rule for
--- recording two genuine facts (ADR-0011, AGENTS.md "Data flow"): the non-ledger fact
+-- recording two genuine facts (ADR-0011, docs/ENGINEERING-RULES.md "Data flow"): the non-ledger fact
 -- first, idempotent on a derived key, a crash between them visible rather than silent.
 --
 -- NOT APPEND-ONLY. announced_at is set by a later UPDATE, so this table takes workflow's

@@ -9,8 +9,9 @@ import java.io.Serial;
  * <p>This is a <b>poison</b> signal — redelivering the same bytes will fail the same way forever —
  * so the listener routes the message to {@code ledger.entries.dlq} and acknowledges it, rather than
  * nacking it into an endless redelivery loop. That is not "skipping a message you can't process"
- * (AGENTS.md §"Data flow"): the bytes are preserved verbatim for a human, and the CDC lag alert
- * fires on the gap. A transient producer failure is the opposite case and never reaches here.
+ * (docs/ENGINEERING-RULES.md §"Data flow"): the bytes are preserved verbatim for a human, and the
+ * CDC lag alert fires on the gap. A transient producer failure is the opposite case and never
+ * reaches here.
  */
 public final class CdcMessageException extends RuntimeException {
 

@@ -53,9 +53,10 @@ import org.slf4j.LoggerFactory;
  * NavPublicationEndToEndTest} owns the arithmetic against real units.
  *
  * <p>Ten fresh funds and 3,650 fresh valuations per run, asserted over only their own ids
- * (AGENTS.md §4). A reused local PostgreSQL therefore grows by that much each time this runs; the
- * queries the strike issues are all indexed on {@code (fund_id, valuation_date)}, which is what
- * makes that growth uninteresting — and this test is the one that would notice if it were not.
+ * (docs/ENGINEERING-RULES.md §4). A reused local PostgreSQL therefore grows by that much each time
+ * this runs; the queries the strike issues are all indexed on {@code (fund_id, valuation_date)},
+ * which is what makes that growth uninteresting — and this test is the one that would notice if it
+ * were not.
  */
 @Tag("integration")
 class NavStrikeThroughputTest {

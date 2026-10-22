@@ -13,7 +13,7 @@ import java.util.Objects;
  * <p>Not {@link dev.fondaria.common.ParticipantId}: that opaque id is what external contracts carry
  * ({@code ParticipantStatement.participantId}), resolved once per statement by {@code
  * ParticipantDirectory}. This is the internal key the snapshot file and {@code workflow.allotment}
- * are actually keyed by, and it never leaves this service (AGENTS.md §7).
+ * are actually keyed by, and it never leaves this service (docs/ENGINEERING-RULES.md §7).
  */
 public record ParticipantKey(OrganizationId organizationId, String participantInternalRef) {
 

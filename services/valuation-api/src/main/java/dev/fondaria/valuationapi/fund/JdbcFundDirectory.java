@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link FundDirectory} over {@code reference.fund} and {@code reference.fund_identity}, using
- * {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Reads only. {@code reference}'s schema-level grants never include {@code UPDATE} or {@code
  * DELETE} anyway (ADR-0011), but this service does not even {@code INSERT}: the fund registry is

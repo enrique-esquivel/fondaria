@@ -14,7 +14,7 @@ import java.io.Serial;
  * bad request.
  *
  * <p>Carries no value: the offending text came from a URL and must not reach a problem detail or a
- * log (AGENTS.md §7).
+ * log (docs/ENGINEERING-RULES.md §7).
  */
 public final class MalformedParticipantIdException extends RuntimeException {
 

@@ -60,10 +60,10 @@ import org.junit.jupiter.api.Test;
  * first because it strikes prices, the second because it values holdings. Both are asserted here,
  * in their own Spring contexts, on the same {@code navVersionId}.
  *
- * <p><b>Every assertion is over ids this class created</b> (AGENTS.md §4): its own organizations,
- * its own funds on their own unit ledgers, its own participants. Nothing counts rows in {@code
- * reference.fund_nav}, {@code workflow.valuation} or {@code workflow.allotment}, all of which hold
- * whatever earlier runs left behind.
+ * <p><b>Every assertion is over ids this class created</b> (docs/ENGINEERING-RULES.md §4): its own
+ * organizations, its own funds on their own unit ledgers, its own participants. Nothing counts rows
+ * in {@code reference.fund_nav}, {@code workflow.valuation} or {@code workflow.allotment}, all of
+ * which hold whatever earlier runs left behind.
  */
 @Tag("integration")
 class NavPublicationEndToEndTest {
@@ -89,9 +89,10 @@ class NavPublicationEndToEndTest {
    * Thirty business dates of MXN price per unit, in cents, oldest first — rising to MXN 11.50, then
    * losing nearly half over eleven dates, then recovering unevenly.
    *
-   * <p>A suite that only ever raises the price passes on a broken implementation (AGENTS.md §4).
-   * The trough is MXN 5.90, below the fund's MXN 10.00 opening price, so a floor at the opening
-   * price — the plausible way to get this wrong — could not survive this series.
+   * <p>A suite that only ever raises the price passes on a broken implementation
+   * (docs/ENGINEERING-RULES.md §4). The trough is MXN 5.90, below the fund's MXN 10.00 opening
+   * price, so a floor at the opening price — the plausible way to get this wrong — could not
+   * survive this series.
    */
   private static final List<Long> NAV_SERIES_CENTS =
       List.of(
@@ -193,7 +194,8 @@ class NavPublicationEndToEndTest {
     assertThat(balance.status()).isEqualTo(200);
     JsonNode nav = positionOf(balance).get("nav");
     assertThat(nav.get("navVersionId").asLong())
-        .as("the balance names the fund_nav row the provider's file produced (AGENTS.md §4)")
+        .as(
+            "the balance names the fund_nav row the provider's file produced (docs/ENGINEERING-RULES.md §4)")
         .isEqualTo(dealingDateNav.navVersionId());
     assertThat(nav.get("navScaled").asLong()).isEqualTo(Scenario.TEN_PESOS_PER_UNIT);
     assertThat(nav.get("stale").asBoolean()).as("struck moments ago").isFalse();

@@ -11,10 +11,10 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * AGENTS.md §4: never {@code double}, {@code float} or {@code BigDecimal} for cash, units or NAV —
- * in storage, transport or computation. Task 20.2 acceptance criterion 4 asks for exactly this, as
- * a grep; this is that grep, run as a portable JUnit check instead of a shell script so it runs
- * wherever {@code make verify} does.
+ * docs/ENGINEERING-RULES.md §4: never {@code double}, {@code float} or {@code BigDecimal} for cash,
+ * units or NAV — in storage, transport or computation. Task 20.2 acceptance criterion 4 asks for
+ * exactly this, as a grep; this is that grep, run as a portable JUnit check instead of a shell
+ * script so it runs wherever {@code make verify} does.
  */
 class ForbiddenNumericTypesTest {
 

@@ -1,25 +1,14 @@
-# AGENTS.md — Pinned context for the implementing agent
+# Engineering rules
 
-> Repository root. Loaded on every task. Keep under ~200 lines — a long rules file gets partially read.
+The standing technical rules for this repository. Code comments, migrations and tests cite them as `docs/ENGINEERING-RULES.md §N`, so the section numbers are stable (§3, §8 and §9 do not exist). Why each rule exists is in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md); what the platform does is in [DOMAIN.md](DOMAIN.md).
 
 ---
 
-## 1. What this is
+## 1. Principle
 
-A platform administering **employee savings and retirement funds in Mexico**. Customers are organizations (20–10,000 employees); the beneficiaries are their employees ("participants").
+**Correctness of participants' money outranks everything: speed, elegance and personal preference.** Customers are organizations; the beneficiaries are their employees (participants). The platform receives valuations from outside and translates them into participant positions; it does not manage the portfolio.
 
-Money arrives from employers, is invested externally, and gains and losses are spread across participants. **We do not manage the portfolio.** We receive valuations from outside and translate them into participant positions.
-
-Products include *fondo de ahorro*, *caja de ahorro*, private retirement plans (PPR) and high-yield savings. They differ by configuration, not by code path. **v1 ships two vehicles: caja de ahorro and an employer-sponsored retirement fund with vesting** — see `ADR-0004` (vesting mechanism) and `ADR-0012` (vehicle scope).
-
-**Correctness of participants' money outranks everything: speed, elegance, and your own preferences.**
-
-Before any Phase 2 task, read:
-- `docs/DOMAIN.md` §4 (ledger model)
-- `docs/DOMAIN.md` §1–2 (NAV, why the ledger is the balance store)
-- `docs/DESIGN-DECISIONS.md (ADR-0004)`
-
-## 2. The one model you must understand
+## 2. The one model to understand
 
 Participants hold **units**, not pesos.
 
@@ -33,20 +22,7 @@ participant balance = units held × NAV per unit
 
 When the pool gains or loses, **one number changes** (the NAV) and every participant's value moves correctly. There is no per-participant earnings calculation. If you find yourself writing one, stop.
 
-## 3. How you work
-
-- **The task is the first unchecked row of `docs/ai-tasks/BACKLOG.md` §
-  "Task sequence"**, unless the user names a different one. Read that table
-  first, then the phase document it points to. Do not ask which task is next
-  and do not infer it from git history.
-- **Then read `docs/ai-tasks/KEY-TYPES.md`** — the index of types that already
-  exist. Reuse what is there; never rebuild a primitive, an id derivation or a
-  rounding rule that is already merged.
-- One task per session. Nothing else.
-- Only create or edit files the task names.
-- You do not make design decisions. If a task is unclear or looks wrong, output `BLOCKED: <question>` and stop. Do not guess.
-- When you believe you're done, run `make verify` and paste the **full** output. Never claim success without it.
-- Do not change a test to make it pass. If a test is provably wrong, say `BLOCKED` and explain.
+---
 
 ## 4. Hard rules
 
@@ -166,9 +142,8 @@ Two exceptions:
 ## 6. Layout
 
 ```
-docs/architecture/    design docs, adr/
-docs/ai-tasks/        BACKLOG.md, TASK-LOG.md, KEY-TYPES.md, phase-XX-*.md
-contracts/            openapi/, events/
+docs/                 DOMAIN.md, DESIGN-DECISIONS.md, RUNBOOKS.md, ENGINEERING-RULES.md, BACKLOG.md
+contracts/            openapi/, events/, files/
 libs/ledger-client/   LedgerPort contract, domain types, id derivation (no vendor dep)
 libs/ledger-tigerbeetle/ the one LedgerPort implementation (ADR-0008)
 libs/platform-common/ Money, Units, Nav, error model, tracing
@@ -186,79 +161,17 @@ Never create a directory outside this structure.
 - **Never log:** RFC, CURP, names, email, salary, balances, tokens, idempotency keys, document contents.
 - Log every cash or unit movement with `transfer_id` and `correlation_id` — traceable without logging its contents.
 
-## 8. Definition of done
-
-- [ ] Every acceptance criterion demonstrably met, each with a test
-- [ ] `make verify` green, full output pasted
-- [ ] Adversarial review gate — see below
-- [ ] No dependency outside the pinned list (or an ADR exists)
-- [ ] New env vars in both compose and Kustomize
-- [ ] `BACKLOG.md` updated — tick the row in § "Task sequence" **and** update
-      § "Where we are" (keep it to a couple of sentences per task)
-- [ ] `TASK-LOG.md` updated — append the task's design decisions, traps
-      avoided and alternatives discarded as the next numbered step,
-      including the assumptions and findings from any adversarial review
-      run this session (its own task's, or a deferred one it closed out —
-      see below)
-- [ ] A decision with consequences beyond this task becomes a new ADR
-      (`docs/ADR-00XX-*.md`), not just a paragraph in `TASK-LOG.md`
-- [ ] `KEY-TYPES.md` updated if the task added or removed a public type in `libs/`
-- [ ] One commit, message `phase-XX/task-YY: <what>`
-- [ ] Session closes with a short, plain-language functional description of
-      the change — what's new, from the user's perspective — distinct from
-      the technical `TASK-LOG.md` entry
-
-**Adversarial review gate — risk-based, not per-task.**
-
-Review a task **immediately** (after `make verify` passes, before the
-BACKLOG/TASK-LOG updates, launched as a subagent (Opus)) if it touches
-any of:
-
-- `libs/ledger-client/`, `libs/ledger-tigerbeetle/`, or anything calling
-  `LedgerPort`
-- NAV or valuation: reading, storing, versioning or applying `fund_nav`,
-  or anything that allots or values units
-- `libs/rules-engine/`, or any product-policy evaluation (vesting, caps,
-  ISR, UMA, INPC, withholding)
-- a Flyway migration touching `transfer`, `fund_nav`, `participant_units`,
-  or any other table this file names as append-only/audit
-- money or unit signedness, rounding, or scale (§4 "Numbers")
-
-Everything else — DTOs, controllers with no balance/rule logic, docs,
-tooling, adapters that touch none of the above — may **defer** its review
-to the end of the current phase (the phase's last task row in
-`BACKLOG.md`). Deferred is not exempt, only later: record
-`DEFERRED-REVIEW` for that task in `TASK-LOG.md` when you close it. At the
-phase's last task, before ticking it done, launch one adversarial review
-subagent over the whole phase's diff (every task since the previous
-phase-closing review) and resolve every open `DEFERRED-REVIEW` entry in
-that same `TASK-LOG.md` update. If unsure whether a task qualifies for
-immediate review, review it immediately — do not guess down.
+---
 
 ## 9. When unsure
 
-Stop. Output `BLOCKED: <question>`. An hour of clarification is cheaper than a fund that doesn't reconcile.
+Stop and ask rather than guess. An hour of clarification is cheaper than a fund that does not reconcile.
 
-## 10. Working agreement (Claude Code)
+---
 
-- **One task per session.** When the task's acceptance criteria are met,
-  stop. Do not start the next task, even if it is obvious. Do not
-  "while I'm here" anything.
-- **Do not refactor code outside the task's file list**, including code
-  you wrote in an earlier session and now dislike. Note it and move on.
-- **Ask before adding a dependency, a module, or a file the task does
-  not name.** Not after.
-- **No machine-specific paths.** No `/Users/...`, no `/opt/homebrew`,
-  no absolute toolchain paths. If a tool is missing, say so — do not
-  patch the build to point at this machine.
-- **Never write a script or harness to satisfy an acceptance criterion**
-  unless the task names the file.
-- Run `make verify` before claiming completion, and show the output.
-- Prefer editing over rewriting. Preserve anything not required to change.
-- When you disagree with the design, say so before implementing. An
-  objection is welcome; a silent deviation is not.
-- **Every task branches from `main` and its PR targets `main`.** Never
-  stack a task's branch on another task's still-open branch — if task
-  N+1 depends on task N's unmerged code, wait for task N's PR to merge
-  into `main` first, then branch. Never delete a task branch until its
-  PR has merged into `main` (not into another feature branch).
+## 10. Working agreement
+
+- Every change branches from `main` and its pull request targets `main`. Never stack a branch on another still-open branch: if change N+1 depends on N's unmerged code, wait for N to merge, then branch.
+- No machine-specific paths (`/Users/...`, `/opt/homebrew`, absolute toolchain paths) in the build or scripts.
+- Do not add a dependency, a module or a top-level directory without agreement.
+- Run `make verify` before claiming completion; `make verify-all` also runs the integration suite.

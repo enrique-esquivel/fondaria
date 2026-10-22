@@ -35,8 +35,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * jsonb} round trip can only be asserted here.
  *
  * <p>Every test uses an organization and an object key it created itself. Fixtures are reused
- * across runs (AGENTS.md §4), so anything asserted over a whole table would be asserted over
- * whatever earlier runs left behind.
+ * across runs (docs/ENGINEERING-RULES.md §4), so anything asserted over a whole table would be
+ * asserted over whatever earlier runs left behind.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class JdbcContributionBatchRepositoryIntegrationTest extends ServiceIntegrationTest {
@@ -46,11 +46,11 @@ class JdbcContributionBatchRepositoryIntegrationTest extends ServiceIntegrationT
   /**
    * A limit big enough that no leftover can crowd this test's batch out of a sweep.
    *
-   * <p>Fixtures are reused across runs (AGENTS.md §4), so {@code workflow.contribution_batch} still
-   * holds whatever earlier runs left claimable, and the sweep orders oldest-first. A modest limit
-   * would make "was my batch claimed" depend on how many times this suite had been run before —
-   * intermittent, and about money. Claiming the leftovers too is harmless; every assertion below is
-   * over an id this test created.
+   * <p>Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4), so {@code
+   * workflow.contribution_batch} still holds whatever earlier runs left claimable, and the sweep
+   * orders oldest-first. A modest limit would make "was my batch claimed" depend on how many times
+   * this suite had been run before — intermittent, and about money. Claiming the leftovers too is
+   * harmless; every assertion below is over an id this test created.
    */
   private static final int CLAIM_EVERYTHING = 1_000_000;
 

@@ -51,9 +51,9 @@ import org.springframework.test.context.DynamicPropertySource;
  *
  * <p><b>Every test creates its own organizations, fund, participants and tenant partition</b>, and
  * asserts only over what it created. Fixtures are reused across runs and TigerBeetle cannot be
- * reset at all (AGENTS.md §4), so nothing here counts over a whole table, ledger or topic, and the
- * ledger namespace is fresh per run — a fixed one would let a run pass on accounts a previous run
- * opened.
+ * reset at all (docs/ENGINEERING-RULES.md §4), so nothing here counts over a whole table, ledger or
+ * topic, and the ledger namespace is fresh per run — a fixed one would let a run pass on accounts a
+ * previous run opened.
  *
  * <h2>One permanent fund, and prices that always move forward</h2>
  *
@@ -239,7 +239,7 @@ class OrganizationSummaryIntegrationTest {
   /**
    * A NAV that falls must move the employer's total down exactly as it moves each participant's,
    * and the tie must survive every step of a series that goes both ways. A suite that only ever
-   * raised the price would pass on a broken implementation (AGENTS.md §4).
+   * raised the price would pass on a broken implementation (docs/ENGINEERING-RULES.md §4).
    */
   @Test
   @DisplayName("the tie survives a volatile NAV series, and a fall really lowers the total")
@@ -379,9 +379,9 @@ class OrganizationSummaryIntegrationTest {
   /**
    * <b>The bound is the acceptance criterion's own two seconds, not a tighter number.</b> A tight
    * wall-clock assertion in CI is intermittent and about money, which is the worst failure mode
-   * available (AGENTS.md §4). What would actually break this is a round trip per participant, and
-   * that is orders of magnitude, not percent: 10,000 sequential ledger calls could not finish in
-   * two seconds on any hardware this runs on.
+   * available (docs/ENGINEERING-RULES.md §4). What would actually break this is a round trip per
+   * participant, and that is orders of magnitude, not percent: 10,000 sequential ledger calls could
+   * not finish in two seconds on any hardware this runs on.
    *
    * <p>The correctness half is asserted too, against the participants that do hold units — a fast
    * summary that lost people would pass a timing assertion on its own.

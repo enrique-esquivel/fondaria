@@ -16,7 +16,8 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link StagedBatchRepository} over {@code workflow.contribution_batch} and {@code
- * workflow.contribution_batch_row}, using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * workflow.contribution_batch_row}, using {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no
+ * ORM).
  */
 @Repository
 public class JdbcStagedBatchRepository implements StagedBatchRepository {

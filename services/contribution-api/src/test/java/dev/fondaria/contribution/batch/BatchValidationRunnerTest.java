@@ -423,7 +423,8 @@ class BatchValidationRunnerTest {
         .hasValueSatisfying(
             rejection ->
                 assertThat(rejection.code()).isEqualTo(BatchRejectionCode.ROW_COUNT_MISMATCH));
-    // AGENTS.md §1: never a partial allotment. A rejected batch takes no money with it,
+    // docs/ENGINEERING-RULES.md §1: never a partial allotment. A rejected batch takes no money with
+    // it,
     // even when money matching its declared total is sitting right there.
     assertThat(claims.claimedBy(batchId)).isEmpty();
     assertThat(claims.unclaimed(organization))

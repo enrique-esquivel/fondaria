@@ -10,7 +10,7 @@ import java.util.Objects;
  *
  * <p>Carries the date and what the gate found, and nothing else. The breaks themselves are in
  * {@code workflow.reconciliation_break}; an exception message is not where a list of drifted funds
- * belongs (AGENTS.md §7).
+ * belongs (docs/ENGINEERING-RULES.md §7).
  */
 public final class CloseBlockedException extends RuntimeException {
 

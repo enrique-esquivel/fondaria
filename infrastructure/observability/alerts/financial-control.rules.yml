@@ -14,7 +14,7 @@
 # - description written for someone woken at 3am
 # - runbook_url pointing to an existing file in docs/RUNBOOKS.md
 #
-# In accordance with AGENTS.md §4 and §7:
+# In accordance with docs/ENGINEERING-RULES.md §4 and §7:
 # - No PII, customer, or account identifiers in labels
 # - Financial drift values are signed; any non-zero drift trips the alert
 # - Idle pipeline does not fire false CDC lag alerts

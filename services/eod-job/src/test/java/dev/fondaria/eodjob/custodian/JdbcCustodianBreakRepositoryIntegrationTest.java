@@ -130,7 +130,8 @@ class JdbcCustodianBreakRepositoryIntegrationTest extends ServiceIntegrationTest
         repository.open(
             providerAccountId, BreakCategory.UNIT_TIMING_DIFFERENCE, 1L, businessDate, now());
 
-    // escalateAged is an unscoped UPDATE across the whole table (AGENTS.md §4: fixtures are
+    // escalateAged is an unscoped UPDATE across the whole table (docs/ENGINEERING-RULES.md §4:
+    // fixtures are
     // reused, so the return count is not this test's to assert — a break another test in this
     // class left non-RESOLVED would inflate it). Only this test's own two breaks' statuses are
     // asserted.
@@ -165,7 +166,8 @@ class JdbcCustodianBreakRepositoryIntegrationTest extends ServiceIntegrationTest
       "hasOpenRealBreak turns true the moment a real break — not a timing difference — opens")
   void hasOpenRealBreakReflectsARealBreakOpening() {
     // hasOpenRealBreak is deliberately platform-wide (it is what the gate reads), so a shared,
-    // never-reset fixture cannot support asserting it false (AGENTS.md §4: never assert a total
+    // never-reset fixture cannot support asserting it false (docs/ENGINEERING-RULES.md §4: never
+    // assert a total
     // over a whole table). Only the true direction is provable: opening one more real break can
     // only keep the answer true or make it true, regardless of what other tests left behind.
     repository.open(

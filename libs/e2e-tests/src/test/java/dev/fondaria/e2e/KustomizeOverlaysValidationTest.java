@@ -425,7 +425,8 @@ class KustomizeOverlaysValidationTest {
               .doesNotContainIgnoringCase("passwd:");
 
           // The local overlay is the one place dev credentials are allowed to live, as
-          // compose's `${VAR:-value}` defaults are (AGENTS.md "Configuration"); prod never
+          // compose's `${VAR:-value}` defaults are (docs/ENGINEERING-RULES.md "Configuration");
+          // prod never
           // generates a Secret from a literal.
           if (p.toString().contains("/prod/")) {
             assertThat(content)

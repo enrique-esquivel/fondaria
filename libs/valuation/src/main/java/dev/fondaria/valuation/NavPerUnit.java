@@ -12,7 +12,7 @@ import java.util.Objects;
  *
  * <p>Carrying {@code unitsInIssue} alongside the result (not just the price) is what lets Task 20.4
  * persist a division that reproduces itself years later from stored data alone, never by rerunning
- * current code (AGENTS.md §4).
+ * current code (docs/ENGINEERING-RULES.md §4).
  */
 public record NavPerUnit(Nav nav, Units unitsInIssue) {
 
@@ -36,9 +36,9 @@ public record NavPerUnit(Nav nav, Units unitsInIssue) {
    * the fund's declared {@code openingNav} is returned unchanged, the price its first contribution
    * buys at (Task 20.1).
    *
-   * <p>Integer arithmetic only (AGENTS.md §4): the division is carried out exactly in {@link
-   * BigInteger}, and its remainder is computed explicitly and used to round half-up — the same
-   * convention {@code Money.value(Units, Nav)} uses — rather than a bare {@code /} that would
+   * <p>Integer arithmetic only (docs/ENGINEERING-RULES.md §4): the division is carried out exactly
+   * in {@link BigInteger}, and its remainder is computed explicitly and used to round half-up — the
+   * same convention {@code Money.value(Units, Nav)} uses — rather than a bare {@code /} that would
    * truncate the remainder unnoticed. A falling {@code reportedValue} produces a proportionally
    * lower {@code nav}; nothing here floors or clamps it.
    */

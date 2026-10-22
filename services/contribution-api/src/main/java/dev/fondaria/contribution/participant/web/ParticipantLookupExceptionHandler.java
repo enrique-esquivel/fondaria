@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the participant-lookup endpoint (AGENTS.md §7), following the
- * pattern {@code OrganizationExceptionHandler} sets.
+ * RFC 9457 problem details for the participant-lookup endpoint (docs/ENGINEERING-RULES.md §7),
+ * following the pattern {@code OrganizationExceptionHandler} sets.
  */
 @RestControllerAdvice(assignableTypes = ParticipantLookupController.class)
 public class ParticipantLookupExceptionHandler {

@@ -7,8 +7,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link ProjectionTotals} over the {@code projection} schema, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link ProjectionTotals} over the {@code projection} schema, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>Why neither query filters on a date</h2>
  *
@@ -38,10 +38,10 @@ import org.springframework.stereotype.Repository;
  * {@code bigint out of range} — rather than reading a {@code BigDecimal} into Java to narrow it
  * there. A total genuinely too large for the platform's own {@code long} is not a number this
  * platform can hold on either side of the comparison, so failing the pass is the only honest
- * outcome; and doing it in SQL keeps {@code BigDecimal} out of a money path entirely (AGENTS.md §4
- * confines it to the display boundary). {@code account_id} is cast to {@code text} for the same
- * reason: it is a u128 identifier stored in {@code numeric(39,0)}, and nothing ever does arithmetic
- * on it.
+ * outcome; and doing it in SQL keeps {@code BigDecimal} out of a money path entirely
+ * (docs/ENGINEERING-RULES.md §4 confines it to the display boundary). {@code account_id} is cast to
+ * {@code text} for the same reason: it is a u128 identifier stored in {@code numeric(39,0)}, and
+ * nothing ever does arithmetic on it.
  */
 @Repository
 public class JdbcProjectionTotals implements ProjectionTotals {

@@ -30,10 +30,10 @@ import org.slf4j.LoggerFactory;
  * this class is consulted before a decision money depends on: {@code reference.fund_nav} is the
  * price of record, and this only spares a just-started instance its first database read.
  *
- * <p><b>Integers only, and no {@code INCRBYFLOAT}</b> (AGENTS.md §4). The NAV is written as its
- * {@code long} at scale 1e-8, units in issue likewise, and instants as epoch milliseconds. Nothing
- * here parses or writes a decimal string, so there is no point at which a price could become a
- * floating-point value.
+ * <p><b>Integers only, and no {@code INCRBYFLOAT}</b> (docs/ENGINEERING-RULES.md §4). The NAV is
+ * written as its {@code long} at scale 1e-8, units in issue likewise, and instants as epoch
+ * milliseconds. Nothing here parses or writes a decimal string, so there is no point at which a
+ * price could become a floating-point value.
  *
  * <p><b>The Lua script exists because there is a real read-then-write to make atomic</b> — unlike
  * the cash-receipt cache, which correctly uses two plain commands. Two things happen together here:
@@ -111,7 +111,10 @@ public class RedisNavSnapshotStore implements NavSnapshotStore {
    */
   private volatile StatefulRedisConnection<String, String> connection;
 
-  /** {@link ReentrantLock}, never {@code synchronized}: {@code connect()} is I/O (AGENTS.md §4). */
+  /**
+   * {@link ReentrantLock}, never {@code synchronized}: {@code connect()} is I/O
+   * (docs/ENGINEERING-RULES.md §4).
+   */
   private final ReentrantLock connectLock = new ReentrantLock();
 
   public RedisNavSnapshotStore(RedisClient client, RedisMetrics metrics) {

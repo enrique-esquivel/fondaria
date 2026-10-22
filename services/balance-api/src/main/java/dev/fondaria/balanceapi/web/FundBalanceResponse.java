@@ -6,7 +6,8 @@ import dev.fondaria.balanceapi.balance.FundPosition;
  * One fund's contribution to a participant's balance — {@code FundBalance} in {@code
  * contracts/openapi/balance-api.yaml}.
  *
- * <p>Units at scale 1e-8, cash in MXN cents, both as plain JSON integers (AGENTS.md §4).
+ * <p>Units at scale 1e-8, cash in MXN cents, both as plain JSON integers (docs/ENGINEERING-RULES.md
+ * §4).
  *
  * <p><b>Unvested is reported, not hidden.</b> Those units are issued and priced; vesting decides
  * what the participant is entitled to take, not what their holding is worth (ADR-0004). Showing the

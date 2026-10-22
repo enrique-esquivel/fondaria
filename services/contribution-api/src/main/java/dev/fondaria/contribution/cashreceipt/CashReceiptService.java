@@ -46,9 +46,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>There is no "does this transfer already exist" check. The transfer id is derived, so a
  * duplicate is refused by TigerBeetle itself, atomic with the write; asking first and then writing
- * would reintroduce exactly the read-then-write race the derivation removes (AGENTS.md §4). {@link
- * LedgerPort#lookupTransfer} is called only <i>after</i> the ledger has reported {@code
- * AlreadyExists}, to confirm the pre-existing movement is the one this request describes.
+ * would reintroduce exactly the read-then-write race the derivation removes
+ * (docs/ENGINEERING-RULES.md §4). {@link LedgerPort#lookupTransfer} is called only <i>after</i> the
+ * ledger has reported {@code AlreadyExists}, to confirm the pre-existing movement is the one this
+ * request describes.
  *
  * <h2>What Redis does, and what it must never do</h2>
  *

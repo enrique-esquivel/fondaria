@@ -41,11 +41,11 @@ import org.springframework.test.context.DynamicPropertySource;
  *
  * <h2>How this suite leaves the shared database as it found it</h2>
  *
- * <p>Fixtures are reused across runs (AGENTS.md §4), so every run creates its own organization,
- * participant and tenant partition, and asserts only over rows it inserted. The partition is
- * <b>dropped</b> afterwards rather than deleted from: {@code projection.participant_units} is
- * append-only and carries a {@code BEFORE DELETE} trigger that raises for every role, owner
- * included (V21).
+ * <p>Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4), so every run creates its own
+ * organization, participant and tenant partition, and asserts only over rows it inserted. The
+ * partition is <b>dropped</b> afterwards rather than deleted from: {@code
+ * projection.participant_units} is append-only and carries a {@code BEFORE DELETE} trigger that
+ * raises for every role, owner included (V21).
  *
  * <p><b>The two funds, by contrast, are fixed and registered idempotently.</b> {@code
  * reference.fund_nav} is append-only too, and its rows carry a foreign key to {@code
@@ -176,7 +176,7 @@ class AsOfBalanceIntegrationTest {
         1_500_00000000L);
 
     // A falling series, deliberately: a suite that only ever rises passes on a broken
-    // implementation (AGENTS.md §4). The gap date is the low point.
+    // implementation (docs/ENGINEERING-RULES.md §4). The gap date is the low point.
     long navOpened = strike(FUND_A, opened, 12_50000000L);
     long navGap = strike(FUND_A, gap, 9_75000000L);
     long navChanged = strike(FUND_A, changed, 11_00000000L);
@@ -451,9 +451,9 @@ class AsOfBalanceIntegrationTest {
    * production timeout deliberately, and no assertion this suite makes is relaxed — the ten
    * millisecond budget and the plan check are untouched.
    *
-   * <p>Bounded rather than unlimited, all the same (AGENTS.md §4). A minute is far beyond what this
-   * statement has ever taken and still fails a genuinely stuck one, instead of holding the job open
-   * until the ninety-minute step timeout.
+   * <p>Bounded rather than unlimited, all the same (docs/ENGINEERING-RULES.md §4). A minute is far
+   * beyond what this statement has ever taken and still fails a genuinely stuck one, instead of
+   * holding the job open until the ninety-minute step timeout.
    */
   private void analyze(String partition) {
     JdbcTemplate maintenance = new JdbcTemplate(dataSource);

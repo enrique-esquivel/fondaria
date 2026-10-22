@@ -65,7 +65,7 @@
             Two roles, one dependency: the scheduler consumes close.signed-off.v1
             (eod-job's Task 7.5a event) and produces statement.jobs.v1; the workers
             consume statement.jobs.v1. ADR-0022 keeps this service on Redpanda —
-            AGENTS.md §5 is still pinned to it until row 30b lands — and Section 2b
+            docs/ENGINEERING-RULES.md §5 is still pinned to it until row 30b lands — and Section 2b
             of that ADR names this exact pair as the cost row 30b inherits if 7.5b
             lands first, which the platform owner confirmed on 2026-09-05.
         -->
@@ -122,7 +122,7 @@
         </dependency>
 
         <!--
-            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            The S3 API client, for object storage only — docs/ENGINEERING-RULES.md §4 bans cloud
             provider SDKs and carves out exactly this. Reads the 7.4 snapshot
             objects and writes the rendered statement objects, both to the object store,
             never AWS. Both default HTTP clients are excluded and

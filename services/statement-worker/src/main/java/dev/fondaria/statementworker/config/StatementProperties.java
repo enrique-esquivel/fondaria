@@ -5,9 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Task 7.5b's own operational tuning, bound from the environment (ADR-0022). Every value has a
- * working default (AGENTS.md §4: production fails to start on an absent secret, but tuning is not
- * one) — the RabbitMQ host itself is bound the same way {@code eod-job}'s {@code SignoffProperties}
- * mirrors it, required and named on absence.
+ * working default (docs/ENGINEERING-RULES.md §4: production fails to start on an absent secret, but
+ * tuning is not one) — the RabbitMQ host itself is bound the same way {@code eod-job}'s {@code
+ * SignoffProperties} mirrors it, required and named on absence.
  *
  * @param amqpHost {@code STATEMENT_AMQP_HOST}. Required — the same RabbitMQ broker every other
  *     service on the platform uses.
@@ -37,7 +37,9 @@ public record StatementProperties(
         publishConfirmTimeout == null ? Duration.ofSeconds(60) : publishConfirmTimeout;
   }
 
-  /** Fails startup naming the absent variable. Never echoes a value (AGENTS.md §7). */
+  /**
+   * Fails startup naming the absent variable. Never echoes a value (docs/ENGINEERING-RULES.md §7).
+   */
   public void requireComplete() {
     if (amqpHost == null || amqpHost.isBlank()) {
       throw new ConfigurationException(

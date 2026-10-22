@@ -9,7 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>Bound under {@code fondaria.database} rather than Spring's own {@code spring.datasource}:
  * binding is permissive here, so an absent variable becomes a {@link ConfigurationException} naming
  * it rather than a binder stack trace or a pool that fails on first use. Production must fail to
- * start when a required secret is absent (AGENTS.md §4) — there are no defaults below.
+ * start when a required secret is absent (docs/ENGINEERING-RULES.md §4) — there are no defaults
+ * below.
  *
  * <p>The login role's membership of {@code fondaria_cdc} (V1__schemas_and_grants.sql) is deployment
  * configuration. That is the role with {@code INSERT} on the projection tables and {@code UPDATE},
@@ -48,7 +49,7 @@ public record DatabaseProperties(
 
   /**
    * Fails startup naming the absent variable. Never echoes a value: a JDBC URL carries a hostname
-   * and the password is a secret (AGENTS.md §7).
+   * and the password is a secret (docs/ENGINEERING-RULES.md §7).
    */
   public void requireComplete() {
     requirePresent(url, URL_VARIABLE);

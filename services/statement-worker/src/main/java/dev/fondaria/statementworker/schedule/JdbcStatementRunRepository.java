@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link StatementRunRepository} over {@code workflow.statement_run} ({@code V30}), using {@code
- * JdbcClient} (AGENTS.md §5 — no ORM).
+ * JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  */
 @Repository
 public class JdbcStatementRunRepository implements StatementRunRepository {

@@ -19,7 +19,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Called from {@code BatchValidationRunner}'s path, at the same point auto-enrolment runs: after
  * a file has passed every structural and plan-rule check of {@code contribution-file-v2.md} §4, and
  * before the reconciliation gate. A batch that fails one of those checks is rejected whole and
- * stages nothing, the same "never a partial allotment" AGENTS.md §1 states for money.
+ * stages nothing, the same "never a partial allotment" docs/ENGINEERING-RULES.md §1 states for
+ * money.
  *
  * <p><b>Why this runs before the gate, not after.</b> By the time a batch reaches this point, no
  * further check can reject it — every remaining step is the gate deciding whether its cash has
@@ -113,7 +114,8 @@ public class ContributionStagingService {
     Instant now = clock.instant();
     transactions.executeWithoutResult(status -> stageParts(batch, parts, now));
 
-    // Counts only. Neither an internal ref nor a payroll ref reaches a log (AGENTS.md §7) --
+    // Counts only. Neither an internal ref nor a payroll ref reaches a log
+    // (docs/ENGINEERING-RULES.md §7) --
     // every field of a staged row but the amounts identifies a person.
     LOGGER.info(
         "Contribution batch rows captured for staging, organizationId={}, batchId={},"

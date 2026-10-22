@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the contribution-batch endpoints (AGENTS.md §7), following the
- * pattern {@code CashReceiptExceptionHandler} sets.
+ * RFC 9457 problem details for the contribution-batch endpoints (docs/ENGINEERING-RULES.md §7),
+ * following the pattern {@code CashReceiptExceptionHandler} sets.
  *
  * <p>Only messages this codebase authored are rendered. Anything else becomes a generic {@code 500}
  * saying nothing, because a driver, parser or SDK message can carry a SQL fragment, a hostname, a

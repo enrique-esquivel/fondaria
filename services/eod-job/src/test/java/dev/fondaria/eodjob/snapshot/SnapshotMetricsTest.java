@@ -79,7 +79,8 @@ class SnapshotMetricsTest {
         .allSatisfy(
             meter ->
                 assertThat(meter.getId().getTags())
-                    .as("a label is as much a log line as a message is (AGENTS.md §7)")
+                    .as(
+                        "a label is as much a log line as a message is (docs/ENGINEERING-RULES.md §7)")
                     .isEmpty());
   }
 

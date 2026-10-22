@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link ProviderAccountDirectory} over {@code reference.provider_account} ({@code V26}), using
- * {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>{@code DISTINCT ON} resolves each scope key to its current version in one query — Postgres
  * groups {@code NULL} {@code organization_id} values together correctly for this purpose, which is

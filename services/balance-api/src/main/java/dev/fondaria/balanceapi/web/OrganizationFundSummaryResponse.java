@@ -11,7 +11,8 @@ import dev.fondaria.balanceapi.summary.OrganizationFundTotal;
  * to the balances those participants were served ({@code ADR-0015}). Multiplying the two rendered
  * numbers here lands within a centavo per lot of it, not on it.
  *
- * <p>Every amount is a plain JSON integer — cents for value, scale 1e-8 for units (AGENTS.md §4).
+ * <p>Every amount is a plain JSON integer — cents for value, scale 1e-8 for units
+ * (docs/ENGINEERING-RULES.md §4).
  */
 public record OrganizationFundSummaryResponse(
     String fundId, long totalUnitsScaled, long totalValueCents, FundNavResponse nav) {

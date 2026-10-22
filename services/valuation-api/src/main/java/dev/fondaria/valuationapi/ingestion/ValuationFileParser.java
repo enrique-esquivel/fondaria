@@ -107,7 +107,7 @@ public final class ValuationFileParser {
 
   /**
    * Check 3 of §4: {@code long}, never a fixed-point or fractional type, and <b>never a decimal
-   * point</b> (AGENTS.md §4).
+   * point</b> (docs/ENGINEERING-RULES.md §4).
    *
    * <p>A decimal gets its own rejection code rather than {@code MALFORMED_FILE}. It is the one
    * parse failure whose tempting recovery is wrong: {@code 1234.56} plainly means MXN 1,234.56, and
@@ -137,7 +137,7 @@ public final class ValuationFileParser {
     if (parsed < 0) {
       // A pooled balance is not negative. Note this is NOT a clamp: nothing here floors a
       // value at zero, it refuses the file. The NAV struck from an accepted value is free
-      // to fall, and must be (AGENTS.md §4).
+      // to fall, and must be (docs/ENGINEERING-RULES.md §4).
       throw malformed("Column reportedValueCents at line " + lineNumber + " is negative.");
     }
     return parsed;

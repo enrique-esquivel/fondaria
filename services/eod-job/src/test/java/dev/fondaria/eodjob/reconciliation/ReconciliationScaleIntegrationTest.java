@@ -127,8 +127,9 @@ class ReconciliationScaleIntegrationTest extends ServiceIntegrationTest {
    * criterion itself names. Neither is a path the running service has: {@code fondaria_app} holds
    * no {@code DELETE} on either table.
    *
-   * <p>It matters that this happens. Fixtures are reused across runs (AGENTS.md §4), and a million
-   * rows left behind would be scanned again by every reconciliation any later test performs.
+   * <p>It matters that this happens. Fixtures are reused across runs (docs/ENGINEERING-RULES.md
+   * §4), and a million rows left behind would be scanned again by every reconciliation any later
+   * test performs.
    */
   @AfterEach
   void removeSyntheticRows() {

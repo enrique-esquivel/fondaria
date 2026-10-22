@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link HistoricUnitsRepository} over {@code projection.participant_units}, using {@code
- * JdbcClient} (AGENTS.md §5 — no ORM).
+ * JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>The statement is built by {@link HistoricUnitsStatement}, which carries the reasoning about
  * branches and the index. This class is the execution and the row mapping, and nothing else — it
@@ -45,7 +45,7 @@ public class JdbcHistoricUnitsRepository implements HistoricUnitsRepository {
             // getString, not getBigDecimal: this is a u128 *identifier* stored as numeric(39,0),
             // and PostgreSQL already renders it in the canonical unsigned decimal the rest of the
             // platform uses. Going through BigDecimal would put a decimal type in a file next to
-            // money for no gain (AGENTS.md §4).
+            // money for no gain (docs/ENGINEERING-RULES.md §4).
             rs.getString("account_id"), rs.getLong("fund_id")),
         rs.getObject("effective_date", LocalDate.class),
         Units.of(rs.getLong("units_scaled")));

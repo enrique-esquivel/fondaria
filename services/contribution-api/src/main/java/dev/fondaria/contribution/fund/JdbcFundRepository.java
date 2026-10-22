@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link FundRepository} over {@code reference.fund_identity} and {@code reference.fund}, using
- * {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>{@link #publish} writes both tables in one transaction: the identity insert is {@code ON
  * CONFLICT DO NOTHING}, so the first call for a {@code fundId} registers it and every later call is

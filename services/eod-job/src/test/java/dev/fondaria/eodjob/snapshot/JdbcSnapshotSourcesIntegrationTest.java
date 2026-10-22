@@ -37,7 +37,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * latest row per account, a row-wise range matching exactly a keyset page, and a correction being
  * the row nothing points at.
  *
- * <p>Every id is fresh and every assertion is over rows this test wrote (AGENTS.md §4).
+ * <p>Every id is fresh and every assertion is over rows this test wrote (docs/ENGINEERING-RULES.md
+ * §4).
  */
 @SpringBootTest
 class JdbcSnapshotSourcesIntegrationTest extends ServiceIntegrationTest {

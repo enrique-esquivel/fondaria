@@ -36,7 +36,7 @@ public record AffectedAllotment(
     Objects.requireNonNull(allottedAt, "allottedAt must not be null");
   }
 
-  /** {@code participantInternalRef} is person-identifying (AGENTS.md §7). */
+  /** {@code participantInternalRef} is person-identifying (docs/ENGINEERING-RULES.md §7). */
   @Override
   public String toString() {
     return "AffectedAllotment[batchId=" + batchId + ", REDACTED]";

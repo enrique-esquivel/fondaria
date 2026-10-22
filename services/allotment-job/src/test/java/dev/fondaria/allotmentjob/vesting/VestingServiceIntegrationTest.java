@@ -67,7 +67,8 @@ class VestingServiceIntegrationTest extends ServiceIntegrationTest {
     recordAllotment(organizationId, batchId, "P-001", fundId, navVersionId, unvestedScaled, false);
 
     // Not asserted on the sweep's own return count -- fixtures are reused across local runs
-    // (AGENTS.md §4), so a sweep this wide can pick up candidates other test runs left
+    // (docs/ENGINEERING-RULES.md §4), so a sweep this wide can pick up candidates other test runs
+    // left
     // behind. Every assertion below is scoped to this test's own organizationId/fundId.
     runner.sweep();
 

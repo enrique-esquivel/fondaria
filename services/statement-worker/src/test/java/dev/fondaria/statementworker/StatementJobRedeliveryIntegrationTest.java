@@ -42,7 +42,8 @@ class StatementJobRedeliveryIntegrationTest extends ServiceIntegrationTest {
     String participantRef = "redelivery-" + UUID.randomUUID();
     UUID participantId = insertParticipant(organizationId, participantRef);
     // A fresh random period, not a fixed one: the Redis fixture is reused across local runs
-    // (AGENTS.md §4), and a fixed period's completion set would accumulate one member per prior
+    // (docs/ENGINEERING-RULES.md §4), and a fixed period's completion set would accumulate one
+    // member per prior
     // run, making the "exactly 1" assertion below fail on any run but the first.
     java.time.YearMonth randomMonth =
         java.time.YearMonth.of(

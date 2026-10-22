@@ -10,7 +10,8 @@ import java.io.Serial;
  * a mistyped id look like a real, empty account — the same rule Task 6.4 applies to a date before a
  * participant's first contribution.
  *
- * <p>Carries no id: it reaches a problem detail, and the value came from a URL (AGENTS.md §7).
+ * <p>Carries no id: it reaches a problem detail, and the value came from a URL
+ * (docs/ENGINEERING-RULES.md §7).
  */
 public final class ParticipantNotFoundException extends RuntimeException {
 

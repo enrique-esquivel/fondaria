@@ -7,7 +7,7 @@ import java.io.Serial;
  * ConfigurationFailureAnalyzer} renders it as a named message rather than a stack trace.
  *
  * <p>Carries the variable's name, never its value: a connection value is a hostname, and hostnames
- * stay out of error output (AGENTS.md §7).
+ * stay out of error output (docs/ENGINEERING-RULES.md §7).
  */
 public final class ConfigurationException extends RuntimeException {
 

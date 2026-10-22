@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>Bound under {@code fondaria.database} rather than Spring's own {@code spring.datasource}, so
  * an absent variable becomes a {@link ConfigurationException} naming it rather than a binder stack
  * trace or a pool that fails on first use. Production must fail to start when a required secret is
- * absent (AGENTS.md §4) — there are no defaults below.
+ * absent (docs/ENGINEERING-RULES.md §4) — there are no defaults below.
  *
  * @param url JDBC URL, e.g. {@code jdbc:postgresql://postgres:5432/funds}
  * @param username the login role; membership of {@code fondaria_app} is deployment configuration
@@ -18,9 +18,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param queryTimeout how long a single statement may run before the driver cancels it. Task 6.3
  *     made this service's request path issue a real query for the first time — the balance path
  *     resolves one cached, indexed row, the movement history reads a partitioned projection — and
- *     AGENTS.md §4 requires every external call to have an explicit timeout. Operational tuning
- *     with a working default, applied to the {@code JdbcClient} rather than to the connection, so
- *     Flyway's migrations on the same pool are not bounded by a request-shaped budget
+ *     docs/ENGINEERING-RULES.md §4 requires every external call to have an explicit timeout.
+ *     Operational tuning with a working default, applied to the {@code JdbcClient} rather than to
+ *     the connection, so Flyway's migrations on the same pool are not bounded by a request-shaped
+ *     budget
  * @param maxPoolSize upper bound on pooled connections
  */
 @ConfigurationProperties(prefix = "fondaria.database")
@@ -56,7 +57,7 @@ public record DatabaseProperties(
 
   /**
    * Fails startup naming the absent variable. Never echoes a value: a JDBC URL carries a hostname
-   * and the password is a secret (AGENTS.md §7).
+   * and the password is a secret (docs/ENGINEERING-RULES.md §7).
    */
   public void requireComplete() {
     requirePresent(url, URL_VARIABLE);

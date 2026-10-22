@@ -14,10 +14,10 @@
 -- THE RUN'S STATUS IS UPDATED IN PLACE, THE BREAKS ARE NOT. RUNNING -> PASSED | FAILED
 -- is exactly the lifecycle `workflow.contribution_batch` already models, and the same
 -- grants apply. A break is a finding, and a finding is never edited: the same rule
--- AGENTS.md §4 states for transfer, fund_nav, participant_units and allotment. A break
+-- docs/ENGINEERING-RULES.md §4 states for transfer, fund_nav, participant_units and allotment. A break
 -- that turns out to be explained is not deleted -- the next run simply does not raise it.
 --
--- EVERY AMOUNT HERE IS SIGNED. AGENTS.md §4: values go down, and a drift has a
+-- EVERY AMOUNT HERE IS SIGNED. docs/ENGINEERING-RULES.md §4: values go down, and a drift has a
 -- direction. There is deliberately no CHECK (drift >= 0): "the ledger holds less than
 -- the projection says" is exactly as real a finding as its opposite, and clamping one of
 -- them to zero would hide half of what this control exists to find.
@@ -109,7 +109,7 @@ COMMENT ON COLUMN workflow.reconciliation_break.scope IS
 COMMENT ON COLUMN workflow.reconciliation_break.account_id IS
     'The cash account that disagrees, as AccountId.asUnsignedDecimal() -- the same text form projection.transfer carries a u128 in. Null for a FUND_UNITS break, which names a fund rather than one account.';
 COMMENT ON COLUMN workflow.reconciliation_break.drift_scaled IS
-    'left_amount_scaled - right_amount_scaled. Signed, and deliberately unclamped: "the ledger holds less than the projection claims" is as real a finding as its opposite (AGENTS.md §4).';
+    'left_amount_scaled - right_amount_scaled. Signed, and deliberately unclamped: "the ledger holds less than the projection claims" is as real a finding as its opposite (docs/ENGINEERING-RULES.md §4).';
 
 -- Findings are evidence, and this one is structural rather than left to the schema's
 -- default privileges: an explicit revoke, plus a trigger that raises for ANY role,

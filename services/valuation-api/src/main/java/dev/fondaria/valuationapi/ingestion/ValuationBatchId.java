@@ -10,9 +10,10 @@ import java.util.UUID;
  *
  * <p><b>Derived, never generated</b>, for the reason {@code ContributionBatchId} is: two concurrent
  * submissions of one file must converge on one batch, and a random id would let them race to create
- * two (AGENTS.md §4). This matters more here than it does for contributions — providers redeliver
- * valuation files as a matter of routine, so resubmission is the normal path rather than an edge
- * case, and a fresh batch per delivery would accumulate one row per redelivery of the same numbers.
+ * two (docs/ENGINEERING-RULES.md §4). This matters more here than it does for contributions —
+ * providers redeliver valuation files as a matter of routine, so resubmission is the normal path
+ * rather than an edge case, and a fresh batch per delivery would accumulate one row per redelivery
+ * of the same numbers.
  *
  * <p><b>The namespace is derived from the source.</b> A valuation batch is neither a ledger id nor
  * an organization id, and unlike a contribution batch it has no tenant to borrow a namespace from —

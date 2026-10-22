@@ -8,7 +8,7 @@ import java.util.Locale;
 /**
  * Registration request body. This is the only place in the whole API where a tax identifier
  * appears, and it appears in a body rather than a path on purpose: a path reaches an access log, a
- * proxy log and a trace (AGENTS.md §7).
+ * proxy log and a trace (docs/ENGINEERING-RULES.md §7).
  *
  * @param taxIdScheme which national scheme {@code taxId} belongs to; {@code MX_RFC} in v1
  * @param taxId the employer's tax identifier, in any spelling — it is canonicalized here, so {@code

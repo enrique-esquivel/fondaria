@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * having seen it. Scripted, only the delivery that actually adds the participant to the set
  * increments the count.
  *
- * <p><b>Integers only, {@code INCR} never {@code INCRBYFLOAT}</b> (AGENTS.md §4).
+ * <p><b>Integers only, {@code INCR} never {@code INCRBYFLOAT}</b> (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>{@link #recordCompleted} propagates a Redis failure; {@link #currentCount} swallows
  * one.</b> The two calls have different consumers and different correct behaviour on an outage.

@@ -23,9 +23,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * distributed cache to coordinate. The authoritative rows are in {@code reference.fund_nav} and
  * this converges on them; it never decides anything.
  *
- * <p><b>{@link ReentrantLock}, never {@code synchronized}</b> (AGENTS.md §4): {@link #refreshAll()}
- * holds it across a database query, and {@code synchronized} around I/O pins a virtual thread. The
- * lock guards only the sweep, so reads never wait on one.
+ * <p><b>{@link ReentrantLock}, never {@code synchronized}</b> (docs/ENGINEERING-RULES.md §4):
+ * {@link #refreshAll()} holds it across a database query, and {@code synchronized} around I/O pins
+ * a virtual thread. The lock guards only the sweep, so reads never wait on one.
  *
  * <p><b>No logging.</b> This module has no slf4j dependency and does not acquire one for a cache;
  * the service-side wiring logs sweeps and Redis failures where a logger already exists.

@@ -58,7 +58,7 @@ final class JsonNumbers {
 
   /**
    * The number tokens that are not integers — a fractional part or an exponent. This is what
-   * AGENTS.md §4 forbids on the wire for cash, units, NAV, a rate or a return.
+   * docs/ENGINEERING-RULES.md §4 forbids on the wire for cash, units, NAV, a rate or a return.
    */
   static List<String> decimalLiteralsIn(String body) {
     return numbersIn(body).stream().filter(number -> !number.matches("-?\\d+")).toList();

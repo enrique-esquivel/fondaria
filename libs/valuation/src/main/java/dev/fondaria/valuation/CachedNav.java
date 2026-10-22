@@ -26,11 +26,11 @@ import java.util.Objects;
  * answer a question nobody is asking.
  *
  * <p>Never a balance. This is a price; {@code Money.value(units, nav)} is the only place it becomes
- * pesos (AGENTS.md §2).
+ * pesos (docs/ENGINEERING-RULES.md §2).
  *
  * @param navVersionId the row in {@code reference.fund_nav} this price came from. Carried so a
- *     caller can record <i>which version it used</i> (AGENTS.md §4) — Phase 6 puts it on every
- *     response, Task 21.2 puts it on every allotment.
+ *     caller can record <i>which version it used</i> (docs/ENGINEERING-RULES.md §4) — Phase 6 puts
+ *     it on every response, Task 21.2 puts it on every allotment.
  * @param stale whether {@code publishedAt} is older than the configured age, computed at read time
  *     against the reading clock — not stored, because it changes without anything being written.
  */

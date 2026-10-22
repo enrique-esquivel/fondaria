@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link VestingCandidateRepository} over {@code workflow.allotment}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>{@code source = 'EMPLOYER' AND vested = false} names exactly the rows Task 21.2's {@code
  * AllotmentService} writes for a scheduled (non-immediate) vesting policy — see that table's own

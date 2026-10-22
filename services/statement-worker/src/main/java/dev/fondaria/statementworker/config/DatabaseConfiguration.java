@@ -11,9 +11,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 /**
  * The service's one {@link DataSource}, and the {@link JdbcClient} every repository uses.
  *
- * <p>JDBC and {@code JdbcClient} by name (AGENTS.md §5): no ORM, no JPA, no R2DBC. Flyway's
- * autoconfiguration picks this bean up and migrates against it at startup, so a service instance
- * cannot serve traffic against a schema it has not migrated.
+ * <p>JDBC and {@code JdbcClient} by name (docs/ENGINEERING-RULES.md §5): no ORM, no JPA, no R2DBC.
+ * Flyway's autoconfiguration picks this bean up and migrates against it at startup, so a service
+ * instance cannot serve traffic against a schema it has not migrated.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(DatabaseProperties.class)

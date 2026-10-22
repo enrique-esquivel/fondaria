@@ -246,8 +246,8 @@ class BalanceControllerTest {
 
   /**
    * No JSON number anywhere in the body carries a decimal point or an exponent. Cash, units and NAV
-   * are integers in storage, transport and computation (AGENTS.md §4); a decimal in transport is
-   * the leak that would let one back in.
+   * are integers in storage, transport and computation (docs/ENGINEERING-RULES.md §4); a decimal in
+   * transport is the leak that would let one back in.
    */
   private static void assertNoDecimalNumbers(String body) {
     assertThat(Pattern.compile(":\\s*-?\\d+\\.\\d").matcher(body).find())

@@ -119,7 +119,8 @@ class JdbcFundRepositoryIntegrationTest extends ServiceIntegrationTest {
   }
 
   private static long freshLedgerId() {
-    // Fixtures are reused across local runs (AGENTS.md §4), and the unit ledger id is
+    // Fixtures are reused across local runs (docs/ENGINEERING-RULES.md §4), and the unit ledger id
+    // is
     // globally unique, so a fixed constant would collide with a previous run. TigerBeetle's
     // real per-fund ledger ids start at 1001 (LedgerCodes); this test only needs freshness.
     return ThreadLocalRandom.current().nextLong(1_000_000L, Long.MAX_VALUE / 2);

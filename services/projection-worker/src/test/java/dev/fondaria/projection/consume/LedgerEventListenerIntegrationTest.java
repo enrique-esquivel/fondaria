@@ -48,9 +48,9 @@ import org.springframework.context.annotation.Primary;
  * are started and stopped per test with a {@link SpringApplicationBuilder}, so shutdown behaviour
  * is testable.
  *
- * <p>Fixtures are reused across runs (AGENTS.md §4). Each test creates its <b>own</b> input
- * exchanges, queues, and dead-letter queue (a per-test nonce), so a permanently-poison message one
- * test produces can never be re-read by the next.
+ * <p>Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4). Each test creates its
+ * <b>own</b> input exchanges, queues, and dead-letter queue (a per-test nonce), so a
+ * permanently-poison message one test produces can never be re-read by the next.
  */
 @Tag("integration")
 class LedgerEventListenerIntegrationTest {

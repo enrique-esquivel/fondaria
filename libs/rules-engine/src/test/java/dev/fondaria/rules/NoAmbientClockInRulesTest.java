@@ -24,9 +24,9 @@ import org.junit.jupiter.api.Test;
  * effective-dated rules, and every one of them is resolved <i>as of a date the caller supplies</i>
  * — a plan version as of a batch's value date, a vesting position as of an employment start date, a
  * dealing date as of the instant a batch became dealable. A rule that reads the ambient clock stops
- * being reproducible: AGENTS.md §4 requires that a calculation be re-derivable years later from
- * stored data, never by rerunning current code against today's date, and the demo's accelerated
- * clock would drive a calendar this module then quietly ignored.
+ * being reproducible: docs/ENGINEERING-RULES.md §4 requires that a calculation be re-derivable
+ * years later from stored data, never by rerunning current code against today's date, and the
+ * demo's accelerated clock would drive a calendar this module then quietly ignored.
  *
  * <p>Scoping this to the dealing-date classes alone would also make it a check that rots — the next
  * rule added to the module would sit outside it by default. Module-wide, a new rule is covered the

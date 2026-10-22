@@ -25,7 +25,7 @@ enters `FUND_CASH` through the batch's ordinary cash legs; the unit side issues 
 units than the cash's exact value would buy. At the next NAV strike, the same pool of cash is
 divided by a slightly smaller number of units in issue, so NAV per unit ticks up by an
 infinitesimal amount and **every existing holder benefits proportionally** — the same
-mechanism `AGENTS.md` §2 describes for every other gain or loss in this system: one number
+mechanism `docs/ENGINEERING-RULES.md` §2 describes for every other gain or loss in this system: one number
 changes, and every participant's value moves correctly. There is no per-participant
 computation, no special "rounding participant," and no separate transfer.
 

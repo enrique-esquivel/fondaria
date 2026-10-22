@@ -90,19 +90,22 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *       an older, smaller balance; invariant&nbsp;2 then fails for that account.
  * </ul>
  *
- * <p>Fixtures are reused across runs (AGENTS.md §4). The <i>seed</i> fixes only the shape of a run
- * — the NAV walk, which participant contributes to which fund on which day, where the kills land —
- * so a run is reproducible from its seed. Every <i>identifier</i> (tenant, holding accounts,
- * transfer ids) is salted with a per-execution {@link #RUN_SALT} so a re-run of the same seed
- * cannot collide with rows an earlier execution left in the reused database, and every assertion is
- * scoped to a {@code tenant_id} this execution created — never a count over a whole table. The date
- * window is salted too, so the checkpoint high-water mark genuinely climbs (and is still asserted
- * with {@code >=}).
+ * <p>Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4). The <i>seed</i> fixes only the
+ * shape of a run — the NAV walk, which participant contributes to which fund on which day, where
+ * the kills land — so a run is reproducible from its seed. Every <i>identifier</i> (tenant, holding
+ * accounts, transfer ids) is salted with a per-execution {@link #RUN_SALT} so a re-run of the same
+ * seed cannot collide with rows an earlier execution left in the reused database, and every
+ * assertion is scoped to a {@code tenant_id} this execution created — never a count over a whole
+ * table. The date window is salted too, so the checkpoint high-water mark genuinely climbs (and is
+ * still asserted with {@code >=}).
  */
 @Tag("integration")
 class CrashAndReplayIntegrationTest {
 
-  /** Ten runs, ten seeds (AGENTS.md — a suite that only exercises one path passes on a bug). */
+  /**
+   * Ten runs, ten seeds (docs/ENGINEERING-RULES.md — a suite that only exercises one path passes on
+   * a bug).
+   */
   private static final long[] SEEDS = {1L, 2L, 3L, 5L, 8L, 13L, 21L, 34L, 55L, 89L};
 
   private static final int CONTRIBUTIONS_PER_RUN = 5_000;
@@ -443,7 +446,8 @@ class CrashAndReplayIntegrationTest {
     }
 
     // Build the wire stream: the base in order, plus redeliveries. "Assume every message arrives
-    // more than once" (AGENTS.md §4). A redelivery is released at a later ordinal than its
+    // more than once" (docs/ENGINEERING-RULES.md §4). A redelivery is released at a later ordinal
+    // than its
     // original,
     // so it lands out of ledger-timestamp order.
     //

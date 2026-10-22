@@ -36,8 +36,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * CashReceiptServiceTest}; the constraints and the {@code NOWAIT} claim can only be asserted here.
  *
  * <p>Every test uses an organization and an idempotency key it created itself. Fixtures are reused
- * across runs (AGENTS.md §4), so anything asserted over a whole table would be asserted over
- * whatever earlier runs left behind.
+ * across runs (docs/ENGINEERING-RULES.md §4), so anything asserted over a whole table would be
+ * asserted over whatever earlier runs left behind.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class JdbcCashReceiptRepositoryIntegrationTest extends ServiceIntegrationTest {

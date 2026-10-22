@@ -63,7 +63,7 @@ public record Participant(
     return value.trim();
   }
 
-  /** Every field but the organization identifies a person (AGENTS.md §7). */
+  /** Every field but the organization identifies a person (docs/ENGINEERING-RULES.md §7). */
   @Override
   public String toString() {
     return "Participant[organizationId=" + organizationId + ", REDACTED]";

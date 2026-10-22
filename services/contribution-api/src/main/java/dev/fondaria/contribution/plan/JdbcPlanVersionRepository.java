@@ -15,9 +15,9 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link PlanVersionRepository} over {@code reference.plan_version}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM). Append-only by grant, not by application logic (ADR-0011): {@code
- * reference}'s schema-level default privileges never grant {@code UPDATE}/{@code DELETE}, so {@link
- * #publish} is always an {@code INSERT}.
+ * (docs/ENGINEERING-RULES.md §5 — no ORM). Append-only by grant, not by application logic
+ * (ADR-0011): {@code reference}'s schema-level default privileges never grant {@code UPDATE}/{@code
+ * DELETE}, so {@link #publish} is always an {@code INSERT}.
  */
 @Repository
 public class JdbcPlanVersionRepository implements PlanVersionRepository {

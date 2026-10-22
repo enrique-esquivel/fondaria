@@ -20,7 +20,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * {@code workflow.close_signoff} against a real PostgreSQL ({@code V29}).
  *
  * <p>Each test uses its own business date, far in the past, so assertions are over rows this test
- * created (AGENTS.md §4) — the fixture is shared.
+ * created (docs/ENGINEERING-RULES.md §4) — the fixture is shared.
  */
 @SpringBootTest
 class JdbcSignoffRepositoryIntegrationTest extends ServiceIntegrationTest {
@@ -145,7 +145,7 @@ class JdbcSignoffRepositoryIntegrationTest extends ServiceIntegrationTest {
       "findUnannounced returns the pending rows but not the announced one, oldest date first")
   void findUnannouncedReturnsPendingOldestFirst() {
     // The fixture is shared and this query is table-wide by design, so assert over this test's own
-    // three dates only (AGENTS.md §4) — never over the whole result.
+    // three dates only (docs/ENGINEERING-RULES.md §4) — never over the whole result.
     LocalDate older = businessDate.minusDays(3);
     LocalDate newer = businessDate.plusDays(3);
     repository.insertIfAbsent(signoffFor(newer));

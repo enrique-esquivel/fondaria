@@ -21,9 +21,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>That convention has one sharp edge this test exists to catch: unlike a missing metric or a
  * missing span, a service that forgets this registration fails <b>silently</b> — nothing breaks, no
- * test but this one notices, and every span/metric that service exports carries whatever AGENTS.md
- * §7 forbids (RFC, CURP, names, amounts, tokens) unredacted. A structural scan closes that gap the
- * same way {@link MetricCardinalityTest} closes the unbounded-tag-key one.
+ * test but this one notices, and every span/metric that service exports carries whatever
+ * docs/ENGINEERING-RULES.md §7 forbids (RFC, CURP, names, amounts, tokens) unredacted. A structural
+ * scan closes that gap the same way {@link MetricCardinalityTest} closes the unbounded-tag-key one.
  */
 class TelemetryRedactionRegisteredInEveryServiceTest {
 
@@ -46,7 +46,7 @@ class TelemetryRedactionRegisteredInEveryServiceTest {
     assertThat(missing)
         .as(
             "a service missing TelemetryRedactionFilter registration silently exports"
-                + " unredacted spans and metrics (AGENTS.md §7)")
+                + " unredacted spans and metrics (docs/ENGINEERING-RULES.md §7)")
         .isEmpty();
   }
 

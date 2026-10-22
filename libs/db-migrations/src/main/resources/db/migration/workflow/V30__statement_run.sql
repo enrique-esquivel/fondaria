@@ -26,7 +26,7 @@
 -- sense workflow.allotment or reference.fund_nav are -- it is a rendering of data
 -- those two tables already hold, byte-reproducible from them at any time. Storing
 -- 250,000 rows a month to duplicate that would be the second implementation
--- AGENTS.md Section 4 warns against, and buys no auditability the object itself
+-- docs/ENGINEERING-RULES.md Section 4 warns against, and buys no auditability the object itself
 -- and its deterministic key do not already provide.
 
 CREATE TABLE workflow.statement_run (
@@ -65,7 +65,7 @@ COMMENT ON COLUMN workflow.statement_run.expected_count IS
 COMMENT ON COLUMN workflow.statement_run.completed_count IS
     'The Redis completion counter''s value at settlement. Null while RUNNING: the live count lives in Redis, not here, because 250,000 increments a month have no business contending with the projection writers for a number nobody queries transactionally (ADR-0022 Section 3).';
 COMMENT ON COLUMN workflow.statement_run.failure_reason IS
-    'Why a FAILED run failed, in operator-facing words. Never an exception message or a hostname (AGENTS.md Section 7).';
+    'Why a FAILED run failed, in operator-facing words. Never an exception message or a hostname (docs/ENGINEERING-RULES.md Section 7).';
 
 -- The scheduler's own idempotent write ("has this period already been opened") and
 -- the settlement sweep's read ("every RUNNING period") are both single-row or

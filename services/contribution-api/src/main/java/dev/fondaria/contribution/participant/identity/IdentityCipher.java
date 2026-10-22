@@ -69,7 +69,8 @@ final class IdentityCipher {
       return cipher.doFinal(input);
     } catch (GeneralSecurityException e) {
       // Never wraps the underlying message: a bad tag, a bad key length and a bad IV all reduce to
-      // one outcome a caller can act on, and none of AGENTS.md §7's fields ever reach this
+      // one outcome a caller can act on, and none of docs/ENGINEERING-RULES.md §7's fields ever
+      // reach this
       // exception's message in the first place -- but the JDK's own message text is not vetted for
       // that promise, so it stops here rather than propagating.
       throw new IdentityDecryptionException();

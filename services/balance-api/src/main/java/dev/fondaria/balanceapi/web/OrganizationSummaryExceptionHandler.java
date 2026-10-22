@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the organization summary (AGENTS.md §7).
+ * RFC 9457 problem details for the organization summary (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Only messages this codebase authored are rendered — never an exception's own, which can carry
  * a SQL fragment, a hostname or an identifier. The real cause is logged.
@@ -26,7 +26,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * <p><b>{@code instance} is the route template, never the concrete request URI.</b> Spring fills
  * that field from the actual path when it is absent, and this route carries an organization
  * identifier — which is derived from a tax identifier and stays out of error bodies an intermediary
- * might store, exactly as {@code AGENTS.md} §7 keeps the tax identifier itself out of every URL.
+ * might store, exactly as {@code docs/ENGINEERING-RULES.md} §7 keeps the tax identifier itself out
+ * of every URL.
  */
 @RestControllerAdvice(assignableTypes = OrganizationSummaryController.class)
 public class OrganizationSummaryExceptionHandler {

@@ -174,7 +174,10 @@ public class AmqpConsumeConfiguration {
     return factory;
   }
 
-  /** Consumer threads on virtual threads, like the rest of the service (AGENTS.md §4). */
+  /**
+   * Consumer threads on virtual threads, like the rest of the service (docs/ENGINEERING-RULES.md
+   * §4).
+   */
   private static SimpleAsyncTaskExecutor consumerExecutor() {
     SimpleAsyncTaskExecutor executor = new SimpleAsyncTaskExecutor("projection-consumer-");
     executor.setVirtualThreads(true);

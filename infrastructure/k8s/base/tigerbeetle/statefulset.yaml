@@ -35,7 +35,7 @@ spec:
         fsGroup: 65532
         # io_uring is TigerBeetle's I/O engine and the container runtime's default
         # seccomp profile blocks the io_uring_* syscalls (the replica
-        # exits with "io_uring is not available ... PermissionDenied"; AGENTS.md
+        # exits with "io_uring is not available ... PermissionDenied"; docs/ENGINEERING-RULES.md
         # "Local Infrastructure" records the same for compose). Unconfined is the
         # one exception the security policy carves out, by name, for this
         # workload; a Localhost profile (runtime default + io_uring_*) installed on

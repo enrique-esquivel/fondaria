@@ -34,11 +34,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * The NAV cache against a real PostgreSQL and a real Redis (Task 20.6).
  *
  * <p><b>Every fund id is freshly generated and every assertion is over ids this test created</b>
- * (AGENTS.md §4). That matters more than usual here: the Redis keys are global rather than
- * per-test, and fixtures are reused across local runs, so {@code loadAll()} legitimately returns
- * whatever earlier runs left behind. Nothing below counts entries or asserts a total — each
- * assertion filters to a fund this test registered. {@code FLUSHALL} is deliberately never called:
- * the fixture is shared, and wiping it would break whatever else is using it.
+ * (docs/ENGINEERING-RULES.md §4). That matters more than usual here: the Redis keys are global
+ * rather than per-test, and fixtures are reused across local runs, so {@code loadAll()}
+ * legitimately returns whatever earlier runs left behind. Nothing below counts entries or asserts a
+ * total — each assertion filters to a fund this test registered. {@code FLUSHALL} is deliberately
+ * never called: the fixture is shared, and wiping it would break whatever else is using it.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class NavCacheIntegrationTest extends ValuationIntegrationTest {
@@ -206,8 +206,9 @@ class NavCacheIntegrationTest extends ValuationIntegrationTest {
   }
 
   /**
-   * AGENTS.md §4: a suite that only exercises rising prices will pass on a broken implementation.
-   * Each day's price is struck, swept and read back, and the series is asserted to genuinely fall.
+   * docs/ENGINEERING-RULES.md §4: a suite that only exercises rising prices will pass on a broken
+   * implementation. Each day's price is struck, swept and read back, and the series is asserted to
+   * genuinely fall.
    */
   @Test
   @DisplayName("a falling and volatile series converges correctly on every date")

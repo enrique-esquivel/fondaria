@@ -15,7 +15,8 @@ import java.util.List;
  * <p><b>{@code periodStart} and {@code periodEnd} say which days {@code
  * contributionsThisPeriodCents} covers</b> (Task 6.5 added them to the contract). A period figure
  * whose window is invisible cannot be checked against anything, and this platform's rule is that a
- * calculation is reproducible years later from what was stored beside it (AGENTS.md §4).
+ * calculation is reproducible years later from what was stored beside it (docs/ENGINEERING-RULES.md
+ * §4).
  *
  * <p>Every amount is a plain JSON integer of MXN cents; units are integers at scale 1e-8. Never a
  * decimal, never a float.

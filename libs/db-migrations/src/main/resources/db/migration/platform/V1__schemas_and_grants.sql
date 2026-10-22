@@ -7,7 +7,7 @@
 --
 -- What is NOT decided here: which login user a deployment connects as. The two
 -- roles below are passwordless NOLOGIN group roles carrying the grants; binding
--- a login user into one of them is deployment configuration (AGENTS.md §4 —
+-- a login user into one of them is deployment configuration (docs/ENGINEERING-RULES.md §4 —
 -- no credentials in the repository).
 
 CREATE SCHEMA IF NOT EXISTS projection;

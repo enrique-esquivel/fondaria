@@ -13,8 +13,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link SnapshotNavSource} over {@code reference.fund_nav}, using {@code JdbcClient} (AGENTS.md §5
- * — no ORM).
+ * {@link SnapshotNavSource} over {@code reference.fund_nav}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>"Live" is the row nothing points at</h2>
  *

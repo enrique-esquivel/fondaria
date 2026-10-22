@@ -7,11 +7,11 @@ import java.util.Map;
  * holds.
  *
  * <p><b>This is the one place in the platform that sums a balance out of PostgreSQL, and it is
- * allowed here for the single reason that makes it useful.</b> AGENTS.md §4 forbids computing a
- * participant balance by summing rows — because a balance served to anyone must come from {@code
- * LedgerPort}. Nothing here is served to anyone. These sums exist only to be compared against the
- * ledger's own answer, and a control whose two sides came from the same source would agree with
- * itself no matter what had gone wrong.
+ * allowed here for the single reason that makes it useful.</b> docs/ENGINEERING-RULES.md §4 forbids
+ * computing a participant balance by summing rows — because a balance served to anyone must come
+ * from {@code LedgerPort}. Nothing here is served to anyone. These sums exist only to be compared
+ * against the ledger's own answer, and a control whose two sides came from the same source would
+ * agree with itself no matter what had gone wrong.
  */
 public interface ProjectionTotals {
 

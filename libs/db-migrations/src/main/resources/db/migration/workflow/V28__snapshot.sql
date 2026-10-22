@@ -79,7 +79,7 @@ COMMENT ON COLUMN workflow.snapshot_run.positions_sha256 IS
 COMMENT ON COLUMN workflow.snapshot_run.previous_manifest_sha256 IS
     'The manifest hash of the most recent COMPLETED snapshot for a strictly earlier business date, chaining each day to the one before it. Null on the first snapshot ever taken -- the genesis of the chain, and the only legitimate null.';
 COMMENT ON COLUMN workflow.snapshot_run.failure_reason IS
-    'Why a FAILED run failed, in operator-facing words: a hash mismatch against an existing snapshot, a fund whose units did not tie to units_in_issue, or a pass that could not finish. Never an exception message or a hostname (AGENTS.md §7).';
+    'Why a FAILED run failed, in operator-facing words: a hash mismatch against an existing snapshot, a fund whose units did not tie to units_in_issue, or a pass that could not finish. Never an exception message or a hostname (docs/ENGINEERING-RULES.md §7).';
 
 -- Serves two reads, both hot and both indexed by the same key. The gate and a re-run ask
 -- "the latest evidence for this date"; the manifest chain asks "the latest completed run
@@ -128,9 +128,9 @@ CREATE TABLE workflow.snapshot_fund_total (
 COMMENT ON TABLE workflow.snapshot_fund_total IS
     'The manifest''s per-fund section, and the evidence for the one check that proves a snapshot complete: SUM(units) over the file must equal units_in_issue for every fund (phase-07 Task 7.4). Written once when a run settles; never edited.';
 COMMENT ON COLUMN workflow.snapshot_fund_total.units_in_issue IS
-    'Read from LedgerPort.lookupAccount at snapshot time, never summed from PostgreSQL (ADR-0008). Stored beside the file''s own total so the tie is reproducible from data years later, without rerunning current code (AGENTS.md §4).';
+    'Read from LedgerPort.lookupAccount at snapshot time, never summed from PostgreSQL (ADR-0008). Stored beside the file''s own total so the tie is reproducible from data years later, without rerunning current code (docs/ENGINEERING-RULES.md §4).';
 COMMENT ON COLUMN workflow.snapshot_fund_total.value_minor_units IS
-    'SUM over the file of Money.value(units, NAV) per position, MXN cents. Signed by type even though a position''s value cannot be negative: AGENTS.md §4 -- no CHECK (>= 0) on a value field, because the next thing valued here may legitimately go below zero.';
+    'SUM over the file of Money.value(units, NAV) per position, MXN cents. Signed by type even though a position''s value cannot be negative: docs/ENGINEERING-RULES.md §4 -- no CHECK (>= 0) on a value field, because the next thing valued here may legitimately go below zero.';
 
 -- A snapshot's totals are the evidence its own tie rests on. Append-only for the reason
 -- V25 gives for reconciliation_break: an explicit revoke plus a trigger that raises for

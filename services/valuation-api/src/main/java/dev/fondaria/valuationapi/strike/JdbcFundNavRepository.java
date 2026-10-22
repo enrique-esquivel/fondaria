@@ -18,8 +18,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link FundNavRepository} over {@code reference.fund_nav}, using {@code JdbcClient} (AGENTS.md §5
- * — no ORM).
+ * {@link FundNavRepository} over {@code reference.fund_nav}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p><b>Neither {@code strike} nor {@code correct} ever issues an {@code UPDATE}.</b> A conflict on
  * the partial unique index {@code fund_nav_fund_date_original_unique} means an original strike

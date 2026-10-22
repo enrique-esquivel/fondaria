@@ -127,7 +127,7 @@ COMMENT ON TABLE workflow.custodian_break IS
 COMMENT ON COLUMN workflow.custodian_break.category IS
     'UNIT_BREAK / CASH_BREAK -- an unexplained disagreement, escalates on the real-break threshold. UNIT_TIMING_DIFFERENCE / CASH_TIMING_DIFFERENCE -- fully explained by the statement''s own pending-trade figure, expected rather than an error, and ages on its own, longer threshold.';
 COMMENT ON COLUMN workflow.custodian_break.drift_scaled IS
-    'Ledger figure minus provider-reported figure (minus the explained pending-trade amount, for a timing difference), signed and unclamped (AGENTS.md Sec 4): the ledger holding less is exactly as real a finding as holding more.';
+    'Ledger figure minus provider-reported figure (minus the explained pending-trade amount, for a timing difference), signed and unclamped (docs/ENGINEERING-RULES.md Sec 4): the ledger holding less is exactly as real a finding as holding more.';
 COMMENT ON COLUMN workflow.custodian_break.first_detected_business_date IS
     'When this break was first opened. Age is first_detected_business_date to the current business date, computed at read time rather than stored, so it is never stale between runs.';
 COMMENT ON COLUMN workflow.custodian_break.last_confirmed_business_date IS

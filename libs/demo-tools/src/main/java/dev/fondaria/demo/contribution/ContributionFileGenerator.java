@@ -33,7 +33,8 @@ public final class ContributionFileGenerator {
   /**
    * Deduction rate range 2%-5%, expressed in basis points out of {@link #BASIS_POINTS_SCALE} --
    * never a {@code double}, even for a rate this module only uses to generate a demo file
-   * (AGENTS.md §4: "NEVER double, float or BigDecimal for cash, units, NAV, rates or returns").
+   * (docs/ENGINEERING-RULES.md §4: "NEVER double, float or BigDecimal for cash, units, NAV, rates
+   * or returns").
    */
   private static final long MIN_DEDUCTION_BASIS_POINTS = 200;
 

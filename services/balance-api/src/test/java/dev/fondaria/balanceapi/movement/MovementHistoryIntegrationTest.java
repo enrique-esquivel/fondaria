@@ -37,8 +37,9 @@ import org.springframework.test.context.DynamicPropertySource;
  * projection.transfer} (Task 6.3).
  *
  * <p><b>Every test creates its own organization, fund, participant and tenant partition</b>, and
- * asserts only over the rows it inserted. Fixtures are reused across runs (AGENTS.md §4), so a
- * count over the whole table would pass or fail on what an earlier run left behind.
+ * asserts only over the rows it inserted. Fixtures are reused across runs
+ * (docs/ENGINEERING-RULES.md §4), so a count over the whole table would pass or fail on what an
+ * earlier run left behind.
  *
  * <p><b>Cleanup drops the tenant's partitions rather than deleting rows.</b> {@code
  * projection.transfer} is append-only and carries a {@code BEFORE DELETE} trigger that raises for
@@ -83,11 +84,11 @@ class MovementHistoryIntegrationTest {
 
   /**
    * <b>Funds are removed as well as partitions.</b> The fixture database is reused across runs
-   * (AGENTS.md §4), and the candidate fund set this endpoint fans out over is the whole of {@code
-   * reference.fund_identity} — four query branches per fund. A suite that registered a fund per
-   * test and never removed it would make its own heaviest test measurably slower on every
-   * subsequent run and eventually time out: intermittent, environment-dependent, and looking like
-   * an unrelated regression. So this suite leaves the registry as it found it.
+   * (docs/ENGINEERING-RULES.md §4), and the candidate fund set this endpoint fans out over is the
+   * whole of {@code reference.fund_identity} — four query branches per fund. A suite that
+   * registered a fund per test and never removed it would make its own heaviest test measurably
+   * slower on every subsequent run and eventually time out: intermittent, environment-dependent,
+   * and looking like an unrelated regression. So this suite leaves the registry as it found it.
    */
   @AfterEach
   void dropTenantPartitionsAndFunds() {

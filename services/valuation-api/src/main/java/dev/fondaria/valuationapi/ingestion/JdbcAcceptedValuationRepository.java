@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link AcceptedValuationRepository} over {@code workflow.valuation}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p><b>No {@code UPDATE} and no {@code DELETE} appear in this class, and none may be added.</b> A
  * live valuation is never overwritten: an identical redelivery is filtered out before it reaches

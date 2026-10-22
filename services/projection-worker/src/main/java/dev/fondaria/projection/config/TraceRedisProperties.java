@@ -20,8 +20,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * @param url Redis URL <b>without credentials</b>. Absent or blank disables trace correlation.
  * @param password the Redis password. Required when {@code url} is set.
- * @param commandTimeout explicit per-command timeout (AGENTS.md §4). Short: a miss must never cost
- *     more than a cheap timeout on the hot path of every projected transfer.
+ * @param commandTimeout explicit per-command timeout (docs/ENGINEERING-RULES.md §4). Short: a miss
+ *     must never cost more than a cheap timeout on the hot path of every projected transfer.
  */
 @ConfigurationProperties(prefix = "fondaria.trace-redis")
 public record TraceRedisProperties(String url, String password, Duration commandTimeout) {

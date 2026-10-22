@@ -90,7 +90,8 @@ class GatewayBaseValidationTest {
   }
 
   @Test
-  @DisplayName("Both listeners terminate TLS 1.3-only, per AGENTS.md and the task's own AC")
+  @DisplayName(
+      "Both listeners terminate TLS 1.3-only, per docs/ENGINEERING-RULES.md and the task's own AC")
   void listenersTerminateTlsAtEdge() throws Exception {
     Map<String, Object> gateway = loadSingleDocument("gateway.yaml");
     @SuppressWarnings("unchecked")

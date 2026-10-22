@@ -21,8 +21,8 @@ import java.util.regex.Pattern;
  * validator compares it against the rows that actually parsed.
  *
  * <p><b>Every amount is a JSON integer of MXN cents.</b> A decimal or a float would be the first
- * one in a money path (AGENTS.md §4), and a JSON number that is not an integer is rejected rather
- * than rounded.
+ * one in a money path (docs/ENGINEERING-RULES.md §4), and a JSON number that is not an integer is
+ * rejected rather than rounded.
  *
  * @param checksumSha256 lowercase-hex SHA-256 of the exact bytes uploaded. Uppercase is accepted
  *     and folded down rather than rejected: the same bytes must be the same batch however a

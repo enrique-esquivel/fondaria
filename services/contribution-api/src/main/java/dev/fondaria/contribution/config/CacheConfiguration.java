@@ -37,7 +37,7 @@ public class CacheConfiguration {
     properties.requireComplete();
     // Built from the URL plus a separately-supplied password, rather than from a URL
     // with credentials in it. Lettuce's credentials-provider API hands back a Reactor
-    // Mono, which is banned without an ADR (AGENTS.md §4), so the builder is used.
+    // Mono, which is banned without an ADR (docs/ENGINEERING-RULES.md §4), so the builder is used.
     RedisURI uri =
         RedisURI.builder(RedisURI.create(properties.url()))
             .withPassword(properties.password().toCharArray())

@@ -7,7 +7,7 @@ import java.util.Objects;
 /**
  * A step downstream of custodian reconciliation was asked to run for a date whose custodian pass
  * has not passed. Carries the date and what the gate found, and nothing else — the breaks
- * themselves are in {@code workflow.custodian_break} (AGENTS.md §7).
+ * themselves are in {@code workflow.custodian_break} (docs/ENGINEERING-RULES.md §7).
  */
 public final class CustodianCloseBlockedException extends RuntimeException {
 

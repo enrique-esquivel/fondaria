@@ -21,7 +21,7 @@ import org.springframework.context.annotation.Bean;
  *
  * <p><b>We do not manage the portfolio.</b> Nothing in this service prices a security or computes a
  * per-participant amount. The one division it performs is {@code NavPerUnit#strike}, unchanged from
- * Task 20.2 (AGENTS.md §2).
+ * Task 20.2 (docs/ENGINEERING-RULES.md §2).
  *
  * <p>The {@code LedgerPort} this service holds ({@code config.LedgerConfiguration}) is read-only in
  * practice: {@code NavStrikeService} only ever calls {@code lookupAccount}. Units in issue are read

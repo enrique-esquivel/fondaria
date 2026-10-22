@@ -95,9 +95,9 @@ public final class PositionFileWriter implements AutoCloseable {
    * Writes one position as one line, and folds it into its fund's running totals.
    *
    * <p>Every quantity is written as an integer — cents, units at 1e-8, NAV at 1e-8 — and never as a
-   * decimal string or a JSON floating-point number (AGENTS.md §4). {@code unrealisedGain} is signed
-   * and is written as it stands; a negative one is a correct answer on a falling NAV, not an error
-   * to clamp.
+   * decimal string or a JSON floating-point number (docs/ENGINEERING-RULES.md §4). {@code
+   * unrealisedGain} is signed and is written as it stands; a negative one is a correct answer on a
+   * falling NAV, not an error to clamp.
    */
   public void write(SnapshotPosition position) {
     if (finished) {

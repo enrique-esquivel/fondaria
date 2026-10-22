@@ -90,7 +90,8 @@ class AllotmentServiceIntegrationTest extends ServiceIntegrationTest {
     fundEmployerCollections(organizationId, TOTAL_CENTS);
 
     // Not asserted on `allotted`'s own count: fixtures are reused across local runs
-    // (AGENTS.md §4), so a sweep this wide (fondaria.allotment.batch-size is set to cover the
+    // (docs/ENGINEERING-RULES.md §4), so a sweep this wide (fondaria.allotment.batch-size is set to
+    // cover the
     // whole backlog, matching ServiceIntegrationTest's own rationale) can pick up STAGED
     // batches other test runs left behind. Every assertion below is scoped to this test's own
     // batchId instead.

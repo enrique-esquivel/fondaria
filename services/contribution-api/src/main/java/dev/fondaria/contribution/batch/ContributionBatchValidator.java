@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  * count before its columns are summed, so the employer is told "rows are missing" rather than "your
  * employer total is short" — the same underlying fault, but only one of those two answers leads
  * anywhere. Every check stops the batch: no row is staged, no participant is enrolled, and no
- * partial allotment is ever possible (AGENTS.md §1).
+ * partial allotment is ever possible (docs/ENGINEERING-RULES.md §1).
  *
  * <p>All arithmetic is {@code long} cents with {@link Math#addExact}. A file whose amounts overflow
  * a {@code long} is malformed rather than silently wrapped into a plausible total.
@@ -88,7 +88,8 @@ public class ContributionBatchValidator {
     for (ContributionFile.ParticipantRow row : file.rows()) {
       if (!seen.add(row.participantInternalRef())) {
         // The participant reference is not rendered: it identifies a person, and a
-        // rejection body is logged by everything it passes through (AGENTS.md §7). The
+        // rejection body is logged by everything it passes through (docs/ENGINEERING-RULES.md §7).
+        // The
         // employer finds the row in its own file.
         throw new BatchRejectedException(
             BatchRejection.of(

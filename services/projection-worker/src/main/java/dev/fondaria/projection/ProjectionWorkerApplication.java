@@ -21,7 +21,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * times, and it converges to exactly the right state. Manual acknowledgement after the write,
  * idempotent inserts (Task 5.4), a monotonic-timestamp guard on the sparse unit position (Task
  * 5.5), and — when a message cannot be decoded at all — dead-letter the bytes and <i>halt</i>,
- * because a gap in a financial projection is worse than downtime (AGENTS.md §4).
+ * because a gap in a financial projection is worse than downtime (docs/ENGINEERING-RULES.md §4).
  *
  * <p>Task 5.3 ships the consumer skeleton: the ordering, acknowledgement, retry and halt machinery,
  * with a no-op sink. Tasks 5.4 and 5.5 add the Postgres writes.

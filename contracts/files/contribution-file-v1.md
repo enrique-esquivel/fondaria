@@ -20,7 +20,7 @@ payroll period. It is uploaded to object storage and submitted to
 The file is the single declared source of truth for the batch's content;
 the API request only carries transport metadata (object key, checksum).
 
-Background: `AGENTS.md` §2 (units, not pesos), `docs/chart-of-accounts.md`
+Background: `docs/ENGINEERING-RULES.md` §2 (units, not pesos), `docs/chart-of-accounts.md`
 §6 (worked example this document reuses), `ADR-0004` (employee/employer
 contribution lots), `ADR-0009` (transport).
 
@@ -62,7 +62,7 @@ Exactly one, first line of the file.
 `declaredTotalCents` and every amount below are non-negative integers, no
 decimal point, no thousands separator, no currency symbol. Amounts are
 always MXN — the file carries no currency column because the platform is
-MXN-only (`AGENTS.md` §1).
+MXN-only (`docs/ENGINEERING-RULES.md` §1).
 
 ## 2a. Source-subtotal record (`recordType = S`)
 
@@ -110,7 +110,7 @@ batch on mismatch before parsing a single row.
 ## 5. Rejection contract
 
 **Whole-batch rejection** — the file is structurally or numerically wrong;
-no row is staged, no partial allotment ever occurs (`AGENTS.md` §1's
+no row is staged, no partial allotment ever occurs (`docs/ENGINEERING-RULES.md` §1's
 "never a partial allotment" via Task 3.4). Checked in this order, cheapest
 first, before any plan-rule evaluation:
 

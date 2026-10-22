@@ -17,7 +17,8 @@ import java.util.Optional;
  * per-fund value total, the file hash and the previous day's manifest hash — plus, for each fund,
  * the {@code units_in_issue} its unit total is checked against. Storing the number the tie was made
  * against, and not only the fact that it tied, is the difference between a manifest that can be
- * re-verified years later from data and one that can only be believed (AGENTS.md §4).
+ * re-verified years later from data and one that can only be believed (docs/ENGINEERING-RULES.md
+ * §4).
  *
  * <h2>There is no timestamp in here, deliberately</h2>
  *

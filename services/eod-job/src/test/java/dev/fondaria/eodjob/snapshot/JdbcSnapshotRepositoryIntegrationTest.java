@@ -26,10 +26,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * {@code workflow.snapshot_run} and {@code workflow.snapshot_fund_total} against a real PostgreSQL
  * ({@code V28}).
  *
- * <p>Every assertion is scoped to ids this test created. Fixtures are reused across runs (AGENTS.md
- * §4), so the business date is randomised far in the past: a fixed date would make {@code
- * latestCompletedBefore} answer with whatever an earlier run left behind, and the manifest chain
- * would be asserted against a stranger's snapshot.
+ * <p>Every assertion is scoped to ids this test created. Fixtures are reused across runs
+ * (docs/ENGINEERING-RULES.md §4), so the business date is randomised far in the past: a fixed date
+ * would make {@code latestCompletedBefore} answer with whatever an earlier run left behind, and the
+ * manifest chain would be asserted against a stranger's snapshot.
  */
 @SpringBootTest
 class JdbcSnapshotRepositoryIntegrationTest extends ServiceIntegrationTest {
@@ -129,7 +129,8 @@ class JdbcSnapshotRepositoryIntegrationTest extends ServiceIntegrationTest {
         .as("the previous business date's snapshot, not the one just taken for this date")
         .isEqualTo(yesterdayId);
     // Deliberately not asserted: that nothing exists before yesterday. Fixtures are reused across
-    // runs (AGENTS.md §4), so an earlier run's snapshot at some other random past date may well be
+    // runs (docs/ENGINEERING-RULES.md §4), so an earlier run's snapshot at some other random past
+    // date may well be
     // there, and asserting its absence would fail on what a previous run left behind.
   }
 

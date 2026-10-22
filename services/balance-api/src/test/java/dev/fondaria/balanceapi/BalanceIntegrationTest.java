@@ -48,9 +48,10 @@ import org.springframework.test.context.DynamicPropertySource;
  * The balance read against a real PostgreSQL and a real TigerBeetle (Task 6.2).
  *
  * <p><b>Every test generates its own organization, fund, participant and ledger namespace.</b>
- * Fixtures are reused across runs and TigerBeetle cannot be reset at all (AGENTS.md §4), so nothing
- * here counts rows over a whole table or a whole ledger — every assertion is over ids this test
- * created, and a fixed namespace would let a run pass on accounts a previous run opened.
+ * Fixtures are reused across runs and TigerBeetle cannot be reset at all (docs/ENGINEERING-RULES.md
+ * §4), so nothing here counts rows over a whole table or a whole ledger — every assertion is over
+ * ids this test created, and a fixed namespace would let a run pass on accounts a previous run
+ * opened.
  */
 @Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -121,7 +122,7 @@ class BalanceIntegrationTest {
 
   /**
    * A NAV that falls must move every balance down. A suite that only ever raises the price passes
-   * on a broken implementation (AGENTS.md §4).
+   * on a broken implementation (docs/ENGINEERING-RULES.md §4).
    */
   @Test
   @DisplayName("a falling NAV lowers the balance, and is never clamped at the earlier value")
@@ -152,10 +153,10 @@ class BalanceIntegrationTest {
    * Proved against a dedicated connection pool this test owns and closes, rather than by stopping
    * the shared PostgreSQL container.
    *
-   * <p><b>The fixture is a per-JVM singleton reused by every other test class</b> (AGENTS.md §4),
-   * so stopping it would break unrelated suites rather than prove anything about this one. Closing
-   * a pool is the same observable condition for the service — every database call fails — and it
-   * isolates the proof to the code path under test.
+   * <p><b>The fixture is a per-JVM singleton reused by every other test class</b>
+   * (docs/ENGINEERING-RULES.md §4), so stopping it would break unrelated suites rather than prove
+   * anything about this one. Closing a pool is the same observable condition for the service —
+   * every database call fails — and it isolates the proof to the code path under test.
    *
    * <p>What is being proved is precise: once a participant has been resolved, the balance path
    * holds no dependency on PostgreSQL at all. Units come from the ledger and the price from memory.
@@ -204,8 +205,9 @@ class BalanceIntegrationTest {
    * answer, and the resolution stays an index lookup rather than degrading into a scan.
    *
    * <p><b>The timing assertion is deliberately loose.</b> A tight wall-clock bound in CI is
-   * intermittent and about money, which is the worst failure mode available (AGENTS.md §4); what
-   * would actually break here is a sequential scan, and that is orders of magnitude, not percent.
+   * intermittent and about money, which is the worst failure mode available
+   * (docs/ENGINEERING-RULES.md §4); what would actually break here is a sequential scan, and that
+   * is orders of magnitude, not percent.
    */
   @Test
   @DisplayName("a balance read is unchanged, and stays an index lookup, at 100,000 participants")
@@ -243,7 +245,8 @@ class BalanceIntegrationTest {
           .as("participant_id_unique must serve the resolution")
           .contains("Index");
     } finally {
-      // The fixture is reused across runs (AGENTS.md §4). Leaving 100,000 rows behind on every
+      // The fixture is reused across runs (docs/ENGINEERING-RULES.md §4). Leaving 100,000 rows
+      // behind on every
       // run would grow the shared database without bound and degrade every other suite that
       // touches this table, so the crowd is removed even when an assertion above fails.
       removeCrowd(crowdPrefix);
@@ -261,7 +264,8 @@ class BalanceIntegrationTest {
     List<UUID> assigned = new ArrayList<>();
     for (int i = 0; i < 25; i++) {
       // Note the INSERT never names participant_id: the previous application version does not
-      // know the column exists, and must keep working (AGENTS.md §4, expand/contract).
+      // know the column exists, and must keep working (docs/ENGINEERING-RULES.md §4,
+      // expand/contract).
       assigned.add(enrolParticipant(organization, "EMP-" + UUID.randomUUID()));
     }
     assertThat(assigned).doesNotContainNull().doesNotHaveDuplicates();

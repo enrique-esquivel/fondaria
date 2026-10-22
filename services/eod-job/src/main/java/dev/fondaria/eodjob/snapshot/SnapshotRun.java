@@ -17,7 +17,7 @@ import java.util.UUID;
  * @param previousManifestSha256 the manifest hash of the most recent completed snapshot for a
  *     strictly earlier business date. Absent only on the first snapshot ever taken.
  * @param failureReason operator-facing words on a {@code FAILED} run. Never an exception message,
- *     never a hostname (AGENTS.md §7).
+ *     never a hostname (docs/ENGINEERING-RULES.md §7).
  */
 public record SnapshotRun(
     UUID runId,

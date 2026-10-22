@@ -31,8 +31,8 @@ import org.junit.jupiter.api.Test;
  * class's behaviour depends on either. The Redis implementation is proven separately against a real
  * container.
  *
- * <p><b>Every fund id is freshly generated</b> (AGENTS.md §4) and every assertion is over ids the
- * test created, so nothing here can pass or fail on what another test left behind.
+ * <p><b>Every fund id is freshly generated</b> (docs/ENGINEERING-RULES.md §4) and every assertion
+ * is over ids the test created, so nothing here can pass or fail on what another test left behind.
  */
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class InMemoryNavCacheTest {
@@ -138,9 +138,9 @@ class InMemoryNavCacheTest {
   }
 
   /**
-   * AGENTS.md §4: a suite that only exercises rising prices will pass on a broken implementation.
-   * The series falls, recovers and falls again, and the cache is asserted to hold each value in
-   * turn — including the ones below where it started.
+   * docs/ENGINEERING-RULES.md §4: a suite that only exercises rising prices will pass on a broken
+   * implementation. The series falls, recovers and falls again, and the cache is asserted to hold
+   * each value in turn — including the ones below where it started.
    */
   @Test
   void a_falling_and_volatile_series_is_held_correctly_at_every_step() {

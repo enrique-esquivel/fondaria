@@ -8,12 +8,12 @@
 --    moves a batch out of ALLOTTED, so no new lease or timestamp column is needed
 --    beyond status_updated_at, which already records when a status last changed.
 --
--- 2. workflow.allotment is the audit trail AGENTS.md §4 requires: "every unit allotment
+-- 2. workflow.allotment is the audit trail docs/ENGINEERING-RULES.md §4 requires: "every unit allotment
 --    records which NAV version it used. Without that link, correcting a NAV error is
 --    impossible." One row per (batch, participant, source) -- exactly the granularity
 --    of one unit-ledger transfer in the CONTRIBUTION_ALLOTMENT chain
 --    (chart-of-accounts.md §4), so a row and a transfer correspond one for one. Never
---    updated or deleted, the same rule AGENTS.md §4 states for transfer, fund_nav and
+--    updated or deleted, the same rule docs/ENGINEERING-RULES.md §4 states for transfer, fund_nav and
 --    participant_units: a correction is a new row, never an edit to this one.
 
 ALTER TABLE workflow.contribution_batch
@@ -50,13 +50,13 @@ CREATE TABLE workflow.allotment (
 );
 
 COMMENT ON TABLE workflow.allotment IS
-    'One row per (batch, participant, source) allotted -- the audit trail AGENTS.md §4 requires: which NAV version priced this unit issuance. Never updated or deleted; a correction is a new row (Task 20.5, post-demo). One row corresponds to exactly one unit-ledger transfer in the CONTRIBUTION_ALLOTMENT chain (chart-of-accounts.md §4).';
+    'One row per (batch, participant, source) allotted -- the audit trail docs/ENGINEERING-RULES.md §4 requires: which NAV version priced this unit issuance. Never updated or deleted; a correction is a new row (Task 20.5, post-demo). One row corresponds to exactly one unit-ledger transfer in the CONTRIBUTION_ALLOTMENT chain (chart-of-accounts.md §4).';
 COMMENT ON COLUMN workflow.allotment.source IS
     'EMPLOYEE and VOLUNTARY always land vested (chart-of-accounts.md §3: no vesting applies to a participant''s own money); EMPLOYER lands vested or unvested depending on the plan version''s vesting_full_years at allotment time.';
 COMMENT ON COLUMN workflow.allotment.nav_version_id IS
-    'The reference.fund_nav row this allotment struck units at. AGENTS.md §4: without this link, correcting a NAV error is impossible.';
+    'The reference.fund_nav row this allotment struck units at. docs/ENGINEERING-RULES.md §4: without this link, correcting a NAV error is impossible.';
 COMMENT ON COLUMN workflow.allotment.units_scaled IS
-    'Units issued, scale 1e-8 (Units.SCALE), floored -- AGENTS.md §4, integer arithmetic only. The sub-tick remainder is not issued and is not recorded here; Task 21.3 is what makes that residue visible.';
+    'Units issued, scale 1e-8 (Units.SCALE), floored -- docs/ENGINEERING-RULES.md §4, integer arithmetic only. The sub-tick remainder is not issued and is not recorded here; Task 21.3 is what makes that residue visible.';
 COMMENT ON COLUMN workflow.allotment.transfer_id IS
     'The deterministically-derived unit-ledger TransferId this row records, so the same (batch, participant, source) rerun always names the transfer the ledger itself already recognizes as existing.';
 

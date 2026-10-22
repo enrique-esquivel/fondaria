@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link FundDirectory} over {@code reference.fund_identity}, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link FundDirectory} over {@code reference.fund_identity}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>No join to {@code reference.fund} and no {@code effective_from} predicate, unlike every other
  * directory in this platform: those exist to resolve which <i>version</i> of a fund's name, vehicle

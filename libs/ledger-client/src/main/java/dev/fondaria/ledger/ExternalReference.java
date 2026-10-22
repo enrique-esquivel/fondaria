@@ -9,10 +9,10 @@ import java.util.UUID;
  * statement line, a payroll file, a remittance advice.
  *
  * <p>It exists so that a movement can be tied back to its external cause without the request
- * handler writing to a second store. A handler writes to exactly one system of record (AGENTS.md
- * §4), so anything that must survive alongside a transfer has to travel <b>on</b> the transfer; and
- * because it is on the transfer, it reaches the projection through CDC for free rather than needing
- * a parallel write that could diverge.
+ * handler writing to a second store. A handler writes to exactly one system of record
+ * (docs/ENGINEERING-RULES.md §4), so anything that must survive alongside a transfer has to travel
+ * <b>on</b> the transfer; and because it is on the transfer, it reaches the projection through CDC
+ * for free rather than needing a parallel write that could diverge.
  *
  * <p><b>128 bits holds a derived reference, not the text it came from.</b> A SPEI {@code clave de
  * rastreo} does not fit in sixteen bytes, so callers derive: {@link #derive(UUID, String)} hashes

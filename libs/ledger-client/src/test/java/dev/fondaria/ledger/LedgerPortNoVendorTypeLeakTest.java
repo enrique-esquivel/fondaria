@@ -13,10 +13,11 @@ import org.junit.jupiter.api.Test;
 
 /**
  * {@code LedgerPort} and its domain types must never leak a TigerBeetle vendor type into a public
- * signature, field or exception (AGENTS.md §4, "Never use a TigerBeetle type in service code").
- * This module also carries no compile dependency on the TigerBeetle client (enforced by the {@code
- * ban-tigerbeetle-client} rule in this module's {@code pom.xml}), so this test exists to catch the
- * case where a vendor type sneaks in transitively through some other dependency.
+ * signature, field or exception (docs/ENGINEERING-RULES.md §4, "Never use a TigerBeetle type in
+ * service code"). This module also carries no compile dependency on the TigerBeetle client
+ * (enforced by the {@code ban-tigerbeetle-client} rule in this module's {@code pom.xml}), so this
+ * test exists to catch the case where a vendor type sneaks in transitively through some other
+ * dependency.
  */
 class LedgerPortNoVendorTypeLeakTest {
 

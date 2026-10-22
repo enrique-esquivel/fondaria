@@ -57,7 +57,7 @@
                 phase-05 Task 5.1: "flyway validate passes in CI". The `migrations`
                 CI job runs `flyway:migrate` then `flyway:validate` against a throwaway
                 Postgres — proving the whole tree applies from empty and that no merged
-                file has drifted from its recorded checksum (AGENTS.md §4). Not bound to
+                file has drifted from its recorded checksum (docs/ENGINEERING-RULES.md §4). Not bound to
                 a lifecycle phase: `make verify` must not need a database.
             -->
             <plugin>
@@ -102,7 +102,7 @@
         Moved here by `git mv` with no file edited: Flyway records a migration
         by its path relative to the `db/migration` location root and by its
         checksum, and both are unchanged, so a database already carrying this
-        history still validates (AGENTS.md §4 — a versioned migration is never
+        history still validates (docs/ENGINEERING-RULES.md §4 — a versioned migration is never
         edited after merge).
 
         Version numbers are therefore a single global sequence across every

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link CostBasisSource} over {@code workflow.allotment} joined to {@code reference.fund_nav},
- * using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * using {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>The row-wise range is the page</h2>
  *
@@ -36,9 +36,9 @@ import org.springframework.stereotype.Repository;
  *
  * <p>{@code nav_version_id}, not the fund's live price for that date. A corrected NAV supersedes
  * the row it replaces, but a lot was still issued at whatever price it was issued at — that is the
- * number {@code workflow.allotment} exists to preserve (AGENTS.md §4: "every unit allotment records
- * which NAV version it used"). Valuing the lot at today's live price instead would make cost basis
- * move whenever the market did, and unrealised gain permanently zero.
+ * number {@code workflow.allotment} exists to preserve (docs/ENGINEERING-RULES.md §4: "every unit
+ * allotment records which NAV version it used"). Valuing the lot at today's live price instead
+ * would make cost basis move whenever the market did, and unrealised gain permanently zero.
  *
  * <p>No summation in SQL, deliberately. Cost basis is a sum of {@code Money.value} results, one per
  * lot, and {@code Money.value} is exact {@code BigInteger} arithmetic with half-up rounding on an

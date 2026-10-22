@@ -10,10 +10,10 @@ import java.util.Objects;
  * Business dates that have passed with no accepted valuation.
  *
  * <p><b>A silently absent NAV is worse than a late one.</b> Every balance in a fund is {@code units
- * × NAV} (AGENTS.md §2), so a fund with no valuation for a business date has every participant's
- * balance quietly stale — and quietly is the problem. This is the valuation-side counterpart of
- * Task 3.4's cash reconciliation ageing report, and it exists for the same reason: an absence has
- * to be a visible state rather than a silence.
+ * × NAV} (docs/ENGINEERING-RULES.md §2), so a fund with no valuation for a business date has every
+ * participant's balance quietly stale — and quietly is the problem. This is the valuation-side
+ * counterpart of Task 3.4's cash reconciliation ageing report, and it exists for the same reason:
+ * an absence has to be a visible state rather than a silence.
  */
 public record ValuationAgeingReport(
     LocalDate asOf, Instant generatedAt, List<MissingValuation> missing) {

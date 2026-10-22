@@ -488,7 +488,8 @@ class AllotmentServiceTest {
     // Summed PART BY PART, and that is not a formality. Valuing the file's units in one
     // multiplication instead floors once where this floors twenty-five times, and lands a couple
     // of centavos lower -- a rendering of one number in pesos, not cash that went anywhere. Units
-    // are what participants hold (AGENTS.md §2); the peso figure is a multiplication performed at
+    // are what participants hold (docs/ENGINEERING-RULES.md §2); the peso figure is a
+    // multiplication performed at
     // whatever granularity it is asked for, which is exactly what ADR-0014 already says.
     assertThat(fileCents).isEqualTo(filePricedCents + fileResidualCents);
     assertThat(fileResidualCents).isBetween(0L, (long) (rowCount / rowsPerPart));

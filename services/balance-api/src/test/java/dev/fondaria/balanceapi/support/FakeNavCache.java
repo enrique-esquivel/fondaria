@@ -15,11 +15,11 @@ import java.util.Optional;
 /**
  * A {@link NavCache} whose contents a test sets directly.
  *
- * <p>A test double, not a second implementation — the ban in AGENTS.md is on a second production
- * {@code LedgerPort}, and {@code InMemoryNavCache}'s own behaviour is covered by its own tests.
- * What is being tested here is what {@code BalanceService} does with a price, including a stale
- * one, and driving that through a real cache would mean manipulating a clock to produce staleness
- * rather than simply stating it.
+ * <p>A test double, not a second implementation — the ban in docs/ENGINEERING-RULES.md is on a
+ * second production {@code LedgerPort}, and {@code InMemoryNavCache}'s own behaviour is covered by
+ * its own tests. What is being tested here is what {@code BalanceService} does with a price,
+ * including a stale one, and driving that through a real cache would mean manipulating a clock to
+ * produce staleness rather than simply stating it.
  */
 public final class FakeNavCache implements NavCache {
 

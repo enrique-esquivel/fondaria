@@ -35,8 +35,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * upload, submission by reference, asynchronous validation, and the outcome on the batch.
  *
  * <p>Every test registers its own fund with a fresh {@link UUID} and asserts only over that fund.
- * Fixtures are reused across local runs (AGENTS.md §4), so a count over {@code workflow.valuation}
- * as a whole would pass or fail on what earlier runs left behind.
+ * Fixtures are reused across local runs (docs/ENGINEERING-RULES.md §4), so a count over {@code
+ * workflow.valuation} as a whole would pass or fail on what earlier runs left behind.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ValuationIngestionIntegrationTest extends ValuationIntegrationTest {
@@ -266,7 +266,8 @@ class ValuationIngestionIntegrationTest extends ValuationIntegrationTest {
     LocalDate second = businessDatesAgo(2);
     LocalDate third = businessDatesAgo(1);
 
-    // Rising, then falling hard. AGENTS.md §4: values go down, and a suite that only ever
+    // Rising, then falling hard. docs/ENGINEERING-RULES.md §4: values go down, and a suite that
+    // only ever
     // exercised rising prices would pass on a broken implementation.
     deliver(row(fund, first, 100_000_000L));
     deliver(row(fund, second, 110_000_000L));
@@ -418,7 +419,9 @@ class ValuationIngestionIntegrationTest extends ValuationIntegrationTest {
     return fundId;
   }
 
-  /** Counts only this fund and date — never a total over the table (AGENTS.md §4). */
+  /**
+   * Counts only this fund and date — never a total over the table (docs/ENGINEERING-RULES.md §4).
+   */
   private int valuationRowsFor(FundId fund, LocalDate date) {
     return jdbc.sql(
             """

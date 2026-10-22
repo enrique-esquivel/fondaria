@@ -6,13 +6,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Object-storage settings for contribution files, bound from the environment (ADR-0009).
  *
- * <p>Absence is a startup failure naming the variable, per AGENTS.md §4: a service that started
- * without a bucket would accept upload-slot requests it cannot honour and reject every batch as
- * unreadable. The local-development values live in {@code infrastructure/compose/.env.example}.
+ * <p>Absence is a startup failure naming the variable, per docs/ENGINEERING-RULES.md §4: a service
+ * that started without a bucket would accept upload-slot requests it cannot honour and reject every
+ * batch as unreadable. The local-development values live in {@code
+ * infrastructure/compose/.env.example}.
  *
  * @param endpoint S3 API endpoint, e.g. {@code http://object-store:8333}. SeaweedFS is the pinned
- *     object store (ADR-0031) (AGENTS.md §5); the endpoint is configuration so the same client
- *     speaks to whatever runs it.
+ *     object store (ADR-0031) (docs/ENGINEERING-RULES.md §5); the endpoint is configuration so the
+ *     same client speaks to whatever runs it.
  * @param accessKey S3 access key
  * @param secretKey S3 secret key
  * @param region signing region. The object store ignores it, but SigV4 requires one to sign with,
@@ -24,7 +25,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param maximumObjectBytes largest file this service will read into memory. A dispersion file can
  *     legitimately run to hundreds of thousands of rows, so it is generous — but unbounded is not
  *     an option when the object's size is chosen by the caller.
- * @param callTimeout explicit per-call timeout (AGENTS.md §4).
+ * @param callTimeout explicit per-call timeout (docs/ENGINEERING-RULES.md §4).
  */
 @ConfigurationProperties(prefix = "fondaria.object-store")
 public record ObjectStoreProperties(

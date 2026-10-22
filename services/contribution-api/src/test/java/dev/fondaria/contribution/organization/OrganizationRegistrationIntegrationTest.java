@@ -39,8 +39,8 @@ import org.springframework.http.ResponseEntity;
  *
  * <p>Everything here registers an employer whose {@code RFC} has never existed and asserts only
  * over what it created itself. The fixtures are reused between runs and TigerBeetle cannot be reset
- * (AGENTS.md §4), so a count over a whole table or ledger would pass or fail on what a previous run
- * left behind.
+ * (docs/ENGINEERING-RULES.md §4), so a count over a whole table or ledger would pass or fail on
+ * what a previous run left behind.
  *
  * <p><b>What the log assertion covers, and what it deliberately does not.</b> The appender sits on
  * the root logger, so it captures whatever the service actually emits at its configured levels;

@@ -13,7 +13,7 @@ import java.util.List;
  * per-participant split of it to report, and a provisional figure that can still change is worse
  * than none.
  *
- * <p>A plain JSON integer of MXN cents (AGENTS.md §4).
+ * <p>A plain JSON integer of MXN cents (docs/ENGINEERING-RULES.md §4).
  *
  * @param stale {@code true} when at least one position's price is older than the configured age.
  *     Served marked, never silently, and never withheld.

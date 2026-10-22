@@ -5,13 +5,13 @@ import java.util.List;
 /**
  * The scripted list of NAV moves `demo-day` cycles through (`phase-D-demo.md` Task D.2), fixed
  * rather than random so the demo is rehearsable: the same sequence every run, and it deliberately
- * includes falls -- `AGENTS.md` § Testing: "test suites must include falling and volatile NAV
- * series".
+ * includes falls -- `docs/ENGINEERING-RULES.md` § Testing: "test suites must include falling and
+ * volatile NAV series".
  *
  * <p>Each move is a signed integer scaled by {@link #MOVE_SCALE} (100,000) rather than a {@code
- * double} -- {@code AGENTS.md} §4 bans floating point for a "market-movement field" even here,
- * where the number only ever feeds a generated valuation file. {@code -1500} is -1.5%; {@code 300}
- * is +0.3%.
+ * double} -- {@code docs/ENGINEERING-RULES.md} §4 bans floating point for a "market-movement field"
+ * even here, where the number only ever feeds a generated valuation file. {@code -1500} is -1.5%;
+ * {@code 300} is +0.3%.
  */
 public final class NavSeries {
 

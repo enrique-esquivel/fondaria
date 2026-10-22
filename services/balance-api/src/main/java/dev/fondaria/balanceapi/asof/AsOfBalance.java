@@ -16,7 +16,7 @@ import java.util.Objects;
  * later NAV correction, which is exactly what {@code AsOfPosition.corrected()} exposes.
  *
  * <p><b>Signed, like every value on this platform.</b> Nothing clamps: a fund whose NAV fell
- * produces a smaller value, and that is the correct answer (AGENTS.md §4).
+ * produces a smaller value, and that is the correct answer (docs/ENGINEERING-RULES.md §4).
  *
  * <p>An empty {@code positions} list with a zero value is a real answer — the participant held
  * something once and had redeemed it all by this date. It is deliberately distinct from the {@code

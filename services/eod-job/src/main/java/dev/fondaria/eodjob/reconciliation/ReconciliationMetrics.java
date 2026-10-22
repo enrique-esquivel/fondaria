@@ -23,8 +23,9 @@ import org.springframework.stereotype.Component;
  * asks.
  *
  * <p>Four meters, and no participant, organization or fund identifier on any of them — a label is
- * as much a log line as a message is (AGENTS.md §7), and an alert only has to say <i>that</i> the
- * close is blocked. Which fund is in {@code workflow.reconciliation_break}, behind authentication.
+ * as much a log line as a message is (docs/ENGINEERING-RULES.md §7), and an alert only has to say
+ * <i>that</i> the close is blocked. Which fund is in {@code workflow.reconciliation_break}, behind
+ * authentication.
  *
  * <ul>
  *   <li>{@code eod_reconciliation_blocked} — {@code 1} while the latest pass did not pass. <b>The

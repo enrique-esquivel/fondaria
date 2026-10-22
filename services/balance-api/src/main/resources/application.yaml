@@ -29,7 +29,7 @@ management:
     health:
       probes:
         enabled: true
-      # Never render component details: they would expose hostnames (AGENTS.md §7).
+      # Never render component details: they would expose hostnames (docs/ENGINEERING-RULES.md §7).
       show-details: never
       show-components: never
       group:
@@ -80,7 +80,7 @@ fondaria:
 
   database:
     # No defaults. Production must fail to start when a required secret is absent
-    # (AGENTS.md §4); local-dev values live in infrastructure/compose/.env.example.
+    # (docs/ENGINEERING-RULES.md §4); local-dev values live in infrastructure/compose/.env.example.
     #
     # Read at startup (Flyway) and to resolve a participantId the first time it is seen.
     # NOT on the balance path in steady state — see CachingParticipantDirectory.
@@ -88,7 +88,7 @@ fondaria:
     username: ${POSTGRES_USER:}
     password: ${POSTGRES_PASSWORD:}
     connect-timeout: ${POSTGRES_CONNECT_TIMEOUT:5s}
-    # Upper bound on a single statement (AGENTS.md §4 — every external call has an explicit
+    # Upper bound on a single statement (docs/ENGINEERING-RULES.md §4 — every external call has an explicit
     # timeout). Applies to application queries only, never to Flyway's migrations.
     query-timeout: ${POSTGRES_QUERY_TIMEOUT:5s}
     max-pool-size: ${POSTGRES_MAX_POOL_SIZE:10}

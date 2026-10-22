@@ -12,8 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * AGENTS.md §4: never {@code double}, {@code float} or {@code BigDecimal} for cash, units or NAV —
- * in storage, transport or computation.
+ * docs/ENGINEERING-RULES.md §4: never {@code double}, {@code float} or {@code BigDecimal} for cash,
+ * units or NAV — in storage, transport or computation.
  *
  * <p>The same check {@code libs/valuation} runs, applied to the service that receives the numbers.
  * It matters most here: this module is where a provider's file is parsed, and a decimal amount is

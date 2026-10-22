@@ -114,7 +114,7 @@ class RateLimitValidationTest {
     // rather than merging it field by field -- confirmed live: `kubectl get backendtrafficpolicy
     // fondaria-backend-defaults -o yaml` reported Overridden=True for every route that has its own
     // rate-limit policy. Left unset here, those routes would silently lose the 5s connect / 30s
-    // request timeout AGENTS.md requires on every external call.
+    // request timeout docs/ENGINEERING-RULES.md requires on every external call.
     Map<String, Object> gatewayDefault = loadSingleDocument("backendtrafficpolicy.yaml");
     @SuppressWarnings("unchecked")
     Map<String, Object> expectedTimeout =

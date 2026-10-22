@@ -11,8 +11,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 /**
  * The service's one {@link DataSource}, and the {@link JdbcClient} every repository uses.
  *
- * <p>JDBC and {@code JdbcClient} by name (AGENTS.md §5): no ORM, no JPA, no R2DBC. Flyway's
- * autoconfiguration picks this bean up and migrates against it at startup, over the shared
+ * <p>JDBC and {@code JdbcClient} by name (docs/ENGINEERING-RULES.md §5): no ORM, no JPA, no R2DBC.
+ * Flyway's autoconfiguration picks this bean up and migrates against it at startup, over the shared
  * migration tree in {@code libs/db-migrations} — so this service and contribution-api converge on
  * one schema and one history rather than each carrying a private view of the database.
  *

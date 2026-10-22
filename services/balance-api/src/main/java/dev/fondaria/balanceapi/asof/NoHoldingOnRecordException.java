@@ -15,8 +15,8 @@ import java.io.Serial;
  * check runs, from {@code master.participant}, and conflating them would make an unrecognised id
  * indistinguishable from a date out of range.
  *
- * <p>Carries no value — neither the id nor the date reaches a problem detail or a log (AGENTS.md
- * §7).
+ * <p>Carries no value — neither the id nor the date reaches a problem detail or a log
+ * (docs/ENGINEERING-RULES.md §7).
  */
 public final class NoHoldingOnRecordException extends RuntimeException {
 

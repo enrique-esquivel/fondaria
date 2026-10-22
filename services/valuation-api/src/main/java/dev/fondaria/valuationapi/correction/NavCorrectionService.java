@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Records a correction to a NAV already struck (Task 20.5) — a wrong price is never deleted or
- * edited, only superseded by a new row alongside it (AGENTS.md §4).
+ * edited, only superseded by a new row alongside it (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>Internal-only.</b> {@code phase-09-identity.md} Task 9.4 names "NAV supersession"
  * explicitly as a four-eyes action, enforced at the database level once Phase 9 exists. Until then
@@ -23,7 +23,8 @@ import org.springframework.stereotype.Service;
  * <p><b>Takes the corrected price directly, not a re-derivation.</b> {@code unitsInIssue} and
  * {@code source} are carried forward unchanged from the row being superseded: a correction fixes
  * the number that was wrong (the struck price), not the units-in-issue reading the original strike
- * already recorded, which stays exactly reproducible from the corrected row alone (AGENTS.md §4).
+ * already recorded, which stays exactly reproducible from the corrected row alone
+ * (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>Never touches {@code workflow.allotment}.</b> Every allotment already struck under the
  * superseded price keeps naming it — re-allotment against a corrected NAV is a Phase 14 concern,

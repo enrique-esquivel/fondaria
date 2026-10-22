@@ -6,7 +6,7 @@ and submitted to `contracts/openapi/valuation-api.yaml` by reference — the
 same transport `ADR-0009` settled for contribution files, reused deliberately
 rather than reinvented (`phase-20-fund-accounting-nav.md` Task 20.3).
 
-Background: `AGENTS.md` §2 (units, not pesos), docs/DOMAIN.md
+Background: `docs/ENGINEERING-RULES.md` §2 (units, not pesos), docs/DOMAIN.md
 §3 (valuation models), `ADR-0009` (transport), `contracts/files/contribution-file-v2.md`
 (the format conventions this document follows).
 
@@ -87,14 +87,14 @@ data shape in the file.
 |---|---|---|
 | `fundId` | UUID | A fund registered in `reference.fund` (Task 20.1). Resolved **as of the row's own `valuationDate`**, not as of today, so a valuation for a past date is checked against the fund as it was on that date. An unregistered fund is `UNKNOWN_FUND` (§4). |
 | `valuationDate` | date, `YYYY-MM-DD` | The date the balance is **as of**. Must be a business date and must not be in the future (§4). Never the date the file was produced or sent. |
-| `reportedValueCents` | integer | The provider's reported total pooled balance for this fund on this date, in MXN cents. Signed is not permitted here — a pooled balance is not negative — but note that the **NAV struck from it is free to fall**, and nothing in the pipeline clamps it (`AGENTS.md` §4). |
+| `reportedValueCents` | integer | The provider's reported total pooled balance for this fund on this date, in MXN cents. Signed is not permitted here — a pooled balance is not negative — but note that the **NAV struck from it is free to fall**, and nothing in the pipeline clamps it (`docs/ENGINEERING-RULES.md` §4). |
 | `providerReference` | string | The provider's own identifier for this valuation. Carried through to the struck NAV so a number in the platform can always be traced back to the statement it came from. Never parsed or interpreted. |
 
 `reportedValueCents` is a non-negative integer of MXN cents: **no decimal
 point**, no thousands separator, no currency symbol. A decimal amount is
 `DECIMAL_AMOUNT` (§4) and is never rounded — this is the whole point of the
 column. Amounts are always MXN; the file carries no currency column because
-the platform is MXN-only (`AGENTS.md` §1), and the fund's own base currency
+the platform is MXN-only (`docs/ENGINEERING-RULES.md` §1), and the fund's own base currency
 in `reference.fund_identity` is what a struck NAV is denominated in.
 
 **One row per fund per date.** Two rows naming the same fund and the same
@@ -166,7 +166,7 @@ fix the file.
 ## 5. Missing and late valuations
 
 **A valuation that never arrives is a first-class state, not a silence.**
-`AGENTS.md` §2 makes NAV the only thing standing between units and a
+`docs/ENGINEERING-RULES.md` §2 makes NAV the only thing standing between units and a
 balance, so a fund with no valuation for a business date has every
 participant's balance quietly stale — and quietly is the problem. Task 3.4's
 reconciliation ageing report exists for the same reason on the cash side.

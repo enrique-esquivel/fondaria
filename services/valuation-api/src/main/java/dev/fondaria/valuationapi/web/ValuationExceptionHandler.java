@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the valuation endpoints (AGENTS.md §7).
+ * RFC 9457 problem details for the valuation endpoints (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Only messages this codebase authored are rendered. Anything else becomes a generic {@code 500}
  * saying nothing, because a driver, parser or SDK message can carry a SQL fragment, a hostname, a

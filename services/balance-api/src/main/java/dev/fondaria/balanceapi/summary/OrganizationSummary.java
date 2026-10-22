@@ -17,8 +17,8 @@ import java.util.Objects;
  * projection can answer, because the account that money passed through is back at zero.
  *
  * <p><b>Signed, like every value on this platform.</b> A fund whose NAV has fallen lowers the
- * organization's total exactly as it lowers each participant's, and nothing here clamps (AGENTS.md
- * §4).
+ * organization's total exactly as it lowers each participant's, and nothing here clamps
+ * (docs/ENGINEERING-RULES.md §4).
  *
  * @param asOf when the read <b>began</b>. An instant, not a business date: both units and price are
  *     live. Not a snapshot instant — the roster is walked in slices, so a transfer committed

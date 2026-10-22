@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * cannot park a consumer thread.
  *
  * <p>What it records is deliberately thin: a reason code and a queue name, never a decode
- * exception's text (which can quote message content — AGENTS.md §7).
+ * exception's text (which can quote message content — docs/ENGINEERING-RULES.md §7).
  */
 @Component
 public class ClusterHaltFlag {

@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Called from {@code BatchValidationRunner}'s path, after a file has passed every structural
  * check of {@code contribution-file-v2.md} §4 — a batch that fails one of those checks is rejected
- * whole and enrols nobody, the same "never a partial allotment" AGENTS.md §1 states for money.
+ * whole and enrols nobody, the same "never a partial allotment" docs/ENGINEERING-RULES.md §1 states
+ * for money.
  *
  * <p><b>Idempotent by construction, not by a marker.</b> Enrolling reduces to {@link
  * ParticipantRepository#insertIfAbsent}, keyed on {@code (organizationId, internalRef)}, so
@@ -80,7 +81,8 @@ public class ParticipantEnrolmentService {
         created++;
       }
     }
-    // Counts only. Neither an internal ref nor a payroll ref reaches a log (AGENTS.md §7) —
+    // Counts only. Neither an internal ref nor a payroll ref reaches a log
+    // (docs/ENGINEERING-RULES.md §7) —
     // every field of a participant row identifies a person.
     LOGGER.info(
         "Contribution batch enrolment processed, organizationId={}, rowsSeen={},"

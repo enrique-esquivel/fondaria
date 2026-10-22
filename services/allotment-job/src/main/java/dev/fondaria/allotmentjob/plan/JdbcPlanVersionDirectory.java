@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link PlanVersionDirectory} over {@code reference.plan_version}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Resolution mirrors contribution-api's {@code JdbcPlanVersionRepository#resolveAsOf} exactly.
  * Duplicated deliberately rather than shared, matching every other read-only directory in this

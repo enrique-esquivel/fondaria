@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  * A structural guard, not a behavioural one — mirrors {@code
  * OrganizationApiNoTaxIdentifierLeakTest}. The lookup's whole job is to resolve a reference to
  * {@code participantId}; nothing else about the participant may ride along in the same response
- * (AGENTS.md §7: no name, no employment dates).
+ * (docs/ENGINEERING-RULES.md §7: no name, no employment dates).
  */
 class ParticipantLookupResponseShapeTest {
 

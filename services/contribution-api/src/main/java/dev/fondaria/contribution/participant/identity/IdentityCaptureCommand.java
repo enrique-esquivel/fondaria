@@ -15,9 +15,9 @@ public record IdentityCaptureCommand(
     String rfc, String curp, String name, Optional<LocalDate> dateOfBirth) {
 
   /**
-   * Generous relative to any real RFC/CURP/name, but a system boundary still bounds it (AGENTS.md
-   * §4a: only validate at the boundary) -- otherwise the request body has no ceiling on the
-   * ciphertext this ends up encrypting and storing.
+   * Generous relative to any real RFC/CURP/name, but a system boundary still bounds it
+   * (docs/ENGINEERING-RULES.md §4a: only validate at the boundary) -- otherwise the request body
+   * has no ceiling on the ciphertext this ends up encrypting and storing.
    */
   private static final int MAX_FIELD_LENGTH = 256;
 
@@ -48,7 +48,7 @@ public record IdentityCaptureCommand(
     }
   }
 
-  /** Every field identifies a person (AGENTS.md §7). */
+  /** Every field identifies a person (docs/ENGINEERING-RULES.md §7). */
   @Override
   public String toString() {
     return "IdentityCaptureCommand[REDACTED]";

@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Every path is keyed by the derived {@code organizationId}. The tax identifier appears exactly
  * once — in the registration body — and never in a path, a query parameter, a response or a log
- * (AGENTS.md §7).
+ * (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Every binding annotation names its parameter explicitly. The build does not compile with
  * {@code -parameters}, so an unnamed {@code @PathVariable} resolves to nothing at runtime and every

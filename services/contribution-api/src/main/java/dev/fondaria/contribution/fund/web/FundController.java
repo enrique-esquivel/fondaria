@@ -29,11 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
  * unused id in {@code [1001, 2,000,000,000)}, picked at random and retried on the rare collision —
  * the same range {@code Scenario.TargetFund.fresh} already draws from — because {@code
  * reference.fund_identity.unit_ledger_id} is unique across every fund that has ever existed
- * (AGENTS.md §4: a fund is never split across TigerBeetle clusters). A later version of an
- * <i>existing</i> fund reuses the id already on record rather than risking a second, discarded
- * allocation: {@link FundRepository#publish}'s identity insert is {@code ON CONFLICT DO NOTHING},
- * so whatever this controller passed for the identity fields on a second call would otherwise be
- * silently ignored by PostgreSQL while still being echoed back in the response.
+ * (docs/ENGINEERING-RULES.md §4: a fund is never split across TigerBeetle clusters). A later
+ * version of an <i>existing</i> fund reuses the id already on record rather than risking a second,
+ * discarded allocation: {@link FundRepository#publish}'s identity insert is {@code ON CONFLICT DO
+ * NOTHING}, so whatever this controller passed for the identity fields on a second call would
+ * otherwise be silently ignored by PostgreSQL while still being echoed back in the response.
  *
  * <p><b>Idempotent on {@code (fundId, version)}.</b> Replaying the identical request is a {@code
  * 200} carrying the row already on record; the same key with different content is a {@code 409} —

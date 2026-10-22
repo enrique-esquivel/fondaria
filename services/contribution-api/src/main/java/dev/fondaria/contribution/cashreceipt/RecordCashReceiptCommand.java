@@ -60,8 +60,8 @@ public record RecordCashReceiptCommand(
 
   /**
    * Deliberately renders neither the idempotency key nor the amount: keys are on the never-log list
-   * and an amount is a monetary value (AGENTS.md §7), and a record's generated {@code toString} is
-   * exactly how both reach a log by accident.
+   * and an amount is a monetary value (docs/ENGINEERING-RULES.md §7), and a record's generated
+   * {@code toString} is exactly how both reach a log by accident.
    */
   @Override
   public String toString() {

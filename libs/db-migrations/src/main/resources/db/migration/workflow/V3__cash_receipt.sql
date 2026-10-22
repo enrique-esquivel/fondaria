@@ -68,7 +68,7 @@ COMMENT ON TABLE workflow.cash_receipt IS
 COMMENT ON COLUMN workflow.cash_receipt.transfer_id IS
     'UUIDv5(ledgerNamespace, organizationId + ":" + idempotencyKey) — the CASH_RECEIPT transfer id, derived, never generated in a request path. Recorded here so a row can be tied to its ledger movement without re-deriving it.';
 COMMENT ON COLUMN workflow.cash_receipt.amount_minor_units IS
-    'MXN cents. bigint, never numeric or decimal: cash is a long in cents everywhere in this platform (AGENTS.md §4). This is one asserted wire, never a balance.';
+    'MXN cents. bigint, never numeric or decimal: cash is a long in cents everywhere in this platform (docs/ENGINEERING-RULES.md §4). This is one asserted wire, never a balance.';
 COMMENT ON COLUMN workflow.cash_receipt.bank_reference IS
     'The statement line this receipt claims to be. Lives here rather than on the transfer because the ledger holds money and links, never descriptive data (ADR-0011); the transfer carries only ExternalReference.derive(ledgerNamespace, bankReference), which ties the two together by recomputation.';
 COMMENT ON COLUMN workflow.cash_receipt.operator_id IS

@@ -10,16 +10,17 @@ import java.util.Optional;
  * One participant's encrypted identity row — {@code master.participant_identity} (Task 9.5).
  *
  * <p>Every {@code byte[]} field here is ciphertext or a wrapped key; none of it is a plaintext
- * identity value, so nothing in this record is on AGENTS.md §7's never-log list by itself. It is
- * still never rendered — a stack trace naming this record is one debugging step away from someone
- * reaching for the decrypted value next, and {@link #toString()} exists to make that step fail.
+ * identity value, so nothing in this record is on docs/ENGINEERING-RULES.md §7's never-log list by
+ * itself. It is still never rendered — a stack trace naming this record is one debugging step away
+ * from someone reaching for the decrypted value next, and {@link #toString()} exists to make that
+ * step fail.
  *
  * @param wrappedDataKey the participant's own AES-256 data key, wrapped under the master key. Empty
  *     once crypto-shredded — see {@link #keyDestroyedAt()}.
  * @param encryptedDateOfBirth empty when the participant's plan resolves to a vehicle that does not
  *     require it (phase-09-identity.md Task 9.5)
  * @param dateOfBirthRequired the rule evaluation's outcome, stored so it is reproducible from this
- *     row alone rather than by re-running current fund configuration (AGENTS.md §4)
+ *     row alone rather than by re-running current fund configuration (docs/ENGINEERING-RULES.md §4)
  * @param identityCapturedAsOf the date that rule evaluation resolved the participant's plan/fund as
  *     of -- the input alongside the plan itself
  */

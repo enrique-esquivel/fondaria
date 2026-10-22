@@ -10,8 +10,9 @@ import java.util.UUID;
  *
  * <p><b>Derived, never generated.</b> Two concurrent submissions of one file must converge on one
  * batch, and a random id would let them race to create two — the same reasoning that makes ledger
- * transfer ids derived (AGENTS.md §4). Resubmitting the same file therefore lands on the same
- * primary key, and the database refuses the second insert rather than the service having to notice.
+ * transfer ids derived (docs/ENGINEERING-RULES.md §4). Resubmitting the same file therefore lands
+ * on the same primary key, and the database refuses the second insert rather than the service
+ * having to notice.
  *
  * <p><b>The namespace is the organization's own id.</b> A batch id is neither a ledger id nor an
  * organization id, so neither configured namespace fits it; and an organization id is already a

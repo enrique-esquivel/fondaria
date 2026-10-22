@@ -16,7 +16,7 @@ import java.time.Instant;
  * <p>{@code transferId} is the tie-out handle: derived, so it is identical on every retry, and it
  * is what the ledger, the logs and {@code workflow.cash_receipt} all agree on. The idempotency key
  * that produced it is deliberately not echoed — it is on the never-log list, and a response body
- * ends up in logs (AGENTS.md §7).
+ * ends up in logs (docs/ENGINEERING-RULES.md §7).
  *
  * <p>{@code amountMinorUnits} is a JSON integer of cents on the way out for the same reason it is
  * one on the way in.

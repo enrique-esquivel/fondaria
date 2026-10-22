@@ -17,8 +17,8 @@ import java.util.function.Supplier;
 /**
  * The only way this module talks to the platform (`phase-D-demo.md`: "everything below is driven
  * through the NodePorts ... exactly as a customer integration would"). Every call carries an
- * explicit timeout (`AGENTS.md` §4) and nothing here retries -- a retry would hide a platform fault
- * rather than report it (Task D.2's own requirement).
+ * explicit timeout (`docs/ENGINEERING-RULES.md` §4) and nothing here retries -- a retry would hide
+ * a platform fault rather than report it (Task D.2's own requirement).
  */
 public final class DemoHttpClient implements AutoCloseable {
 

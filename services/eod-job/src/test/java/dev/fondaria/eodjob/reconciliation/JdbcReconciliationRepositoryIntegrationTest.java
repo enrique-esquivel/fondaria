@@ -23,9 +23,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * {@code workflow.reconciliation_run} and {@code workflow.reconciliation_break} against a real
  * PostgreSQL ({@code V25}).
  *
- * <p>Every assertion is over ids this test created (AGENTS.md §4) — the fixture is shared and holds
- * whatever earlier runs recorded, so each test uses its own business date, far enough in the past
- * that no other suite files a run against it.
+ * <p>Every assertion is over ids this test created (docs/ENGINEERING-RULES.md §4) — the fixture is
+ * shared and holds whatever earlier runs recorded, so each test uses its own business date, far
+ * enough in the past that no other suite files a run against it.
  */
 @SpringBootTest
 class JdbcReconciliationRepositoryIntegrationTest extends ServiceIntegrationTest {

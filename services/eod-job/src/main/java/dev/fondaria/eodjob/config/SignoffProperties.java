@@ -38,7 +38,9 @@ public record SignoffProperties(
         publishConfirmTimeout == null ? Duration.ofSeconds(30) : publishConfirmTimeout;
   }
 
-  /** Fails startup naming the absent variable. Never echoes a value (AGENTS.md §7). */
+  /**
+   * Fails startup naming the absent variable. Never echoes a value (docs/ENGINEERING-RULES.md §7).
+   */
   public void requireComplete() {
     if (amqpHost == null || amqpHost.isBlank()) {
       throw new ConfigurationException(

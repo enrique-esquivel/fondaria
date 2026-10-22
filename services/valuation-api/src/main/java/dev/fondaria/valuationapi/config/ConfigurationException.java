@@ -8,7 +8,7 @@ import java.io.Serial;
  * trace.
  *
  * <p>Carries the variable's name, never its value: an address value is a hostname, and hostnames
- * stay out of error output (AGENTS.md §7).
+ * stay out of error output (docs/ENGINEERING-RULES.md §7).
  */
 public final class ConfigurationException extends RuntimeException {
 

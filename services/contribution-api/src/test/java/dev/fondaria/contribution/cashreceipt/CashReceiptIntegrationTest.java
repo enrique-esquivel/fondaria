@@ -56,9 +56,9 @@ import org.springframework.http.ResponseEntity;
  * <p><b>Nothing here is asserted over a total.</b> Every test registers an employer whose {@code
  * RFC} has never existed, so its {@code EMPLOYER_COLLECTIONS} account starts at zero and every
  * balance assertion is over money this test moved. The fixtures are reused between runs and
- * TigerBeetle cannot be reset (AGENTS.md §4); a count over the whole cash ledger would pass or fail
- * on what a previous run left there, which is the worst failure mode available — intermittent, and
- * about money.
+ * TigerBeetle cannot be reset (docs/ENGINEERING-RULES.md §4); a count over the whole cash ledger
+ * would pass or fail on what a previous run left there, which is the worst failure mode available —
+ * intermittent, and about money.
  *
  * <p>"Exactly one movement" is asserted two ways on purpose: the account balance moved by the
  * receipt's amount and no more, and the derived transfer id resolves to exactly one transfer of

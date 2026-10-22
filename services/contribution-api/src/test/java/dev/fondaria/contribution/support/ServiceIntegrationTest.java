@@ -29,11 +29,11 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  *
  * <p><b>The derivation namespaces and the bucket name are random per JVM, and that is
  * deliberate.</b> Fixtures are reused across local runs and TigerBeetle cannot be reset at all
- * (AGENTS.md §4). A fixed namespace would mean the second run of a suite deriving the same account
- * ids as the first, so a test could pass on accounts a previous run opened — intermittently, and
- * about money. A fresh namespace gives every run its own id space, including for platform
- * singletons such as {@code BANK_CLEARING}, while a fresh tax identifier per test does the same for
- * the organizations themselves, and a fresh bucket does the same for uploaded files.
+ * (docs/ENGINEERING-RULES.md §4). A fixed namespace would mean the second run of a suite deriving
+ * the same account ids as the first, so a test could pass on accounts a previous run opened —
+ * intermittently, and about money. A fresh namespace gives every run its own id space, including
+ * for platform singletons such as {@code BANK_CLEARING}, while a fresh tax identifier per test does
+ * the same for the organizations themselves, and a fresh bucket does the same for uploaded files.
  *
  * <p>Redis is pointed at the shared fixture rather than left unconfigured, because absence of the
  * Redis variables is a startup failure by design (see {@code CacheProperties}) — a cache outage
@@ -96,7 +96,8 @@ public abstract class ServiceIntegrationTest {
     // which is the worst failure mode available for a test about money.
     registry.add("fondaria.batch-validation.poll-interval", () -> "1h");
 
-    // A sweep claims oldest-first, and fixtures are reused across runs (AGENTS.md §4), so
+    // A sweep claims oldest-first, and fixtures are reused across runs (docs/ENGINEERING-RULES.md
+    // §4), so
     // workflow.contribution_batch still holds whatever earlier runs left claimable. With
     // the production batch size a test's own batch could be crowded out of its own sweep —
     // intermittently, and about money. Claiming the leftovers too is harmless: every

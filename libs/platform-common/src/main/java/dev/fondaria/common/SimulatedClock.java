@@ -59,8 +59,8 @@ import org.slf4j.LoggerFactory;
  * returns {@link StorableClock#systemUTC()} otherwise and never constructs this class at all, so
  * {@code reference.demo_clock} is never read in production. See each service's application class.
  *
- * <p>{@link ReentrantLock}, never {@code synchronized} (AGENTS.md §4): the guarded section performs
- * JDBC I/O, and {@code synchronized} around I/O pins a virtual thread.
+ * <p>{@link ReentrantLock}, never {@code synchronized} (docs/ENGINEERING-RULES.md §4): the guarded
+ * section performs JDBC I/O, and {@code synchronized} around I/O pins a virtual thread.
  */
 public final class SimulatedClock extends Clock implements AutoCloseable {
 
@@ -69,7 +69,10 @@ public final class SimulatedClock extends Clock implements AutoCloseable {
   /** How often the background thread re-reads {@code reference.demo_clock} (phase-D-demo.md). */
   private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
 
-  /** Explicit timeout on the poll's JDBC call (AGENTS.md §4: every external call has one). */
+  /**
+   * Explicit timeout on the poll's JDBC call (docs/ENGINEERING-RULES.md §4: every external call has
+   * one).
+   */
   private static final Duration POLL_TIMEOUT = Duration.ofSeconds(1);
 
   private static final String SELECT_OFFSET =

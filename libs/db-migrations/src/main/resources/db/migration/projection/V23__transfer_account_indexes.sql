@@ -31,7 +31,7 @@
 -- consulted.
 --
 -- Additive only: no column, constraint or grant changes, so the previous application
--- version keeps running unchanged (AGENTS.md §4, expand/contract).
+-- version keeps running unchanged (docs/ENGINEERING-RULES.md §4, expand/contract).
 
 CREATE INDEX transfer_by_debit_account
     ON projection.transfer (debit_account_id, ledger_timestamp DESC, transfer_id DESC);

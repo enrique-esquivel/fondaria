@@ -63,9 +63,9 @@ public class StatementRenderer {
 
   /**
    * {@code statements/period=YYYY-MM/participant=<participantId>.json} — the opaque {@link
-   * ParticipantId}, never the internal ref (AGENTS.md §7), and deterministic: the same job always
-   * names the same object, so a redelivered job overwrites identical bytes rather than creating a
-   * duplicate.
+   * ParticipantId}, never the internal ref (docs/ENGINEERING-RULES.md §7), and deterministic: the
+   * same job always names the same object, so a redelivered job overwrites identical bytes rather
+   * than creating a duplicate.
    */
   static String objectKey(String period, ParticipantId participantId) {
     return "statements/period=" + period + "/participant=" + participantId.value() + ".json";

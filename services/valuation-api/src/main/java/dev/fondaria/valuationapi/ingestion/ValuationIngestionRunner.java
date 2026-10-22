@@ -169,7 +169,8 @@ public class ValuationIngestionRunner {
       // pass first — an unbounded blind retry can strike a stale price against units in issue that
       // moved since acceptance, and a bounded one can abandon a fund silently once its window
       // expires — so building one is deliberately left to a dedicated task, not guessed at here
-      // (AGENTS.md §9). Until then, this ERROR line plus a manual Task 20.5 correction is the
+      // (docs/ENGINEERING-RULES.md §9). Until then, this ERROR line plus a manual Task 20.5
+      // correction is the
       // recovery path.
       for (AcceptedValuation valuation : toRecord) {
         try {

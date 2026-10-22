@@ -41,7 +41,7 @@ public record AllotmentResidual(
     }
     if (residual.isNegative()) {
       throw new IllegalArgumentException(
-          "residual must never be negative (AGENTS.md §4: rounding is always in the fund's"
+          "residual must never be negative (docs/ENGINEERING-RULES.md §4: rounding is always in the fund's"
               + " favour), got: "
               + residual.cents());
     }

@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Same division of labour as {@code ReconciliationMetrics}: the exception stops the close, these
  * meters are how a human finds out. Four, and no participant, organization or fund identifier on
- * any of them — a label is as much a log line as a message is (AGENTS.md §7), and an alert only has
- * to say <i>that</i> the snapshot is missing. Which fund did not tie is in {@code
+ * any of them — a label is as much a log line as a message is (docs/ENGINEERING-RULES.md §7), and
+ * an alert only has to say <i>that</i> the snapshot is missing. Which fund did not tie is in {@code
  * workflow.snapshot_run.failure_reason}, behind authentication.
  *
  * <ul>

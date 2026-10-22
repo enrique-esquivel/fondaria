@@ -7,7 +7,7 @@ import java.time.LocalDate;
  * One movement — {@code Movement} in {@code contracts/openapi/balance-api.yaml}.
  *
  * <p>{@code unitsScaled} is a plain JSON integer at scale 1e-8, a positive magnitude; the direction
- * is its own field and never the sign (AGENTS.md §4).
+ * is its own field and never the sign (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>{@code transferId} and {@code ledgerTimestamp} are strings, and that is not an amount
  * rendered as text.</b> They are a u128 and a u64: both exceed a JSON number's safe integer range,

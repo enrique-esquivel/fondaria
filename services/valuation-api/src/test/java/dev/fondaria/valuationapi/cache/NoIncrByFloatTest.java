@@ -14,9 +14,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * AGENTS.md §4: "No {@code INCRBYFLOAT} in Redis. Integer operations only, inside a Lua script." An
- * explicit acceptance criterion of Task 20.6 — "repository grep for {@code INCRBYFLOAT} returns
- * nothing (CI check)".
+ * docs/ENGINEERING-RULES.md §4: "No {@code INCRBYFLOAT} in Redis. Integer operations only, inside a
+ * Lua script." An explicit acceptance criterion of Task 20.6 — "repository grep for {@code
+ * INCRBYFLOAT} returns nothing (CI check)".
  *
  * <p><b>Repository-wide, not module-wide</b>, unlike {@code ForbiddenNumericTypesTest} — the
  * criterion says repository, and the rule is about anything that could ever talk to Redis, not only
@@ -33,9 +33,9 @@ class NoIncrByFloatTest {
   private static final String FORBIDDEN = "INCRBY" + "FLOAT";
 
   /**
-   * Code only. Prose is excluded deliberately: {@code AGENTS.md}, the phase documents and the
-   * design notes all name the command in order to forbid it, and a check that fails on its own rule
-   * being written down is a check somebody deletes.
+   * Code only. Prose is excluded deliberately: {@code docs/ENGINEERING-RULES.md}, the phase
+   * documents and the design notes all name the command in order to forbid it, and a check that
+   * fails on its own rule being written down is a check somebody deletes.
    */
   private static final List<String> SCANNED_EXTENSIONS =
       List.of(".java", ".lua", ".sql", ".yaml", ".yml", ".kt", ".sh");
@@ -85,7 +85,7 @@ class NoIncrByFloatTest {
 
     assertThat(offenders)
         .withFailMessage(
-            "%s is forbidden (AGENTS.md §4): a NAV, a unit count and a cash amount are integers at"
+            "%s is forbidden (docs/ENGINEERING-RULES.md §4): a NAV, a unit count and a cash amount are integers at"
                 + " a fixed scale, and there is no Redis operation that may widen one into a"
                 + " floating-point value. Found at: %s",
             FORBIDDEN, offenders)
@@ -127,8 +127,9 @@ class NoIncrByFloatTest {
   }
 
   /**
-   * Walks up from the module directory. Absolute paths are never hardcoded (AGENTS.md §10) — the
-   * repository is located by structure, so this works on any machine and in CI.
+   * Walks up from the module directory. Absolute paths are never hardcoded
+   * (docs/ENGINEERING-RULES.md §10) — the repository is located by structure, so this works on any
+   * machine and in CI.
    */
   private static Path repositoryRoot() {
     Path candidate = Path.of("").toAbsolutePath();

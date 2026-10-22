@@ -9,9 +9,9 @@ import java.util.UUID;
  *
  * <p><b>This exists so that {@code participant_internal_ref} never has to travel.</b> An internal
  * ref identifies a person exactly as an {@code RFC} does, and anything in a URL path reaches an
- * access log, a proxy log and a trace (AGENTS.md §7). So the internal ref stays inside {@code
- * master.participant} and its primary key, and this is what appears in a path, a response body and
- * a message key.
+ * access log, a proxy log and a trace (docs/ENGINEERING-RULES.md §7). So the internal ref stays
+ * inside {@code master.participant} and its primary key, and this is what appears in a path, a
+ * response body and a message key.
  *
  * <p><b>Randomly assigned, unlike {@link OrganizationId}, and for a considered reason.</b> An
  * organization id is {@code UUIDv5(namespace, taxId)} so that registering the same employer twice

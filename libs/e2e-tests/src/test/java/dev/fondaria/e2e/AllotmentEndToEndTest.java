@@ -41,10 +41,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <h2>What "deterministic" means when every id is fresh</h2>
  *
  * <p>Every repetition registers its own employer, its own fund on its own unit ledger and its own
- * participant (AGENTS.md §4 — fixtures are reused and TigerBeetle cannot be reset), so the ids
- * differ by construction and only the figures can be compared. That is the right comparison: the
- * criterion is that identical inputs produce identical units, an identical price and identically
- * reconciling pooled accounts, not that a rerun collides with the ledger it wrote last time.
+ * participant (docs/ENGINEERING-RULES.md §4 — fixtures are reused and TigerBeetle cannot be reset),
+ * so the ids differ by construction and only the figures can be compared. That is the right
+ * comparison: the criterion is that identical inputs produce identical units, an identical price
+ * and identically reconciling pooled accounts, not that a rerun collides with the ledger it wrote
+ * last time.
  *
  * <p>This class deliberately does not read the Query API. {@link ContributionToQueryEndToEndTest}
  * owns that surface; here the ledger is the surface, which is where Phase 21 puts a participant's

@@ -19,9 +19,9 @@ import org.junit.jupiter.api.Test;
  * <pre>batch.organizationId().scope() + ":" + participantInternalRef + ":" + fundId</pre>
  *
  * <p>and {@link ParticipantScope#forFund} must reproduce it byte for byte. Services do not depend
- * on each other's source trees (AGENTS.md §4), so the compiler cannot check this and no integration
- * test spans both — the balance suite issues units under its own copy of the derivation, which
- * would drift in lockstep with this one and prove nothing.
+ * on each other's source trees (docs/ENGINEERING-RULES.md §4), so the compiler cannot check this
+ * and no integration test spans both — the balance suite issues units under its own copy of the
+ * derivation, which would drift in lockstep with this one and prove nothing.
  *
  * <p><b>A drift does not fail; it derives ids for accounts that do not exist</b>, {@code
  * lookupAccounts} returns nothing for them, and every participant is reported as holding zero — a
@@ -47,9 +47,9 @@ class ParticipantScopeTest {
 
   /**
    * Organization first, because {@code participantInternalRef} is unique only within an
-   * organization (AGENTS.md §4, and {@code master.participant}'s own primary key). Two employers
-   * may legitimately use the same internal ref, and a scope that led with it would collapse their
-   * holdings into one account.
+   * organization (docs/ENGINEERING-RULES.md §4, and {@code master.participant}'s own primary key).
+   * Two employers may legitimately use the same internal ref, and a scope that led with it would
+   * collapse their holdings into one account.
    */
   @Test
   void twoOrganizationsSharingAnInternalRefDeriveDifferentScopes() {

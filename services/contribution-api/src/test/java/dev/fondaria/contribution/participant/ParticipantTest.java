@@ -40,7 +40,8 @@ class ParticipantTest {
 
   @Test
   void toString_names_no_participant_field() {
-    // AGENTS.md §7: an internal ref, a payroll ref and the employment dates all identify a
+    // docs/ENGINEERING-RULES.md §7: an internal ref, a payroll ref and the employment dates all
+    // identify a
     // person, the same reasoning ContributionFile.ParticipantRow already applies.
     Participant participant = participant(LocalDate.of(2019, 3, 1), LocalDate.of(2026, 1, 15));
 

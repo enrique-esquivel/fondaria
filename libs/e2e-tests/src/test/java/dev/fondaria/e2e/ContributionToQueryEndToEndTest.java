@@ -26,9 +26,9 @@ import org.junit.jupiter.api.Test;
  * test does not peek at {@code projection.transfer} to decide the pipeline has finished and then
  * ask the API a question it already knows the answer to.
  *
- * <p>Every assertion is over ids this class created (AGENTS.md §4): its own organization, its own
- * fund on its own unit ledger, its own participant. Nothing counts rows in a table or messages on a
- * topic.
+ * <p>Every assertion is over ids this class created (docs/ENGINEERING-RULES.md §4): its own
+ * organization, its own fund on its own unit ledger, its own participant. Nothing counts rows in a
+ * table or messages on a topic.
  */
 @Tag("integration")
 class ContributionToQueryEndToEndTest {
@@ -130,7 +130,7 @@ class ContributionToQueryEndToEndTest {
       assertThat(JsonNumbers.decimalLiteralsIn(response.body()))
           .as(
               "%s returned a non-integer JSON number; cash is cents, units and NAV are 1e-8"
-                  + " integers, and no float may appear on the wire (AGENTS.md §4). Body: %s",
+                  + " integers, and no float may appear on the wire (docs/ENGINEERING-RULES.md §4). Body: %s",
               response.path(), response.body())
           .isEmpty();
       assertThat(JsonNumbers.numbersIn(response.body()))

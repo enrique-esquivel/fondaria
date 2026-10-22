@@ -116,7 +116,8 @@ public final class ContributionFileParser {
     LocalDate employmentStart = parseDate(fields.get(2), "employmentStartDate", lineNumber);
     LocalDate enrolment = parseDate(fields.get(3), "enrolmentDate", lineNumber);
     if (employmentStart.isAfter(enrolment)) {
-      // Neither date is echoed: an employment date is data about a person (AGENTS.md §7).
+      // Neither date is echoed: an employment date is data about a person
+      // (docs/ENGINEERING-RULES.md §7).
       throw malformed(
           "The participant at line "
               + lineNumber
@@ -276,7 +277,8 @@ public final class ContributionFileParser {
 
   /**
    * {@code long}, never {@code BigDecimal} or {@code double}, and never a decimal point: §3 makes
-   * every amount an integer of cents with no separator and no currency symbol (AGENTS.md §4).
+   * every amount an integer of cents with no separator and no currency symbol
+   * (docs/ENGINEERING-RULES.md §4).
    */
   private static long parseNonNegativeLong(String value, String column, int lineNumber) {
     long parsed;

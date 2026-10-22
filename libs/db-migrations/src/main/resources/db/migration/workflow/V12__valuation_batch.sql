@@ -91,13 +91,13 @@ CREATE TABLE workflow.valuation (
     -- is checked in code, resolved as of the row's OWN valuation_date (Task 20.1
     -- funds are effective-dated), and a UNKNOWN_FUND rejection has to name the
     -- fund and date at fault. A foreign-key violation surfaces as a driver
-    -- exception carrying a constraint name, which AGENTS.md §7 forbids rendering
+    -- exception carrying a constraint name, which docs/ENGINEERING-RULES.md §7 forbids rendering
     -- and which could not carry that detail anyway.
     fund_id                   uuid        NOT NULL,
     valuation_date            date        NOT NULL,
 
     -- What the provider reported the pooled assets are worth, in MXN cents.
-    -- bigint, never numeric or double (AGENTS.md §4). A pooled balance is not
+    -- bigint, never numeric or double (docs/ENGINEERING-RULES.md §4). A pooled balance is not
     -- negative, hence the CHECK -- but note that the NAV struck from this is free
     -- to FALL, and nothing downstream clamps it.
     reported_value_minor_units bigint     NOT NULL,
@@ -126,7 +126,7 @@ CREATE TABLE workflow.valuation (
 COMMENT ON TABLE workflow.valuation IS
     'What an external provider reported a fund''s pooled assets were worth on a valuation date (Task 20.3). Never a NAV, never a balance, never summed. Task 20.4 divides one of these rows by units in issue read from the ledger to strike a NAV.';
 COMMENT ON COLUMN workflow.valuation.reported_value_minor_units IS
-    'MXN cents, integer. The NAV struck from it may fall; nothing clamps it (AGENTS.md §4).';
+    'MXN cents, integer. The NAV struck from it may fall; nothing clamps it (docs/ENGINEERING-RULES.md §4).';
 COMMENT ON COLUMN workflow.valuation.provider_reference IS
     'The provider''s own identifier for this valuation, carried so a number in the platform traces back to the statement it came from. Never parsed, and never compared when deciding whether a redelivery contradicts an accepted valuation.';
 

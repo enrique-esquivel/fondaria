@@ -12,15 +12,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 /**
  * The service's one {@link DataSource}, and the {@link JdbcClient} every repository uses.
  *
- * <p>JDBC and {@code JdbcClient} by name (AGENTS.md §5): no ORM, no JPA, no R2DBC. Flyway's
- * autoconfiguration picks this bean up and migrates against it at startup, over the shared
+ * <p>JDBC and {@code JdbcClient} by name (docs/ENGINEERING-RULES.md §5): no ORM, no JPA, no R2DBC.
+ * Flyway's autoconfiguration picks this bean up and migrates against it at startup, over the shared
  * migration tree in {@code libs/db-migrations} — so this service and contribution-api converge on
  * one schema and one history rather than each carrying a private view of the database.
  *
- * <p>Every timeout is explicit (AGENTS.md §4). A pool that waits forever for a connection turns a
- * database blip into an unbounded queue of parked virtual threads, and a statement with no bound
- * does the same thing one query at a time — which Task 6.3 made reachable, since the movement
- * history is the first request path here that reads PostgreSQL on every call.
+ * <p>Every timeout is explicit (docs/ENGINEERING-RULES.md §4). A pool that waits forever for a
+ * connection turns a database blip into an unbounded queue of parked virtual threads, and a
+ * statement with no bound does the same thing one query at a time — which Task 6.3 made reachable,
+ * since the movement history is the first request path here that reads PostgreSQL on every call.
  *
  * <p><b>The statement bound is on the {@link JdbcClient}, not on the connection.</b> Setting {@code
  * statement_timeout} through the pool would apply it to Flyway as well, and a migration is not a

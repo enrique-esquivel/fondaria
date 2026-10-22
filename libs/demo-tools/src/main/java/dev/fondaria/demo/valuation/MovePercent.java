@@ -5,7 +5,7 @@ import dev.fondaria.demo.DemoToolsException;
 /**
  * Parses a human-typed move like {@code "-1.5%"} into {@link NavSeries#MOVE_SCALE}-scaled integer
  * cents, entirely in string/integer arithmetic -- never a {@code double} or {@code BigDecimal} for
- * a market-movement field (`AGENTS.md` §4), even at the command line.
+ * a market-movement field (`docs/ENGINEERING-RULES.md` §4), even at the command line.
  */
 public final class MovePercent {
 

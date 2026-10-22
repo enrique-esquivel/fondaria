@@ -8,9 +8,9 @@ import java.util.Set;
 import java.util.stream.StreamSupport;
 
 /**
- * Strips any observation key-value whose key names a field {@code AGENTS.md} §7 forbids in a log
- * line — an observation materializes as both a span attribute and a metric tag, so this is the one
- * place both are covered.
+ * Strips any observation key-value whose key names a field {@code docs/ENGINEERING-RULES.md} §7
+ * forbids in a log line — an observation materializes as both a span attribute and a metric tag, so
+ * this is the one place both are covered.
  *
  * <p>Registered as an {@link ObservationFilter} bean in each service (Spring Boot auto-detects
  * every such bean and applies it to the shared {@code ObservationRegistry}), it runs on every

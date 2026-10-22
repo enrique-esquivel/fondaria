@@ -7,10 +7,10 @@ import java.util.Optional;
 /**
  * One disagreement between two derivations of the same quantity, quantified exactly.
  *
- * <p><b>Signed and unclamped</b> (AGENTS.md §4). {@code drift = left − right}, and both directions
- * are real findings: "the ledger holds less than the projection claims" is a lost redemption
- * message, "more" is a lost issuance. A control that reported only one of them would be silent on
- * half of what it exists to catch.
+ * <p><b>Signed and unclamped</b> (docs/ENGINEERING-RULES.md §4). {@code drift = left − right}, and
+ * both directions are real findings: "the ledger holds less than the projection claims" is a lost
+ * redemption message, "more" is a lost issuance. A control that reported only one of them would be
+ * silent on half of what it exists to catch.
  *
  * @param fundId present for {@link BreakScope#FUND_UNITS}, absent for a cash account
  * @param accountId present for {@link BreakScope#CASH_ACCOUNT} as {@code

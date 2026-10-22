@@ -8,8 +8,8 @@ import java.util.Objects;
  *
  * <p>The message is what {@code workflow.snapshot_run.failure_reason} records and what an operator
  * reads, so it is written in their words and carries no exception text, no SQL and no hostname
- * (AGENTS.md §7). It names the date, because the first question about a failed close is always
- * which one.
+ * (docs/ENGINEERING-RULES.md §7). It names the date, because the first question about a failed
+ * close is always which one.
  *
  * <p>Two failures are distinct enough to be caught separately and have their own subclasses: {@link
  * SnapshotMismatchException} (a re-run disagreeing with a snapshot already taken) and {@link

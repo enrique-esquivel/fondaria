@@ -15,7 +15,8 @@ import java.util.Optional;
  * <p><b>This mirrors contribution-api's port of the same name rather than sharing it.</b>
  * Extracting a common object-store module is the obvious next step and is recorded as a follow-up
  * in {@code TASK-LOG.md}; Task 20.3 names {@code services/valuation-api/} and no library, and
- * inventing a shared module unasked is the kind of scope drift AGENTS.md §10 rules out.
+ * inventing a shared module unasked is the kind of scope drift docs/ENGINEERING-RULES.md §10 rules
+ * out.
  */
 public interface ObjectStore {
 

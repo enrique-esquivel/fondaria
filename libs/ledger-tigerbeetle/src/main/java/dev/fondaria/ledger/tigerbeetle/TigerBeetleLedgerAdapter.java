@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Batching.</b> Every write — including a single transfer — goes through {@code
  * createTransfersAsync(TransferBatch)}; there is no separate single-transfer code path, since
- * batching is what keeps TigerBeetle's storage amplification down (AGENTS.md §4).
+ * batching is what keeps TigerBeetle's storage amplification down (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>Id byte order.</b> {@code AccountId}/{@code TransferId} store {@code (mostSignificantBits,
  * leastSignificantBits)}, matching {@link java.util.UUID}. TigerBeetle's own two-long setters
@@ -73,13 +73,14 @@ import org.slf4j.LoggerFactory;
  * <p><b>Account balance sign.</b> For a unit-ledger account, {@link LedgerAccount.Unit#balance()}
  * is typed as {@link Units}, which cannot hold a negative value, yet the chart of accounts
  * (docs/chart-of-accounts.md §5) explicitly expects {@code UNITS_IN_ISSUE} to always equal the sum
- * of participant holdings (AGENTS.md §2, Task 2.7 property 2 — no negation). So a unit account's
- * balance is computed in whichever direction is that account's own non-negative one: {@code
- * creditsPosted − debitsPosted} for a {@code debits_must_not_exceed_credits} account (participant
- * holdings, ledger-enforced non-negative), {@code debitsPosted − creditsPosted} for the contra
- * accounts ({@code UNITS_IN_ISSUE}, {@code UNIT_ROUNDING}). A cash account's balance is always
- * {@code creditsPosted − debitsPosted}; {@link Money} can hold a negative value, and this is the
- * convention that reproduces every figure in the chart of accounts' two worked examples exactly.
+ * of participant holdings (docs/ENGINEERING-RULES.md §2, Task 2.7 property 2 — no negation). So a
+ * unit account's balance is computed in whichever direction is that account's own non-negative one:
+ * {@code creditsPosted − debitsPosted} for a {@code debits_must_not_exceed_credits} account
+ * (participant holdings, ledger-enforced non-negative), {@code debitsPosted − creditsPosted} for
+ * the contra accounts ({@code UNITS_IN_ISSUE}, {@code UNIT_ROUNDING}). A cash account's balance is
+ * always {@code creditsPosted − debitsPosted}; {@link Money} can hold a negative value, and this is
+ * the convention that reproduces every figure in the chart of accounts' two worked examples
+ * exactly.
  */
 public final class TigerBeetleLedgerAdapter implements LedgerPort {
 

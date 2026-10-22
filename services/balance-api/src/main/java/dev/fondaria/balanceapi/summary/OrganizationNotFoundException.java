@@ -11,7 +11,7 @@ import java.io.Serial;
  * aggregation begins, so the two can never be confused.
  *
  * <p>Carries no value: the id came from a URL, and this exception's message reaches a log
- * (AGENTS.md §7).
+ * (docs/ENGINEERING-RULES.md §7).
  */
 public final class OrganizationNotFoundException extends RuntimeException {
 

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  * What the platform pages on for sign-off (Task 7.5a). Same division of labour as {@code
  * ReconciliationMetrics} and {@code SnapshotMetrics}: the exception stops the chain, these meters
  * are how a human finds out. No participant, organization or fund identifier on any meter
- * (AGENTS.md §7).
+ * (docs/ENGINEERING-RULES.md §7).
  *
  * <ul>
  *   <li>{@code eod_signoff_blocked} — {@code 1} while the latest sweep could not sign off the

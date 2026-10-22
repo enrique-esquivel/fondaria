@@ -13,7 +13,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * record mirrors the one value that must be present ({@code amqpHost}) so an absent variable is a
  * named {@link ConfigurationException} rather than a consumer that silently connects to {@code
  * localhost} and never sees an event. Everything else is operational tuning with a working default
- * (AGENTS.md §4: production fails to start on an absent secret; tuning is not a secret).
+ * (docs/ENGINEERING-RULES.md §4: production fails to start on an absent secret; tuning is not a
+ * secret).
  *
  * @param amqpHost {@code PROJECTION_AMQP_HOST} — the broker the projection reads its input
  *     exchanges from and writes the poison record to. Required.
@@ -42,8 +43,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     before projecting what it has, which bounds the latency batching adds. Defaults to 100 ms.
  * @param retryInitialBackoff first pause after a transient failure before retrying.
  * @param retryMaxBackoff the cap the exponential backoff grows to. Retries never stop — a gap in a
- *     financial projection is worse than downtime (AGENTS.md §4) — so the interval is bounded, not
- *     the attempt count.
+ *     financial projection is worse than downtime (docs/ENGINEERING-RULES.md §4) — so the interval
+ *     is bounded, not the attempt count.
  * @param deadLetterTimeout how long to wait for RabbitMQ to confirm the one poison record written
  *     to {@code ledger.entries.dlq} before giving up and halting anyway.
  */
@@ -103,7 +104,9 @@ public record ProjectionConsumerProperties(
     deadLetterTimeout = deadLetterTimeout == null ? Duration.ofSeconds(10) : deadLetterTimeout;
   }
 
-  /** Fails startup naming the absent variable. Never echoes a value (AGENTS.md §7). */
+  /**
+   * Fails startup naming the absent variable. Never echoes a value (docs/ENGINEERING-RULES.md §7).
+   */
   public void requireComplete() {
     if (amqpHost == null || amqpHost.isBlank()) {
       throw new ConfigurationException(

@@ -37,12 +37,13 @@ import org.junit.jupiter.api.Test;
  *
  * <h2>No NAV appears in this suite, deliberately</h2>
  *
- * <p>AGENTS.md §4 requires a falling and volatile price series wherever a suite exercises prices.
- * This one exercises none: a tie-out compares <i>units</i> against units and cents against cents,
- * and a price never enters the comparison. That is the property being asserted as much as anything
- * else — a reconciliation that moved with the NAV would tie on a falling day and break on a rising
- * one. The value of those units at a price is {@link dev.fondaria.common.Money#value}'s business,
- * and the end-to-end suite prices its fund on a falling series.
+ * <p>docs/ENGINEERING-RULES.md §4 requires a falling and volatile price series wherever a suite
+ * exercises prices. This one exercises none: a tie-out compares <i>units</i> against units and
+ * cents against cents, and a price never enters the comparison. That is the property being asserted
+ * as much as anything else — a reconciliation that moved with the NAV would tie on a falling day
+ * and break on a rising one. The value of those units at a price is {@link
+ * dev.fondaria.common.Money#value}'s business, and the end-to-end suite prices its fund on a
+ * falling series.
  */
 class ReconciliationServiceTest {
 

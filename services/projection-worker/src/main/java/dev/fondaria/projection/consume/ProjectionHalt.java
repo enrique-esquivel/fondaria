@@ -10,11 +10,11 @@ import org.springframework.stereotype.Component;
  * The consumer's halt latch. Set once, never cleared for the life of the process.
  *
  * <p>"Never skip a message you can't process. Send it to the DLQ and halt. A gap in a financial
- * projection is worse than downtime" (AGENTS.md §4). When {@link LedgerEventListener} hits a poison
- * message it trips this latch, raises the cluster-wide flag and hands the bytes to {@link
- * DeadLetterPublisher}, then stops the listener containers. The delivery is <b>not</b>
- * acknowledged, so the gap is closed by a deliberate restart (after a schema fix), never by the
- * consumer skipping ahead on its own.
+ * projection is worse than downtime" (docs/ENGINEERING-RULES.md §4). When {@link
+ * LedgerEventListener} hits a poison message it trips this latch, raises the cluster-wide flag and
+ * hands the bytes to {@link DeadLetterPublisher}, then stops the listener containers. The delivery
+ * is <b>not</b> acknowledged, so the gap is closed by a deliberate restart (after a schema fix),
+ * never by the consumer skipping ahead on its own.
  *
  * <p>The latch is per process. It is also tripped by {@link ClusterHalt} when it reads another
  * replica's halt from {@code workflow.projection_halt}, so a halt on one pod is a halt on all of

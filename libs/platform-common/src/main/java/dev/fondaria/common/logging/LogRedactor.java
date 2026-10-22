@@ -5,8 +5,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Redaction layer scrubbing prohibited fields from log messages and metadata per {@code AGENTS.md}
- * §7:
+ * Redaction layer scrubbing prohibited fields from log messages and metadata per {@code
+ * docs/ENGINEERING-RULES.md} §7:
  *
  * <ul>
  *   <li>PAN (credit / debit card numbers)

@@ -4,7 +4,7 @@
 -- along a lifecycle boundary that a single append-only table cannot express:
 --
 -- fund_identity holds what is fixed at a fund's first registration and never
--- changes again -- the TigerBeetle unit ledger id (AGENTS.md §4: a fund is
+-- changes again -- the TigerBeetle unit ledger id (docs/ENGINEERING-RULES.md §4: a fund is
 -- never split across clusters, so its ledger id is assigned once and never
 -- reused), the base currency, the unit scale, the inception date and the
 -- opening NAV per unit the first contribution buys at. Uniqueness of
@@ -41,7 +41,7 @@ COMMENT ON TABLE reference.fund_identity IS
 COMMENT ON COLUMN reference.fund_identity.unit_ledger_id IS
     'The TigerBeetle ledger id (from 1001, LedgerCodes) carrying this fund''s units. Assigned once and never reused by another fund -- enforced by the UNIQUE constraint above, not by discipline.';
 COMMENT ON COLUMN reference.fund_identity.unit_scale IS
-    'The fixed-point scale units are stored at -- always Units.SCALE (1e-8), carried as data rather than a constant so a stored row reproduces its own arithmetic without rerunning current code (AGENTS.md §4).';
+    'The fixed-point scale units are stored at -- always Units.SCALE (1e-8), carried as data rather than a constant so a stored row reproduces its own arithmetic without rerunning current code (docs/ENGINEERING-RULES.md §4).';
 COMMENT ON COLUMN reference.fund_identity.opening_nav_scaled IS
     'The price, scaled 1e-8 in the fund''s base currency, the fund''s first contribution buys at (docs/DOMAIN.md). Configuration, not a constant.';
 

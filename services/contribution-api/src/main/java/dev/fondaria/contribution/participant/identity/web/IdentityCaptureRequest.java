@@ -15,7 +15,7 @@ public record IdentityCaptureRequest(String rfc, String curp, String name, Local
     return new IdentityCaptureCommand(rfc, curp, name, Optional.ofNullable(dateOfBirth));
   }
 
-  /** Every field identifies a person (AGENTS.md §7). */
+  /** Every field identifies a person (docs/ENGINEERING-RULES.md §7). */
   @Override
   public String toString() {
     return "IdentityCaptureRequest[REDACTED]";

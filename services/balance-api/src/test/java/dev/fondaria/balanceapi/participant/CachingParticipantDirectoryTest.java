@@ -127,7 +127,10 @@ class CachingParticipantDirectoryTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
-  /** {@code participantInternalRef} identifies a person and must not reach a log (AGENTS.md §7). */
+  /**
+   * {@code participantInternalRef} identifies a person and must not reach a log
+   * (docs/ENGINEERING-RULES.md §7).
+   */
   @Test
   void aScopeNeverRendersTheInternalRef() {
     assertThat(new ParticipantScope(ORGANIZATION, "EMP-000123").toString())

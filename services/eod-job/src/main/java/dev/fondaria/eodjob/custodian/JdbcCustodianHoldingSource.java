@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link CustodianHoldingSource} over {@code workflow.allotment}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Unpaged, unlike {@code JdbcHoldingAccountSource}: that scan is platform-wide and must be
  * keyset-paged at scale (Task 7.2); this one is bounded by a single organization's participants in

@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link ParticipantDirectory} over {@code master.participant}, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link ParticipantDirectory} over {@code master.participant}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Read-only: contribution-api owns this table's writes (auto-enrolment, Task 2b.3). This service
  * only ever resolves a participant's plan and employment start date to compute a vesting schedule

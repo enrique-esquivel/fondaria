@@ -47,9 +47,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <h2>Why the NAV series must fall</h2>
  *
  * <p>A generated series that only rises leaves a whole class of defect invisible — a clamp, an
- * unsigned type, a "gain" that cannot be negative (AGENTS.md §4). The generator below therefore
- * spans prices above and below every purchase price, and the final price is as likely to be the
- * lowest of the series as the highest.
+ * unsigned type, a "gain" that cannot be negative (docs/ENGINEERING-RULES.md §4). The generator
+ * below therefore spans prices above and below every purchase price, and the final price is as
+ * likely to be the lowest of the series as the highest.
  *
  * <h2>Why this one does not go through the CDC chain</h2>
  *

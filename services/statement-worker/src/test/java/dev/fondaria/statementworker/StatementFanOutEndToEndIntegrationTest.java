@@ -36,8 +36,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  * exactly, and a redelivery of the same close event does not double-count or change a single
  * rendered byte.
  *
- * <p>Asserts only over the period and participants this test creates itself (AGENTS.md §4): the
- * database, the topics and the buckets are shared and reused.
+ * <p>Asserts only over the period and participants this test creates itself
+ * (docs/ENGINEERING-RULES.md §4): the database, the topics and the buckets are shared and reused.
  */
 @SpringBootTest
 class StatementFanOutEndToEndIntegrationTest extends ServiceIntegrationTest {
@@ -60,7 +60,7 @@ class StatementFanOutEndToEndIntegrationTest extends ServiceIntegrationTest {
     String fallingRef = "falling-" + UUID.randomUUID();
     // A random month, not a fixed one: workflow.snapshot_run_one_of_record_per_date allows at
     // most one COMPLETED run per business date, and Postgres is reused across local runs
-    // (AGENTS.md §4) — a fixed date collides with itself on the second run.
+    // (docs/ENGINEERING-RULES.md §4) — a fixed date collides with itself on the second run.
     java.time.YearMonth closingMonth = randomYearMonth();
     LocalDate openingDate = closingMonth.minusMonths(1).atEndOfMonth();
     LocalDate closingDate = closingMonth.atEndOfMonth();

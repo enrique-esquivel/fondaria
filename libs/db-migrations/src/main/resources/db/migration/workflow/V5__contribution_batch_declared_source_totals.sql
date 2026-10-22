@@ -16,7 +16,7 @@
 -- 2. Every declaration is now known at INSERT, not after the file parses. The columns
 --    stay nullable, deliberately: making them NOT NULL would break the previous
 --    application version, which writes them as NULL until validation (Flyway
---    expand/contract, AGENTS.md §4). Tightening them is a later migration, once no
+--    expand/contract, docs/ENGINEERING-RULES.md §4). Tightening them is a later migration, once no
 --    version that writes NULL is deployed.
 --
 -- V4 is merged and is never edited, so the widened constraints are replaced here.

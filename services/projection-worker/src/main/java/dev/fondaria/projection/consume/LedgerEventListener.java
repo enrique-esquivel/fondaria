@@ -53,7 +53,7 @@ import org.springframework.stereotype.Component;
  *       cluster-wide halt flag ({@link ClusterHalt}, so every replica stops, not just this one),
  *       preserve the bytes to {@code ledger.entries.dlq}, and stop every listener container. The
  *       delivery is never acknowledged: the gap is closed by a deliberate restart, never skipped
- *       (AGENTS.md §4, ADR-0032 §2).
+ *       (docs/ENGINEERING-RULES.md §4, ADR-0032 §2).
  *   <li><b>Halted</b> (this pod's latch is tripped, by its own poison or by another replica's) →
  *       nothing further is dispatched and nothing is acknowledged, before the sink and again
  *       between the sink's commit and the {@code basicAck}. A delivery that committed but was not

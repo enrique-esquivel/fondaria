@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p><b>No default.</b> A default would be in this repository, and a signing key in a repository
  * signs nothing — every deployment would accept cursors forged by anyone who has read the source
- * (AGENTS.md §4: production must fail to start when a required secret is absent). Local development
- * sets it in {@code infrastructure/compose/.env.example} like every other value.
+ * (docs/ENGINEERING-RULES.md §4: production must fail to start when a required secret is absent).
+ * Local development sets it in {@code infrastructure/compose/.env.example} like every other value.
  *
  * <p><b>Long enough to be a key.</b> HMAC-SHA256 accepts any key length, so a two-character value
  * would be accepted silently and would be trivially brute-forced; the floor makes that a startup

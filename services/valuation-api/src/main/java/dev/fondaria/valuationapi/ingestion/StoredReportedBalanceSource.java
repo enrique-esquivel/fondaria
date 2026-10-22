@@ -43,7 +43,8 @@ public class StoredReportedBalanceSource implements ReportedBalanceSource {
                 () ->
                     new NoSuchElementException(
                         "No valuation has been accepted for fund " + fund + " on " + date));
-    // MXN by construction: v1 is MXN-only (AGENTS.md §1) and the file carries no currency
+    // MXN by construction: v1 is MXN-only (docs/ENGINEERING-RULES.md §1) and the file carries no
+    // currency
     // column for that reason. A fund's base currency lives in reference.fund_identity and
     // is what Task 20.4 denominates the struck NAV in.
     return Money.of(valuation.reportedValueMinorUnits(), CurrencyCode.MXN);

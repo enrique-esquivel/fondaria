@@ -11,7 +11,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires the balance-as-of read (Task 6.4). Constructor injection only (AGENTS.md §4).
+ * Wires the balance-as-of read (Task 6.4). Constructor injection only (docs/ENGINEERING-RULES.md
+ * §4).
  *
  * <p>No properties of its own: the endpoint introduces no environment variable. It reuses the
  * database pool and its {@code POSTGRES_QUERY_TIMEOUT}, the identity namespace behind {@code

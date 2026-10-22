@@ -7,8 +7,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link FundDirectory} over {@code reference.fund_identity} (AGENTS.md §5 — {@code JdbcClient}, no
- * ORM).
+ * {@link FundDirectory} over {@code reference.fund_identity} (docs/ENGINEERING-RULES.md §5 — {@code
+ * JdbcClient}, no ORM).
  *
  * <p>Reads the identity half rather than {@code reference.fund}: {@code fund_identity} is one row
  * per fund, fixed at registration and never versioned, so this needs no effective-dating and cannot

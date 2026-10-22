@@ -49,7 +49,7 @@ GRANT UPDATE ON reference.demo_clock TO fondaria_app;
 
 -- "The offset only ever increases" is a design invariant, not just a convention demo-tools is
 -- trusted to follow -- enforced here, atomic with the write, the same way every other invariant
--- in this platform that has consequences is (AGENTS.md: "belongs above the port" is for product
+-- in this platform that has consequences is (docs/ENGINEERING-RULES.md: "belongs above the port" is for product
 -- policy; a structural fact about one row is enforced in the row itself). A CHECK constraint
 -- cannot reference the row's previous value, so this needs a trigger. The trigger function runs
 -- with the invoking role's own privileges (no SECURITY DEFINER), and Postgres invokes it

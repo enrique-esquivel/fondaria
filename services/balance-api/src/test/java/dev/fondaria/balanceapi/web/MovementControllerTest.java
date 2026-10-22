@@ -286,7 +286,7 @@ class MovementControllerTest {
         .build();
   }
 
-  /** Units are integers in storage, transport and computation (AGENTS.md §4). */
+  /** Units are integers in storage, transport and computation (docs/ENGINEERING-RULES.md §4). */
   private static void assertNoDecimalNumbers(String body) {
     assertThat(Pattern.compile(":\\s*-?\\d+\\.\\d").matcher(body).find())
         .as("a JSON number with a decimal point in: %s", body)

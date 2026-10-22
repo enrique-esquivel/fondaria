@@ -83,7 +83,8 @@ public class OrganizationService {
         repository
             .findById(organizationId)
             .orElseThrow(() -> new OrganizationNotFoundException(organizationId));
-    // The derived id only; the tax identifier it came from never reaches a log (AGENTS.md §7).
+    // The derived id only; the tax identifier it came from never reaches a log
+    // (docs/ENGINEERING-RULES.md §7).
     LOGGER.info(
         "Organization registration processed, organizationId={}, created={}",
         organizationId,

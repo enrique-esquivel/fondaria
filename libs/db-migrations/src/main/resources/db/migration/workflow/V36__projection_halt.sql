@@ -1,6 +1,6 @@
 -- Row 26f -- the cluster-wide projection halt flag (ADR-0032 §2).
 --
--- WHY A TABLE, AND WHY IN workflow. "Send it to the DLQ and halt" (AGENTS.md §4) used
+-- WHY A TABLE, AND WHY IN workflow. "Send it to the DLQ and halt" (docs/ENGINEERING-RULES.md §4) used
 -- to be a per-process latch: with two replicas, one halted while the other kept
 -- consuming and acking every other queue, readiness UP. A halt is operational state
 -- with a lifecycle -- raised by a worker, cleared by an operator -- so it belongs in
@@ -15,7 +15,7 @@
 --
 -- NO PAYLOAD. The row names the source queue and a reason code only: a decode
 -- failure's text can quote message content. The bytes are in the DLQ; the full reason
--- is in the halting pod's log (AGENTS.md §7).
+-- is in the halting pod's log (docs/ENGINEERING-RULES.md §7).
 
 CREATE TABLE workflow.projection_halt (
     halt_id         bigint      GENERATED ALWAYS AS IDENTITY,

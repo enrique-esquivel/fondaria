@@ -13,8 +13,8 @@ import java.util.Objects;
  *
  * <p>{@code unitsInIssue} travels with the price rather than being looked up again later: a stored
  * row reproduces its own arithmetic years afterward from data alone, never by rerunning current
- * code (AGENTS.md §4). {@code supersedesId} is null for an original strike and set only by a
- * correction (Task 20.5), which also requires {@code reason}.
+ * code (docs/ENGINEERING-RULES.md §4). {@code supersedesId} is null for an original strike and set
+ * only by a correction (Task 20.5), which also requires {@code reason}.
  *
  * @param navVersionId the surrogate key. {@code 0} for a candidate not yet persisted.
  */

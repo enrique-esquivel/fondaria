@@ -26,7 +26,7 @@ CREATE TABLE workflow.allotment_residual (
         PRIMARY KEY (batch_id),
     CONSTRAINT allotment_residual_row_count_positive
         CHECK (row_count > 0),
-    -- AGENTS.md §4: rounding is always in the fund's favour, never a participant's.
+    -- docs/ENGINEERING-RULES.md §4: rounding is always in the fund's favour, never a participant's.
     -- A negative residual means units were over-issued somewhere -- a run must fail
     -- before it ever reaches this insert, never be recorded and absorbed silently.
     CONSTRAINT allotment_residual_non_negative

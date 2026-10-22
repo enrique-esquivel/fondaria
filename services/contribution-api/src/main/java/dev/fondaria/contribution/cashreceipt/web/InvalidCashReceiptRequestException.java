@@ -8,7 +8,8 @@ import java.io.Serial;
  * <p>Exists so that only <i>vetted</i> messages reach a response body, exactly as {@code
  * InvalidOrganizationRequestException} does for the organization endpoints. Each message names the
  * field and the rule and never the value: an amount is a monetary figure and a bank reference
- * identifies a real payment, and neither belongs in an error a proxy will log (AGENTS.md §7).
+ * identifies a real payment, and neither belongs in an error a proxy will log
+ * (docs/ENGINEERING-RULES.md §7).
  */
 public final class InvalidCashReceiptRequestException extends RuntimeException {
 

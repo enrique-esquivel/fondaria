@@ -18,10 +18,11 @@ import org.springframework.context.annotation.Configuration;
  * (see {@code ValuationApiApplication}'s superseded javadoc).
  *
  * <p>This is the only place in {@code valuation-api} that names a TigerBeetle type; everything
- * downstream — {@code NavStrikeService} — depends on {@link LedgerPort} alone (AGENTS.md §4).
- * Wrapped in {@link ClusterAwareLedgerPort} for the same reason contribution-api's is: v1 runs a
- * single cluster, but a second one then becomes configuration rather than a change to every call
- * site (ADR-0005). This service never calls {@code createTransfer} — the strike only reads.
+ * downstream — {@code NavStrikeService} — depends on {@link LedgerPort} alone
+ * (docs/ENGINEERING-RULES.md §4). Wrapped in {@link ClusterAwareLedgerPort} for the same reason
+ * contribution-api's is: v1 runs a single cluster, but a second one then becomes configuration
+ * rather than a change to every call site (ADR-0005). This service never calls {@code
+ * createTransfer} — the strike only reads.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({LedgerClientProperties.class, IdentityProperties.class})

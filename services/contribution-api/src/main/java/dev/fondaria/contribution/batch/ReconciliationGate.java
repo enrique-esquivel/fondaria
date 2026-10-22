@@ -204,9 +204,10 @@ public class ReconciliationGate {
    * The one log line a batch that stays pending was missing. Without it, a batch waiting on cash
    * that never arrives is indistinguishable from a sweep that stopped running at all — both look
    * like silence. No amount here, on purpose: {@code availableCents} is this organization's
-   * unclaimed collections balance, and a balance is on the never-log list (AGENTS.md §7) — a count
-   * says just as much for diagnosis. DEBUG, not INFO: a batch waiting on a wire can sit here for
-   * days, re-evaluated every sweep, and this is steady state, not an event.
+   * unclaimed collections balance, and a balance is on the never-log list
+   * (docs/ENGINEERING-RULES.md §7) — a count says just as much for diagnosis. DEBUG, not INFO: a
+   * batch waiting on a wire can sit here for days, re-evaluated every sweep, and this is steady
+   * state, not an event.
    */
   private void logNotMatched(UUID batchId, OrganizationId organizationId, int candidateCount) {
     LOGGER.debug(

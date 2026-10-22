@@ -51,10 +51,10 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * directly with events decoded the same way {@link LedgerEventListener} decodes them.
  *
  * <p>Tagged {@code integration}: boots Postgres, stays out of the plain {@code make verify} loop.
- * Fixtures are reused across runs (AGENTS.md §4), so every assertion is scoped to a {@code
- * tenant_id} / {@code transfer_id} this test generated — never a count over a whole table. The
- * checkpoint is one row per consumer (ADR-0032), and every test method drives the sink as its own
- * freshly-named consumer, so its checkpoint row is the test's own and is asserted exactly.
+ * Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4), so every assertion is scoped to a
+ * {@code tenant_id} / {@code transfer_id} this test generated — never a count over a whole table.
+ * The checkpoint is one row per consumer (ADR-0032), and every test method drives the sink as its
+ * own freshly-named consumer, so its checkpoint row is the test's own and is asserted exactly.
  */
 @Tag("integration")
 @SpringJUnitConfig(JdbcProjectionSinkIntegrationTest.TestConfig.class)

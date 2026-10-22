@@ -162,7 +162,7 @@ class ReconciliationGateTest {
     // Task 29.13: a batch stuck in PENDING_RECONCILIATION with no cash available produced
     // no log line at all, indistinguishable from a sweep that had stopped running. Every
     // plain "nothing to match yet" outcome must say so — exactly once, and without the
-    // organization's balance (AGENTS.md §7: a balance is never logged).
+    // organization's balance (docs/ENGINEERING-RULES.md §7: a balance is never logged).
     givenReceipt(300_000L, 0);
 
     gate.evaluate(organization, batchId, 750_000L);

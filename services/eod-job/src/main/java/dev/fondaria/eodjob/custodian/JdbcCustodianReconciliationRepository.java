@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link CustodianReconciliationRepository} over {@code workflow.custodian_reconciliation_run}
- * ({@code V27}), using {@code JdbcClient} (AGENTS.md §5 — no ORM). Mirrors {@code
+ * ({@code V27}), using {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM). Mirrors {@code
  * JdbcReconciliationRepository}'s shape for the same reasons: opened {@code RUNNING} before any
  * comparison, and the guard {@code WHERE status = 'RUNNING'} on completion catches a run settled by
  * something else while this one was still comparing.

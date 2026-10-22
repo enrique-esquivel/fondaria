@@ -14,7 +14,8 @@ import java.util.UUID;
  *
  * @param driftScaled ledger minus provider-reported (minus the explained pending-trade amount, for
  *     a timing difference), signed and unclamped — the ledger holding less is exactly as real a
- *     finding as holding more (AGENTS.md §4). Never zero; never adjusted to force agreement.
+ *     finding as holding more (docs/ENGINEERING-RULES.md §4). Never zero; never adjusted to force
+ *     agreement.
  * @param firstDetectedBusinessDate when this break was opened; age is measured from here
  * @param lastConfirmedBusinessDate the most recent pass that still found this break present
  */

@@ -56,7 +56,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION projection.reject_mutation() IS
-    'Raised by the append-only triggers on the projection movement tables. A correction is a new row, never an edit (AGENTS.md §4).';
+    'Raised by the append-only triggers on the projection movement tables. A correction is a new row, never an edit (docs/ENGINEERING-RULES.md §4).';
 
 -- A row trigger on a partitioned parent propagates to every existing and future
 -- partition (Postgres 13+), so tenant/month partitions created later by

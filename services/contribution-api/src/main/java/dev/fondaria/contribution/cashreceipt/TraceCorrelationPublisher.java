@@ -16,8 +16,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>The ledger never carries this.</b> {@code user_data_128} already carries {@link
  * dev.fondaria.ledger.ExternalReference} for a cash transfer, and a trace id is descriptive/
- * operational data, not money or a link (AGENTS.md §4) — so this bypasses the ledger and CDC
- * entirely, keyed on {@code transferId}, which every ledger event already carries untouched.
+ * operational data, not money or a link (docs/ENGINEERING-RULES.md §4) — so this bypasses the
+ * ledger and CDC entirely, keyed on {@code transferId}, which every ledger event already carries
+ * untouched.
  *
  * <p><b>Every failure is swallowed and logged, exactly like {@link RedisCashReceiptResponseCache}.
  * </b> A miss or an unreachable Redis costs one unlinked trace, never a request. Nothing here is on

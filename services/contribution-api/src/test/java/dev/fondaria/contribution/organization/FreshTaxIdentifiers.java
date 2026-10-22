@@ -7,10 +7,11 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Generates a well-formed {@code RFC} nobody else has used.
  *
- * <p>Fixtures are reused across local runs and TigerBeetle in particular cannot be reset (AGENTS.md
- * §4), so a test that registered a fixed tax identifier would, on its second run, assert against an
- * organization and a ledger account the previous run created. Every test here therefore registers
- * an employer that has never existed before and asserts only over what it created itself.
+ * <p>Fixtures are reused across local runs and TigerBeetle in particular cannot be reset
+ * (docs/ENGINEERING-RULES.md §4), so a test that registered a fixed tax identifier would, on its
+ * second run, assert against an organization and a ledger account the previous run created. Every
+ * test here therefore registers an employer that has never existed before and asserts only over
+ * what it created itself.
  *
  * <p>Public because the cash-receipt tests need the same guarantee: a receipt posts real money into
  * a real {@code EMPLOYER_COLLECTIONS} account, and reusing an employer between runs would have a

@@ -69,7 +69,7 @@ COMMENT ON TABLE workflow.contribution_batch_row IS
 COMMENT ON COLUMN workflow.contribution_batch_row.participant_internal_ref IS
     'Pseudonymous, matching master.participant.participant_internal_ref. No name, RFC or CURP.';
 COMMENT ON COLUMN workflow.contribution_batch_row.employee_minor_units IS
-    'MXN cents from this row''s EMPLOYEE column. bigint, never numeric (AGENTS.md §4). Cash staged for allotment, never a unit and never a balance.';
+    'MXN cents from this row''s EMPLOYEE column. bigint, never numeric (docs/ENGINEERING-RULES.md §4). Cash staged for allotment, never a unit and never a balance.';
 
 -- The poller sweeps a batch's own rows; the ageing and status paths sweep by
 -- organization and period. No index on status alone: it is always queried

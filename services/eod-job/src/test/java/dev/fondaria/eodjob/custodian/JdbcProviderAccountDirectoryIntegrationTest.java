@@ -21,7 +21,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * {@code reference.provider_account} against a real PostgreSQL ({@code V26}): resolution is always
  * as-of a date, exactly as {@code reference.plan_version} resolves.
  *
- * <p>Every assertion is over ids this test created (AGENTS.md §4).
+ * <p>Every assertion is over ids this test created (docs/ENGINEERING-RULES.md §4).
  */
 @SpringBootTest
 class JdbcProviderAccountDirectoryIntegrationTest extends ServiceIntegrationTest {

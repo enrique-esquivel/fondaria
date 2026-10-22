@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link OrganizationRepository} over {@code master.organization} and {@code
- * master.organization_revision}, using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * master.organization_revision}, using {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Current state and history are written in one transaction, so an organization can never exist
  * with no history row, nor gain a history row describing a state it never held.

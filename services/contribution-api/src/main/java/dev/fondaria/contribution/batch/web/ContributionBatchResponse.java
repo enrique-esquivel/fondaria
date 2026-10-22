@@ -12,7 +12,7 @@ import java.util.Optional;
  * The batch status resource of the OpenAPI contract.
  *
  * <p><b>Every amount is a JSON integer of MXN cents.</b> Never a decimal, never a float, never a
- * string (AGENTS.md §4, restated by the contract's own description).
+ * string (docs/ENGINEERING-RULES.md §4, restated by the contract's own description).
  *
  * <p><b>{@code awaitingAllotment} and {@code dealingDate} are the window, made visible.</b> Between
  * reconciliation and allotment a participant has money and no units — a first-class state ({@code

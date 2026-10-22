@@ -36,7 +36,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * a presigned URL actually accepts an upload and that the bytes come back unchanged.
  *
  * <p>Every object key is unique to its test. The object-store fixture is reused across runs
- * (AGENTS.md §4), so a fixed key would have one run reading what an earlier one uploaded.
+ * (docs/ENGINEERING-RULES.md §4), so a fixed key would have one run reading what an earlier one
+ * uploaded.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class S3ObjectStoreIntegrationTest extends ServiceIntegrationTest {

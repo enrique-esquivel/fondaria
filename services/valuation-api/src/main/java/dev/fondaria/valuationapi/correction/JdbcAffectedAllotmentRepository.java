@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link AffectedAllotmentRepository} over {@code workflow.allotment}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>{@code allotment_by_nav_version} (V19) is what keeps this a lookup rather than a scan — the
  * only reason this service reads {@code workflow.allotment} at all is to answer this one question.

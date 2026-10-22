@@ -155,7 +155,7 @@
         </dependency>
 
         <!--
-            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            The S3 API client, for object storage only — docs/ENGINEERING-RULES.md §4 bans cloud
             provider SDKs and carves out exactly this. It talks to the object store, never
             to AWS; the endpoint is configuration. Both default HTTP clients are
             excluded and url-connection-client supplied instead, for the reasons

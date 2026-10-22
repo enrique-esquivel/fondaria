@@ -23,8 +23,8 @@ import java.util.Set;
  * A {@link LedgerPort} holding whatever a test says exists, and recording every {@code
  * createAccount}/{@code createLinkedChain} call {@link AllotmentService} makes against it — the
  * same idiom contribution-api's {@code RecordingLedgerPort} and {@code StubLedgerPort} use, kept
- * local rather than shared because this is a separate deployable (AGENTS.md §4: no service depends
- * on another service's source tree).
+ * local rather than shared because this is a separate deployable (docs/ENGINEERING-RULES.md §4: no
+ * service depends on another service's source tree).
  *
  * <p>A successful {@link #createLinkedChain} call durably records every transfer it created, so a
  * later {@link #lookupTransfer} sees it — matching real TigerBeetle closely enough for {@link

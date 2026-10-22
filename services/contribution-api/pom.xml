@@ -148,7 +148,7 @@
         </dependency>
 
         <!--
-            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            The S3 API client, for object storage only — docs/ENGINEERING-RULES.md §4 bans cloud
             provider SDKs and carves out exactly this. It talks to SeaweedFS (the
             pinned object store), never to AWS; the endpoint is configuration.
             Task 3.4 owns presigned-URL issuance (ADR-0009), which is why it
@@ -162,7 +162,7 @@
             classes are also in Spring's spring-jcl — precisely what the root
             pom's banDuplicateClasses rule exists to catch — and netty-nio-client
             is an async transport this service has no use for in a blocking,
-            virtual-threaded runtime (AGENTS.md §4).
+            virtual-threaded runtime (docs/ENGINEERING-RULES.md §4).
         -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>

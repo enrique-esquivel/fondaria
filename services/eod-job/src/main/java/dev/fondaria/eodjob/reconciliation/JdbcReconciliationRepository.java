@@ -16,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link ReconciliationRepository} over {@code workflow.reconciliation_run} and {@code
- * workflow.reconciliation_break} ({@code V25}), using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * workflow.reconciliation_break} ({@code V25}), using {@code JdbcClient} (docs/ENGINEERING-RULES.md
+ * §5 — no ORM).
  *
  * <p>{@link #complete} is one transaction over both tables. A run marked {@code FAILED} whose
  * breaks had not been written would name a drift nobody could see, and a run whose breaks were
@@ -185,7 +186,8 @@ public class JdbcReconciliationRepository implements ReconciliationRepository {
     long unitLedgerId = rs.getLong("unit_ledger_id");
     boolean unitLedgerPresent = !rs.wasNull();
     // account_id::text in the query above, not getBigDecimal here: the column is numeric(39,0)
-    // holding a u128, which is an identifier and never arithmetic. AGENTS.md §4 confines
+    // holding a u128, which is an identifier and never arithmetic. docs/ENGINEERING-RULES.md §4
+    // confines
     // BigDecimal to the display boundary, and reading one only to call toString() on it would
     // put the type in a path that has no numbers in it.
     String accountId = rs.getString("account_id");

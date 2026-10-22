@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     different cluster's data, which is the one failure mode worse than not starting.
  * @param clusterName the logical cluster name this deployment's ledger ids resolve to (ADR-0005).
  *     v1 runs a single cluster; a second one is configuration, never a code change.
- * @param callTimeout explicit per-call timeout for every ledger call (AGENTS.md §4)
+ * @param callTimeout explicit per-call timeout for every ledger call (docs/ENGINEERING-RULES.md §4)
  */
 @ConfigurationProperties(prefix = "fondaria.ledger.client")
 public record LedgerClientProperties(Long clusterId, String clusterName, Duration callTimeout) {

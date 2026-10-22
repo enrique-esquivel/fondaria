@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
  * <b>every</b> such row first — {@link #reannouncePending} — not only the current date's, so a
  * broker outage that outlasts the cut-off still recovers rather than stranding yesterday's
  * sign-off. A consumer of the event is idempotent on the business date, so a re-publish is
- * harmless. This is the platform's standard two-fact rule (AGENTS.md §"Data flow").
+ * harmless. This is the platform's standard two-fact rule (docs/ENGINEERING-RULES.md §"Data flow").
  *
  * <h2>Automatic, for now</h2>
  *

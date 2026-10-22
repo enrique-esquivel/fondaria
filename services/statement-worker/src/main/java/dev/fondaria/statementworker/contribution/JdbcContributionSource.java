@@ -19,8 +19,8 @@ import org.springframework.stereotype.Repository;
 /**
  * {@link ContributionSource} over {@code workflow.allotment} joined to {@code reference.fund_nav}
  * (the strike price) and {@code reference.fund_identity} (the fund's currency, fixed at
- * registration and not carried on {@code fund_nav} itself), using {@code JdbcClient} (AGENTS.md §5
- * — no ORM).
+ * registration and not carried on {@code fund_nav} itself), using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>Filtered by the NAV's own valuation date for the month boundary, by {@code allotted_at} for
  * read consistency</h2>

@@ -16,8 +16,8 @@ import java.util.Map;
  * vocabulary lives in one place — the enum and the parser's column order — instead of being
  * restated by every record and every loop that sums one.
  *
- * <p><b>Every amount is a {@code long} of MXN cents</b> (AGENTS.md §4). The file carries no
- * currency column because the platform is MXN-only, and no decimal point anywhere.
+ * <p><b>Every amount is a {@code long} of MXN cents</b> (docs/ENGINEERING-RULES.md §4). The file
+ * carries no currency column because the platform is MXN-only, and no decimal point anywhere.
  */
 public record ContributionFile(List<ParticipantRow> rows) {
 

@@ -13,7 +13,8 @@ import java.util.Objects;
  * for accounts that do not exist, and every participant is reported as holding nothing.
  *
  * <p>Organization first, because {@code participantInternalRef} is unique only within an
- * organization, never globally (AGENTS.md §4, and {@code master.participant}'s own primary key).
+ * organization, never globally (docs/ENGINEERING-RULES.md §4, and {@code master.participant}'s own
+ * primary key).
  */
 public record ParticipantScope(OrganizationId organizationId, String participantInternalRef) {
 
@@ -30,7 +31,7 @@ public record ParticipantScope(OrganizationId organizationId, String participant
     return organizationId.scope() + ":" + participantInternalRef + ":" + fundId;
   }
 
-  /** {@code participantInternalRef} identifies a person (AGENTS.md §7). */
+  /** {@code participantInternalRef} identifies a person (docs/ENGINEERING-RULES.md §7). */
   @Override
   public String toString() {
     return "ParticipantScope[organizationId=" + organizationId + ", REDACTED]";

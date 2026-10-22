@@ -191,7 +191,8 @@ class ContributionFileParserTest {
 
     @Test
     void a_decimal_amount_is_malformed_because_cents_are_integers() {
-      // AGENTS.md §4: no decimal point anywhere in a monetary value. A producer that
+      // docs/ENGINEERING-RULES.md §4: no decimal point anywhere in a monetary value. A producer
+      // that
       // writes pesos-with-decimals must be told so, not silently truncated.
       assertMalformed(oneRow("P-1,PAY-1,2019-03-01,2026-01-15,\"1,000\",0,0"));
     }
@@ -328,7 +329,8 @@ class ContributionFileParserTest {
 
     @Test
     void no_rejection_message_renders_a_reference() {
-      // AGENTS.md §7: a rejection body is logged by everything it passes through, and a
+      // docs/ENGINEERING-RULES.md §7: a rejection body is logged by everything it passes through,
+      // and a
       // participant reference identifies a person.
       assertThatThrownBy(
               () -> parse(oneRow("P-SECRET-0142,PAY-SECRET-9,2019-03-01,2026-01-15,nope,0,0")))

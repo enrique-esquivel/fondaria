@@ -2,7 +2,7 @@
 # Postgres are all meshed now that the real meshed-to-meshed blocker
 # (networkpolicies/allow-mesh-proxy.yaml) is fixed. TigerBeetle stays the one
 # deliberate exception (Direct IO, io_uring, raw-TCP replication; "cannot be
-# reset" per AGENTS.md), unchanged from the original decision, and
+# reset" per docs/ENGINEERING-RULES.md), unchanged from the original decision, and
 # tigerbeetle-cdc stays unmeshed alongside it (no inbound HTTP surface to
 # protect either way). Postgres was attempted once before without its own
 # fix and reverted -- every service's JDBC connection hit `Connection reset`

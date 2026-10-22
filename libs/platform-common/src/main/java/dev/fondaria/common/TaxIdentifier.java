@@ -7,9 +7,9 @@ import java.util.Objects;
  * for shape at construction, so an ill-formed value cannot exist as an instance of this type.
  *
  * <p>This is the identity an organization is known by. It is deliberately <b>not</b> what appears
- * in URLs, logs or messages: a tax identifier is on the never-log list (AGENTS.md §7). Callers
- * derive an opaque id from it via {@code derivationKey()} and pass that around instead, which is
- * why this record has no {@code toString()} carrying the value.
+ * in URLs, logs or messages: a tax identifier is on the never-log list (docs/ENGINEERING-RULES.md
+ * §7). Callers derive an opaque id from it via {@code derivationKey()} and pass that around
+ * instead, which is why this record has no {@code toString()} carrying the value.
  *
  * @param scheme which country's scheme {@code value} belongs to
  * @param value the canonical (stripped, upper-case) identifier

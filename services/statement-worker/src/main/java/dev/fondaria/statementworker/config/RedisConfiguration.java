@@ -32,7 +32,7 @@ public class RedisConfiguration {
     properties.requireComplete();
     // Built from the URL plus a separately-supplied password, not a URL with credentials
     // embedded: Lettuce's credentials-provider API returns a Reactor Mono, banned without an ADR
-    // (AGENTS.md §4).
+    // (docs/ENGINEERING-RULES.md §4).
     RedisURI uri =
         RedisURI.builder(RedisURI.create(properties.url()))
             .withPassword(properties.password().toCharArray())

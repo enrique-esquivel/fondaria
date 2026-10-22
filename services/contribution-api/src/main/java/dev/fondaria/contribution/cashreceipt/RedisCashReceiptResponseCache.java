@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>One {@code SETEX} and one {@code GET}, no Lua.</b> Both are single atomic commands, so
  * there is nothing here for a script to make atomic. A Lua script is required for a read-then-write
- * (AGENTS.md §4); this has none, because it never computes anything — see {@link
+ * (docs/ENGINEERING-RULES.md §4); this has none, because it never computes anything — see {@link
  * CashReceiptResponseCache}.
  *
  * <p><b>The serialized form writes the amount as an integer.</b> {@code putLong}/{@code asLong},

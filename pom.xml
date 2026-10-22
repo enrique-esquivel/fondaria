@@ -27,7 +27,7 @@
         <spring-boot.version>3.5.16</spring-boot.version>
 
         <!--
-            AWS SDK v2, used for the S3 API against the object store only (AGENTS.md §4
+            AWS SDK v2, used for the S3 API against the object store only (docs/ENGINEERING-RULES.md §4
             permits the S3 API client for object storage). Managed here rather
             than per-module: libs/testing's object-store fixture and contribution-api's
             object store both use it, and a second local pin is what split the

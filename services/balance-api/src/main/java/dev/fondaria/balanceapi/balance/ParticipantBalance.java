@@ -18,7 +18,7 @@ import java.util.Objects;
  * (Task 21.1).
  *
  * <p><b>Signed, like every value on this platform.</b> Nothing here clamps: a fund whose NAV has
- * fallen produces a smaller value and that is the correct answer (AGENTS.md §4).
+ * fallen produces a smaller value and that is the correct answer (docs/ENGINEERING-RULES.md §4).
  *
  * @param asOf when this was computed. An instant, not a business date — both units and price are
  *     read live.

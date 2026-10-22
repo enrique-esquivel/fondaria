@@ -8,8 +8,8 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
  * The one {@link SnapshotObjectReader} implementation, speaking the S3 API to the object store
- * (AGENTS.md §5). Read-only against {@code SNAPSHOT_BUCKET}: this service holds no credential that
- * can write there — Task 7.4's close is the only producer.
+ * (docs/ENGINEERING-RULES.md §5). Read-only against {@code SNAPSHOT_BUCKET}: this service holds no
+ * credential that can write there — Task 7.4's close is the only producer.
  */
 public class S3SnapshotObjectReader implements SnapshotObjectReader {
 
@@ -33,7 +33,8 @@ public class S3SnapshotObjectReader implements SnapshotObjectReader {
       return body;
     } catch (SdkException e) {
       metrics.requestCompleted("get", System.nanoTime() - start, true);
-      // The key is safe to name — a date-prefixed filename, never a participant (AGENTS.md §7).
+      // The key is safe to name — a date-prefixed filename, never a participant
+      // (docs/ENGINEERING-RULES.md §7).
       throw new SnapshotObjectUnavailableException("could not read the object " + objectKey, e);
     }
   }

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link ParticipantIdentityRepository} over {@code master.participant_identity}, using {@code
- * JdbcClient} (AGENTS.md §5 — no ORM).
+ * JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  */
 @Repository
 class JdbcParticipantIdentityRepository implements ParticipantIdentityRepository {

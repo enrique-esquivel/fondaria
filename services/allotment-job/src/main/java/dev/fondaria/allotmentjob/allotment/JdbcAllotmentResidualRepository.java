@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link AllotmentResidualRepository} over {@code workflow.allotment_residual} (V17), using {@code
- * JdbcClient} (AGENTS.md §5 — no ORM).
+ * JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>{@code ON CONFLICT} names the primary key explicitly, the same discipline {@code
  * JdbcAllotmentRepository}'s javadoc records: an unqualified clause would suppress a genuinely

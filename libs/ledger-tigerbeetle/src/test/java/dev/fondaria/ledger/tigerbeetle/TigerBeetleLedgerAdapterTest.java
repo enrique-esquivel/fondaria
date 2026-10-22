@@ -125,7 +125,8 @@ class TigerBeetleLedgerAdapterTest {
         (LedgerAccount.Unit) adapter.lookupAccount(unitsInIssue).orElseThrow();
     LedgerAccount.Unit participantHoldingsAccount =
         (LedgerAccount.Unit) adapter.lookupAccount(participantHoldings).orElseThrow();
-    // Sigma participant units = units in issue (AGENTS.md Section 2) - no negation, both sides
+    // Sigma participant units = units in issue (docs/ENGINEERING-RULES.md Section 2) - no negation,
+    // both sides
     // report
     // the same non-negative magnitude despite UNITS_IN_ISSUE being a contra account.
     assertThat(unitsInIssueAccount.balance()).isEqualTo(allotment);

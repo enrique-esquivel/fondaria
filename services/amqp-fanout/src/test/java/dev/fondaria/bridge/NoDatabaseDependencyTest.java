@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  * adds {@code spring-boot-starter-jdbc}, Flyway, a JDBC driver, a connection pool or an ORM to this
  * module's pom, one of these classes resolves and the test fails. A bridge that can open a database
  * connection is one that can be tempted into becoming a rule engine or a second system of record
- * (AGENTS.md §"Data flow", §"The ledger").
+ * (docs/ENGINEERING-RULES.md §"Data flow", §"The ledger").
  */
 class NoDatabaseDependencyTest {
 

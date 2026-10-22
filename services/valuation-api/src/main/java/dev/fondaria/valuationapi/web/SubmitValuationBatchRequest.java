@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  *
  * <p><b>{@code declaredRowCount} is a JSON integer.</b> It is the only number on this request, and
  * the reported values themselves are integers of MXN cents inside the file — never a decimal and
- * never fractional (AGENTS.md §4).
+ * never fractional (docs/ENGINEERING-RULES.md §4).
  *
  * @param checksumSha256 lowercase-hex SHA-256 of the exact bytes uploaded. Uppercase is accepted
  *     and folded down rather than rejected: the same bytes must be the same batch however a

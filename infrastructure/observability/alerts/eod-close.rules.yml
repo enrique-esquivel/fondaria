@@ -20,10 +20,10 @@
 #
 # Five alerts, one per docs/RUNBOOKS.md page named in phase-07-eod.md Task 7.6. Every alert
 # is `severity: page` -- each names a condition that blocks the daily close or leaves
-# participants' money unproved for a business date, the same bar AGENTS.md Sec 7 and
+# participants' money unproved for a business date, the same bar docs/ENGINEERING-RULES.md Sec 7 and
 # Task 11.4 set for a page ("page-level alerts are limited to things that are actually
 # urgent"). No alert carries a fund, organization or participant label, for the same
-# reason the meters it reads do not (AGENTS.md Sec 7): a label is as much a log line as a
+# reason the meters it reads do not (docs/ENGINEERING-RULES.md Sec 7): a label is as much a log line as a
 # message is, and an alert only has to say *that* something is wrong. Which fund or
 # account is wrong is in the workflow.* row behind authentication, and every runbook's
 # first diagnostic command is the query that finds it.

@@ -11,7 +11,7 @@ import java.time.temporal.ChronoUnit;
  *
  * <p>Vested fraction is expressed in basis points (10000 = 100%), the same fixed-point convention
  * {@code Units}/{@code Nav} use elsewhere in the platform — never {@code double} or {@code
- * BigDecimal} (AGENTS.md §4).
+ * BigDecimal} (docs/ENGINEERING-RULES.md §4).
  *
  * <p>Only a linear grade to {@code vestingFullYears} is implemented. Cliffs, non-linear grades and
  * forfeiture on termination are open questions this step does not answer (phase-02b "Open

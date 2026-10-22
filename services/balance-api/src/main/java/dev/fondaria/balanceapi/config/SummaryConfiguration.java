@@ -13,7 +13,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires the organization summary (Task 6.5). Constructor injection only (AGENTS.md §4).
+ * Wires the organization summary (Task 6.5). Constructor injection only (docs/ENGINEERING-RULES.md
+ * §4).
  *
  * <p>No environment variable of its own. It reuses the ledger, the NAV cache, the database pool and
  * its {@code POSTGRES_QUERY_TIMEOUT}, the identity namespace behind {@code AccountIdDeriver}, and

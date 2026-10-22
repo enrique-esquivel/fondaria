@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the plan-version endpoint (AGENTS.md §7), following the pattern
- * {@code OrganizationExceptionHandler} sets.
+ * RFC 9457 problem details for the plan-version endpoint (docs/ENGINEERING-RULES.md §7), following
+ * the pattern {@code OrganizationExceptionHandler} sets.
  */
 @RestControllerAdvice(assignableTypes = PlanVersionController.class)
 public class PlanVersionExceptionHandler {

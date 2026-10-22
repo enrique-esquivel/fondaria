@@ -47,9 +47,10 @@ public record ParticipantStatement(
   /**
    * The example text already committed to {@code contracts/openapi/balance-api.yaml}'s {@code
    * ParticipantStatement.footerDisclosure} — authored Spanish, naming {@code
-   * docs/rounding-policy.md} as the source of the unit-rounding rule (AGENTS.md §7: user-facing
-   * text is never built from raw figures). Reused verbatim rather than re-authored, so the
-   * contract's own documented example and what this service actually renders are the same sentence.
+   * docs/rounding-policy.md} as the source of the unit-rounding rule (docs/ENGINEERING-RULES.md §7:
+   * user-facing text is never built from raw figures). Reused verbatim rather than re-authored, so
+   * the contract's own documented example and what this service actually renders are the same
+   * sentence.
    */
   public static final String FOOTER_DISCLOSURE =
       "El remanente de redondeo de unidades no se asigna a los participantes; ver"
@@ -68,9 +69,9 @@ public record ParticipantStatement(
    * inconsistent number.
    *
    * <p>{@code marketMovement = closing − opening − contributions + withdrawals + fees + tax}
-   * ({@code contracts/openapi/balance-api.yaml}'s own definition). Signed and unclamped (AGENTS.md
-   * §4, {@code docs/DOMAIN.md} §5.1) — a falling NAV makes this negative, and nothing here or
-   * downstream may floor it at zero.
+   * ({@code contracts/openapi/balance-api.yaml}'s own definition). Signed and unclamped
+   * (docs/ENGINEERING-RULES.md §4, {@code docs/DOMAIN.md} §5.1) — a falling NAV makes this
+   * negative, and nothing here or downstream may floor it at zero.
    */
   public static ParticipantStatement of(
       ParticipantId participantId,

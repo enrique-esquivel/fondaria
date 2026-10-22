@@ -11,9 +11,9 @@ import java.util.Objects;
  * against which of the three derivations.
  *
  * <p><b>The ties are over the whole platform, so a caller asserting on a shared database must
- * narrow to what it created</b> (AGENTS.md §4: never assert a total over a whole ledger, table or
- * topic). That is why {@link #unitTies()} is a list of per-fund ties rather than a single
- * platform-wide verdict.
+ * narrow to what it created</b> (docs/ENGINEERING-RULES.md §4: never assert a total over a whole
+ * ledger, table or topic). That is why {@link #unitTies()} is a list of per-fund ties rather than a
+ * single platform-wide verdict.
  */
 public record ReconciliationResult(
     ReconciliationRun run,

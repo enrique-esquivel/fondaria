@@ -17,12 +17,13 @@ import java.util.Optional;
  * writes permits a double credit. Caches lose data; this one is allowed to.
  *
  * <p><b>Nothing is computed here.</b> No counter, no balance, no arithmetic on money in Redis, and
- * so no {@code INCRBYFLOAT} (AGENTS.md §4) — one receipt goes in and comes back out verbatim.
+ * so no {@code INCRBYFLOAT} (docs/ENGINEERING-RULES.md §4) — one receipt goes in and comes back out
+ * verbatim.
  *
  * <p><b>Keyed by the derived transfer id, not by the idempotency key.</b> Idempotency keys are on
- * the never-log list (AGENTS.md §7) and a Redis key is visible to {@code MONITOR} and {@code
- * SLOWLOG}; the transfer id is the opaque derivation of the same thing and identifies the receipt
- * just as precisely.
+ * the never-log list (docs/ENGINEERING-RULES.md §7) and a Redis key is visible to {@code MONITOR}
+ * and {@code SLOWLOG}; the transfer id is the opaque derivation of the same thing and identifies
+ * the receipt just as precisely.
  *
  * <p><b>Only resolved receipts are cached.</b> An {@code UNCONFIRMED} receipt is a movement whose
  * outcome nobody knows, and caching one would replay that non-answer for a day.

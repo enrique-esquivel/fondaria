@@ -210,7 +210,10 @@ public class VestingService {
     return Optional.of(Units.of(deltaScaled));
   }
 
-  /** {@code floor(basisScaled × bps ÷ 10000)} — integer arithmetic only (AGENTS.md §4). */
+  /**
+   * {@code floor(basisScaled × bps ÷ 10000)} — integer arithmetic only (docs/ENGINEERING-RULES.md
+   * §4).
+   */
   private static long floorTarget(long basisScaled, long bps) {
     return BigInteger.valueOf(basisScaled)
         .multiply(BigInteger.valueOf(bps))

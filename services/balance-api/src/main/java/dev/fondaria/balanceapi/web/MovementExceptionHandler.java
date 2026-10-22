@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the movement-history endpoint (AGENTS.md §7).
+ * RFC 9457 problem details for the movement-history endpoint (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Its own advice rather than an extension of {@link BalanceExceptionHandler}: the two routes
  * fail in different ways — a history never touches the ledger or a price, and a balance has no
@@ -73,7 +73,9 @@ public class MovementExceptionHandler {
     return problem(HttpStatus.FORBIDDEN, FORBIDDEN_TYPE, "Forbidden", e.detail());
   }
 
-  /** Never echoes the id: it came from a URL and identifies a person (AGENTS.md §7). */
+  /**
+   * Never echoes the id: it came from a URL and identifies a person (docs/ENGINEERING-RULES.md §7).
+   */
   @ExceptionHandler(ParticipantNotFoundException.class)
   public ProblemDetail participantNotFound(ParticipantNotFoundException e) {
     return problem(

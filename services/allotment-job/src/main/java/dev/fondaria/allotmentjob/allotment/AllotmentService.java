@@ -44,10 +44,11 @@ import org.springframework.stereotype.Service;
  * (chart-of-accounts.md §4) as one linked chain, fired atomically.
  *
  * <p><b>This class never strikes a NAV and never moves one.</b> It reads a price valuation-api
- * already struck ({@link AllotmentNavSource#findOriginal}) and divides by it — {@code AGENTS.md}
- * §2: "a contribution never moves the NAV. Pool value and units in issue rise proportionally; the
- * price is unchanged." Nothing here computes a per-participant return either; the one division is
- * {@link #floorUnits}, unchanged in spirit from {@code NavPerUnit#strike}.
+ * already struck ({@link AllotmentNavSource#findOriginal}) and divides by it — {@code
+ * docs/ENGINEERING-RULES.md} §2: "a contribution never moves the NAV. Pool value and units in issue
+ * rise proportionally; the price is unchanged." Nothing here computes a per-participant return
+ * either; the one division is {@link #floorUnits}, unchanged in spirit from {@code
+ * NavPerUnit#strike}.
  *
  * <p><b>Not ready is not an error.</b> A batch whose plan version has no resolvable fund, or whose
  * dealing date has no struck NAV yet, is reported via the empty {@link Optional} return — the
@@ -455,9 +456,9 @@ public class AllotmentService {
 
   /**
    * The scope a per-participant, per-fund account ({@code PARTICIPANT_HOLDINGS_VESTED} / {@code
-   * _UNVESTED}) is derived under. Organization-scoped first (AGENTS.md §4: every table, message key
-   * and query is scoped by tenant first) — {@code participantInternalRef} alone is only unique
-   * within an organization, never globally.
+   * _UNVESTED}) is derived under. Organization-scoped first (docs/ENGINEERING-RULES.md §4: every
+   * table, message key and query is scoped by tenant first) — {@code participantInternalRef} alone
+   * is only unique within an organization, never globally.
    */
   private static String participantScope(
       StagedBatch batch, String participantInternalRef, FundId fundId) {

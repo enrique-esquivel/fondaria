@@ -18,7 +18,7 @@ exactly the right state (phase-05):
   partition is drained by one thread and nothing is handed to another. Two events
   for one account are never in flight at once.
 - **Transient failure → retry forever, bounded interval.** A stuck projection is
-  downtime; a gap is worse (AGENTS.md §4).
+  downtime; a gap is worse (docs/ENGINEERING-RULES.md §4).
 - **Undecodable message → dead-letter the bytes to `ledger.entries.dlq`, then
   HALT.** `projection_poison_total` increments, the listener containers stop, and
   `/actuator/health/readiness` reports `DOWN`. The offset is never committed — the

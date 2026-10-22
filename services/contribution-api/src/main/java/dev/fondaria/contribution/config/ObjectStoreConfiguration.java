@@ -28,8 +28,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * which needs wildcard DNS that a self-hosted object store does not have.
  *
  * <p>The synchronous URL-connection HTTP client is used rather than the SDK's defaults: this
- * service is blocking code on virtual threads (AGENTS.md §4), so an async Netty transport would add
- * an event loop and a second concurrency model for no gain.
+ * service is blocking code on virtual threads (docs/ENGINEERING-RULES.md §4), so an async Netty
+ * transport would add an event loop and a second concurrency model for no gain.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ObjectStoreProperties.class)
@@ -49,7 +49,8 @@ public class ObjectStoreConfiguration {
         .region(Region.of(properties.region()))
         .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
         .httpClientBuilder(UrlConnectionHttpClient.builder())
-        // Explicit, per AGENTS.md §4. A read of an employer's file that hangs forever
+        // Explicit, per docs/ENGINEERING-RULES.md §4. A read of an employer's file that hangs
+        // forever
         // would hold a validation lease until it went stale, blocking that batch for the
         // whole staleness window rather than failing and being retried on the next sweep.
         .overrideConfiguration(

@@ -144,7 +144,8 @@ class RebuildProjectionIntegrationTest {
   void rebuildFromZeroProducesIdenticalState() {
     Run run = generate();
 
-    // The NAV series genuinely falls — for every fund, below where it started (AGENTS.md §4).
+    // The NAV series genuinely falls — for every fund, below where it started
+    // (docs/ENGINEERING-RULES.md §4).
     for (int f = 0; f < FUNDS; f++) {
       assertThat(navSeriesFalls(run.nav[f]))
           .as("fund %d NAV series must fall below its opening price", f)
@@ -494,7 +495,8 @@ class RebuildProjectionIntegrationTest {
               cashEntryJson(ts, freshId(idRng), freshId(idRng), run.tenant)));
     }
 
-    // "Assume every message arrives more than once" (AGENTS.md §4): redeliver a ~12% sample at a
+    // "Assume every message arrives more than once" (docs/ENGINEERING-RULES.md §4): redeliver a
+    // ~12% sample at a
     // later offset than the original, so a redelivery lands out of ledger-timestamp order — the
     // exact thing the rebuild must absorb to the same state. Base slot k has zero low bits
     // (k << 20); a redelivery carries non-zero jitter, so it can never overwrite an original.

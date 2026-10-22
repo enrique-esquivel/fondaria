@@ -49,8 +49,8 @@ platform does and why units, not pesos), [`DESIGN-DECISIONS.md`](docs/DESIGN-DEC
 (the architecture decisions, cited in code as `ADR-00NN`) and
 [`RUNBOOKS.md`](docs/RUNBOOKS.md) (operating it). The ledger accounts are in
 [`docs/chart-of-accounts.md`](docs/chart-of-accounts.md) and the unit-rounding
-rule in [`docs/rounding-policy.md`](docs/rounding-policy.md). [`AGENTS.md`](AGENTS.md)
-holds the engineering rules the code comments cite (`AGENTS.md §4` and so on).
+rule in [`docs/rounding-policy.md`](docs/rounding-policy.md); future ideas are in [`docs/BACKLOG.md`](docs/BACKLOG.md). [`docs/ENGINEERING-RULES.md`](docs/ENGINEERING-RULES.md)
+holds the engineering rules the code comments cite (`docs/ENGINEERING-RULES.md §4` and so on).
 
 ## Running it locally
 

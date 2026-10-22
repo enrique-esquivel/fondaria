@@ -18,7 +18,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * Spring configuration wiring the business metrics publisher (Task 30.10).
  *
- * <p>Constructor injection only (AGENTS.md §4).
+ * <p>Constructor injection only (docs/ENGINEERING-RULES.md §4).
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(BusinessMetricsProperties.class)

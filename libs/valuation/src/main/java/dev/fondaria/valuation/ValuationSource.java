@@ -5,7 +5,7 @@ import java.time.LocalDate;
 
 /**
  * We do not manage the portfolio. We receive a valuation from an external investment platform and
- * translate it into a price per unit (AGENTS.md §2, {@code docs/DOMAIN.md} §3).
+ * translate it into a price per unit (docs/ENGINEERING-RULES.md §2, {@code docs/DOMAIN.md} §3).
  *
  * <p>Three adapters cover the realistic integration shapes, so a different provider is a new
  * adapter, never a rewrite of this port (ADR-0004):

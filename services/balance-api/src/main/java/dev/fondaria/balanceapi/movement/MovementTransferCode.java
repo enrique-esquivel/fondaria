@@ -14,8 +14,8 @@ import java.util.Objects;
  * match.
  *
  * <p><b>An unknown code is not skipped.</b> Dropping a row a participant's ledger really contains
- * would make the history silently incomplete, which is worse than an error (AGENTS.md §4 — never
- * skip what you cannot process).
+ * would make the history silently incomplete, which is worse than an error
+ * (docs/ENGINEERING-RULES.md §4 — never skip what you cannot process).
  */
 public enum MovementTransferCode {
   CONTRIBUTION_ALLOTMENT(LedgerCodes.TransferCode.CONTRIBUTION_ALLOTMENT),

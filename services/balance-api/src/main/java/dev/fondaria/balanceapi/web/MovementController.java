@@ -25,8 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><b>Every parameter arrives as text and is parsed here.</b> Binding {@code LocalDate} or an
  * {@code enum} directly would let Spring produce the failure instead, and its message quotes the
  * offending value — which on this route is a caller-supplied string in a URL that a problem detail
- * must not echo back (AGENTS.md §7). Parsing by hand is what keeps the {@code 400} body free of the
- * caller's own input.
+ * must not echo back (docs/ENGINEERING-RULES.md §7). Parsing by hand is what keeps the {@code 400}
+ * body free of the caller's own input.
  *
  * <p><b>Unauthenticated in v1</b>, like every other endpoint here, and it must not be exposed
  * outside the cluster until Phase 9/10 lands. The cursor's signature is a tamper check, never an

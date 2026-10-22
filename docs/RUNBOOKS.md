@@ -180,7 +180,7 @@ Two things to know:
 - **Reused containers keep their data**, and TigerBeetle cannot be reset at all
   (its `reset()` is a documented no-op). This is safe only because tests generate
   fresh random ids and assert only over ids they created — see the testing rules in
-  `AGENTS.md`. A test that totals a whole ledger id, table or topic will pass or
+  `docs/ENGINEERING-RULES.md`. A test that totals a whole ledger id, table or topic will pass or
   fail based on what earlier runs left behind.
 
 CI never reuses: the workflow sets `TESTCONTAINERS_REUSE_ENABLE=false` so a green
@@ -913,7 +913,7 @@ before starting a large manual rebuild so you know how long to expect it to take
 
 - Page fires immediately (`severity: page`, `for: 0m`).
 - `dlq_depth` is greater than zero on the Financial Control Dashboard.
-- One or more CDC consumers or workers may have halted per the "never skip a message, halt instead" policy (`AGENTS.md` §4).
+- One or more CDC consumers or workers may have halted per the "never skip a message, halt instead" policy (`docs/ENGINEERING-RULES.md` §4).
 
 ### What is at risk
 
@@ -1324,7 +1324,7 @@ stays closed is an hour the close is not proving the books balance.
 |---|---|
 | Run `RUNNING` past its usual duration, or `FAILED` with `break_count = 0` | Operational failure, not a drift. Check the pod/process; if it crashed, the next scheduled pass (`fondaria.reconciliation.poll-interval`) re-attempts automatically. No participant-facing decision to make. |
 | Break with `PROJECTION_*` on one side and the checkpoint lagging | Wait for the projection to catch up (``#cdc-replay`` if it is stalled, not merely behind) and re-run before treating it as a real drift. |
-| Break between the two **ledger-only** derivations (`LEDGER_PARTICIPANT_UNITS` vs. `LEDGER_UNITS_IN_ISSUE`), or a break that persists after the projection is confirmed current | Real drift. This is never fixed by adjusting a participant's units to match — there is no code path that does that, deliberately (AGENTS.md §4). It is a data or ledger-client defect and needs engineering investigation, not an operational fix. |
+| Break between the two **ledger-only** derivations (`LEDGER_PARTICIPANT_UNITS` vs. `LEDGER_UNITS_IN_ISSUE`), or a break that persists after the projection is confirmed current | Real drift. This is never fixed by adjusting a participant's units to match — there is no code path that does that, deliberately (docs/ENGINEERING-RULES.md §4). It is a data or ledger-client defect and needs engineering investigation, not an operational fix. |
 | Same break reappears run after run | Escalate immediately — a break that keeps recurring after the projection has caught up means the discrepancy is structural, not transient. |
 
 **Never** close the gate by hand. There is no operator action that marks a `FAILED` run
@@ -1359,7 +1359,7 @@ way this alert clears is a subsequent pass finding zero breaks.
 - Every report of a real drift must include: `run_id`, `business_date`, every row from
   `workflow.reconciliation_break` for that run, and whether the projection was confirmed
   current at the time (§ diagnostic 3) — the same data an auditor would need to
-  reconstruct the finding years later (AGENTS.md §4).
+  reconstruct the finding years later (docs/ENGINEERING-RULES.md §4).
 
 <a id="custodian-break"></a>
 
@@ -1487,7 +1487,7 @@ money is where the ledger says it is.
   note.
 - A break resolved by a corrected custodian statement is reported with the corrected
   statement's `checksum_sha256` and `received_at`, so the resolution is reproducible from
-  stored data (AGENTS.md §4) rather than "the custodian said it was fixed."
+  stored data (docs/ENGINEERING-RULES.md §4) rather than "the custodian said it was fixed."
 - A break resolved by a ledger correction is reported with the correcting transfer's id,
   never by editing `workflow.custodian_break` itself — the row stays as the historical
   record that a break existed and was investigated.
@@ -1872,7 +1872,7 @@ the gate did its job, not that participants have already seen a wrong number.
   diagnostic 1), whether a late-arriving transfer explains it (§ diagnostic 2), and
   whether a matching Task 7.2 break was found (§ diagnostic 3) — this is what lets someone
   reconstruct, from stored data alone, whether the snapshot or the ledger was the source
-  of the disagreement (AGENTS.md §4).
+  of the disagreement (docs/ENGINEERING-RULES.md §4).
 - If the business date is a month-end, also notify whoever owns the statement schedule —
   a delayed monthly close has a participant-facing deadline the daily close does not.
 - A tie failure that turns out to be caused by a bug fixed in code is reported with the

@@ -16,8 +16,9 @@ import dev.fondaria.common.Money;
  * takes for the movement history.
  *
  * <p><b>Nothing here is a balance and nothing here is summed into one.</b> The prohibition
- * (AGENTS.md §4) is on deriving what someone holds by adding up rows; this adds up movements to
- * report a flow, and the holdings in the same response come from {@code LedgerPort} as they must.
+ * (docs/ENGINEERING-RULES.md §4) is on deriving what someone holds by adding up rows; this adds up
+ * movements to report a flow, and the holdings in the same response come from {@code LedgerPort} as
+ * they must.
  */
 public interface ContributionTotalRepository {
 

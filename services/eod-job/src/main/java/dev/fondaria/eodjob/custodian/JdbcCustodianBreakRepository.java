@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link CustodianBreakRepository} over {@code workflow.custodian_break} ({@code V27}), using
- * {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Unlike {@code workflow.reconciliation_break} (Task 7.2), rows here are updated in place —
  * {@code workflow}'s ordinary grant, no extra revoke or trigger, because the task requires a break

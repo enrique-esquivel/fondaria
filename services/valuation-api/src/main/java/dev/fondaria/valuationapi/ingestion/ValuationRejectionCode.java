@@ -6,8 +6,8 @@ package dev.fondaria.valuationapi.ingestion;
  *
  * <p>Every code here rejects the <b>whole file</b>. A partially accepted valuation file would leave
  * some funds priced on this delivery and some not, with nothing recording which — and since a NAV
- * is what turns units into a balance (AGENTS.md §2), "some funds are stale and we do not know
- * which" is the worst available outcome.
+ * is what turns units into a balance (docs/ENGINEERING-RULES.md §2), "some funds are stale and we
+ * do not know which" is the worst available outcome.
  */
 public enum ValuationRejectionCode {
   /** The stored object's SHA-256 is not the checksum that was submitted, or nothing is stored. */

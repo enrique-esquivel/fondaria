@@ -15,7 +15,7 @@
 # not page, while Envoy's fast retry (JwksAsyncFetch's default 1s failed-refetch interval) means a
 # genuine, sustained JWKS outage racks up far more than three failures inside the window.
 #
-# severity: page, matching AGENTS.md Sec 7 and Task 11.4's own bar: an unreachable JWKS is not a
+# severity: page, matching docs/ENGINEERING-RULES.md Sec 7 and Task 11.4's own bar: an unreachable JWKS is not a
 # capacity or latency problem, it is every application route this policy protects going dark
 # (fail-closed means 401 for everyone, not just forged tokens) until Keycloak or the network path
 # to it is restored.

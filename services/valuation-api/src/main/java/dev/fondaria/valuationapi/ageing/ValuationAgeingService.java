@@ -123,7 +123,8 @@ public class ValuationAgeingService {
    * Logs anything past the configured threshold.
    *
    * <p>Scheduled separately from the endpoint because an ageing report nobody opens is not a
-   * control. A fund id and a date are safe to log — neither identifies a person (AGENTS.md §7).
+   * control. A fund id and a date are safe to log — neither identifies a person
+   * (docs/ENGINEERING-RULES.md §7).
    */
   @Scheduled(
       fixedDelayString = "${fondaria.valuation-ingestion.ageing-alert-interval:15m}",

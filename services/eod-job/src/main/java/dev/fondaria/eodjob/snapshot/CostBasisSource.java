@@ -12,7 +12,7 @@ import java.util.List;
  * <p>A position's cost basis is {@code Σ Money.value(lot units, the NAV that lot was issued at)}
  * over its allotment lots. That is exactly reproducible from stored data years later — {@code
  * workflow.allotment} records the units and the {@code nav_version_id}, both append-only — which is
- * what AGENTS.md §4 requires of any figure a statement will carry.
+ * what docs/ENGINEERING-RULES.md §4 requires of any figure a statement will carry.
  *
  * <p><b>It is not identical to the pesos the employer sent, and the gap is known and bounded.</b>
  * Allotment floors units, so a lot's cash was up to one tick more than the units issued are worth

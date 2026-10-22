@@ -44,7 +44,7 @@ class PositionFileWriterTest {
                 + "\"navVersionId\":7,\"currency\":\"MXN\",\"valueMinorUnits\":10000,"
                 + "\"costBasisMinorUnits\":9000,\"unrealisedGainMinorUnits\":1000}");
     assertThat(lines.get(0))
-        .as("no decimal point anywhere near an amount (AGENTS.md §4)")
+        .as("no decimal point anywhere near an amount (docs/ENGINEERING-RULES.md §4)")
         .doesNotContain(".");
   }
 

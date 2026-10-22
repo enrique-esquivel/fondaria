@@ -9,8 +9,8 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link ParticipantDirectory} over {@code master.participant}'s primary key ({@code
- * organization_id, participant_internal_ref}), using {@code JdbcClient} (AGENTS.md §5 — no ORM).
- * The lookup is served by that primary key directly — no secondary index needed.
+ * organization_id, participant_internal_ref}), using {@code JdbcClient} (docs/ENGINEERING-RULES.md
+ * §5 — no ORM). The lookup is served by that primary key directly — no secondary index needed.
  */
 @Repository
 public class JdbcParticipantDirectory implements ParticipantDirectory {

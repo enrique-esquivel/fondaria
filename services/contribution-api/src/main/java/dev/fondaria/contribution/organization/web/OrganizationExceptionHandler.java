@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the organization endpoints (AGENTS.md §7).
+ * RFC 9457 problem details for the organization endpoints (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Only messages this codebase authored are rendered. Anything else — a driver error, a parser
  * error, an unchecked bug — becomes a generic {@code 500} whose detail says nothing, because such a

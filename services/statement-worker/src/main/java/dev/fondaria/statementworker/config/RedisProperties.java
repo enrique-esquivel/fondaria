@@ -18,9 +18,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * and written (that is the object itself, in {@code STATEMENT_BUCKET}).
  *
  * @param url {@code redis://host:port}, no credentials embedded (Lettuce's credentials-provider API
- *     returns a Reactor {@code Mono}, banned without an ADR — AGENTS.md §4).
+ *     returns a Reactor {@code Mono}, banned without an ADR — docs/ENGINEERING-RULES.md §4).
  * @param password supplied separately and never logged.
- * @param commandTimeout explicit per-call timeout (AGENTS.md §4).
+ * @param commandTimeout explicit per-call timeout (docs/ENGINEERING-RULES.md §4).
  * @param counterTtl how long an idle period's counter keys survive before Redis may reclaim them.
  *     Long enough for an operator to read "August: 249,998 / 250,000" for the whole of the next
  *     close cycle; short enough that twelve months of counters do not accumulate forever. Applied
@@ -45,7 +45,9 @@ public record RedisProperties(
     counterTtl = counterTtl == null ? Duration.ofDays(45) : counterTtl;
   }
 
-  /** Fails startup naming the absent variable. Never echoes a value (AGENTS.md §7). */
+  /**
+   * Fails startup naming the absent variable. Never echoes a value (docs/ENGINEERING-RULES.md §7).
+   */
   public void requireComplete() {
     if (url == null || url.isBlank()) {
       throw new ConfigurationException(

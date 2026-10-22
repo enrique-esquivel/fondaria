@@ -71,8 +71,8 @@ import org.springframework.boot.test.context.SpringBootTest;
  * would prove TigerBeetle's arithmetic rather than this service's behaviour.
  *
  * <p>Every test registers an organization nobody has used before. Fixtures are reused across runs
- * and TigerBeetle cannot be reset at all (AGENTS.md §4), so a shared employer would have a balance
- * assertion pass or fail on what an earlier run left in its account.
+ * and TigerBeetle cannot be reset at all (docs/ENGINEERING-RULES.md §4), so a shared employer would
+ * have a balance assertion pass or fail on what an earlier run left in its account.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ContributionBatchIntegrationTest extends ServiceIntegrationTest {
@@ -390,7 +390,7 @@ class ContributionBatchIntegrationTest extends ServiceIntegrationTest {
             rejection ->
                 assertThat(rejection.code()).isEqualTo(BatchRejectionCode.ROW_COUNT_MISMATCH));
     assertThat(claims.claimedBy(batch.batchId())).isEmpty();
-    // AGENTS.md §1: never a partial allotment. The money is untouched.
+    // docs/ENGINEERING-RULES.md §1: never a partial allotment. The money is untouched.
     assertThat(collectionsBalance(organizationId)).isEqualTo(750_000L);
   }
 
@@ -422,12 +422,13 @@ class ContributionBatchIntegrationTest extends ServiceIntegrationTest {
             rejection -> {
               assertThat(rejection.code()).isEqualTo(BatchRejectionCode.SOURCE_SUBTOTAL_MISMATCH);
               assertThat(rejection.message())
-                  .as("AGENTS.md §7: a stored rejection reaches every log downstream of it")
+                  .as(
+                      "docs/ENGINEERING-RULES.md §7: a stored rejection reaches every log downstream of it")
                   .contains("EMPLOYER")
                   .doesNotContain("P-002")
                   .doesNotContain("ACME-EMP-0891");
             });
-    // AGENTS.md §1: never a partial allotment. The money is untouched.
+    // docs/ENGINEERING-RULES.md §1: never a partial allotment. The money is untouched.
     assertThat(claims.claimedBy(batch.batchId())).isEmpty();
     assertThat(collectionsBalance(organizationId)).isEqualTo(750_000L);
   }

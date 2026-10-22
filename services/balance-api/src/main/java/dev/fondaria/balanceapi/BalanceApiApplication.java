@@ -17,10 +17,11 @@ import org.springframework.context.annotation.Bean;
 /**
  * The read side: what a participant holds, and what it is worth (Phase 6, Task 6.2).
  *
- * <p><b>The balance is a multiplication, not a query</b> (AGENTS.md §2). Units come from the ledger
- * — {@code LedgerPort.lookupAccounts}, O(1) per account and batched into one round trip — and the
- * NAV per unit comes from an in-memory cache holding one number per fund. Value is {@code units ×
- * NAV}, computed on read by {@code Money.value} and never stored, never summed out of PostgreSQL.
+ * <p><b>The balance is a multiplication, not a query</b> (docs/ENGINEERING-RULES.md §2). Units come
+ * from the ledger — {@code LedgerPort.lookupAccounts}, O(1) per account and batched into one round
+ * trip — and the NAV per unit comes from an in-memory cache holding one number per fund. Value is
+ * {@code units × NAV}, computed on read by {@code Money.value} and never stored, never summed out
+ * of PostgreSQL.
  *
  * <p><b>That is why PostgreSQL is not in this path.</b> The only thing this service reads from the
  * database on behalf of a request is the {@code participantId → (organizationId,

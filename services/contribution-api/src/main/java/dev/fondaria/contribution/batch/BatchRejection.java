@@ -7,7 +7,7 @@ import java.util.Objects;
  * Why a whole batch was rejected, in a form safe to return to the employer.
  *
  * @param message human-readable and authored here, never a parser, driver or JDK message — those
- *     carry hostnames, SQL fragments and file contents (AGENTS.md §7)
+ *     carry hostnames, SQL fragments and file contents (docs/ENGINEERING-RULES.md §7)
  * @param details code-specific structured detail, e.g. declared versus actual totals. <b>Every
  *     amount in it is an integer of cents</b>, never a float or a decimal string, matching the
  *     OpenAPI contract. It never contains a participant reference: a rejection body is logged by

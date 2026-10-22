@@ -34,7 +34,7 @@ COMMENT ON TABLE master.organization IS
 COMMENT ON COLUMN master.organization.organization_id IS
     'UUIDv5(organizationNamespace, taxId.derivationKey()). Derived, never assigned, and never changed by an update — it is what the ledger accounts holding this employer''s money are derived from.';
 COMMENT ON COLUMN master.organization.tax_id IS
-    'Canonical RFC. Never appears in a URL, log line, message key or trace (AGENTS.md §7); only organization_id travels.';
+    'Canonical RFC. Never appears in a URL, log line, message key or trace (docs/ENGINEERING-RULES.md §7); only organization_id travels.';
 COMMENT ON COLUMN master.organization.fee_bracket IS
     'Commercial bracket code agreed in the contract. Opaque here on purpose: the fee schedule it selects is effective-dated reference data owned by Task 2b.2, and duplicating its shape in master data would create a second, un-versioned copy.';
 
@@ -57,7 +57,7 @@ CREATE TABLE master.organization_revision (
 );
 
 COMMENT ON TABLE master.organization_revision IS
-    'Append-only history of master.organization. Revision 1 is the registration; each accepted update appends the next. Never UPDATEd, never DELETEd (AGENTS.md §4).';
+    'Append-only history of master.organization. Revision 1 is the registration; each accepted update appends the next. Never UPDATEd, never DELETEd (docs/ENGINEERING-RULES.md §4).';
 
 REVOKE UPDATE, DELETE ON master.organization_revision FROM fondaria_app;
 REVOKE UPDATE, DELETE ON master.organization_revision FROM PUBLIC;

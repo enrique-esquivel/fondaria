@@ -54,7 +54,7 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  * that prices the fund those contributions buy into, the real CDC job, and the six fixtures behind
  * them. Started once per JVM and shared by every test class in this module — the stack costs a
  * minute to raise and nothing a test does to it needs it torn down, because every test derives its
- * own organization, fund and participant (AGENTS.md §4).
+ * own organization, fund and participant (docs/ENGINEERING-RULES.md §4).
  *
  * <h2>What is real here, and what is not</h2>
  *
@@ -324,7 +324,7 @@ final class PlatformStack {
                 contributionBucket,
                 // Both sweeps are driven explicitly by the tests. A timer firing mid-test would
                 // make every assertion about a batch's status intermittent, which is the worst
-                // failure mode available for a test about money (AGENTS.md §4).
+                // failure mode available for a test about money (docs/ENGINEERING-RULES.md §4).
                 "BATCH_VALIDATION_POLL_INTERVAL",
                 "1h",
                 // Fixtures are reused across runs, so the workflow tables still hold whatever

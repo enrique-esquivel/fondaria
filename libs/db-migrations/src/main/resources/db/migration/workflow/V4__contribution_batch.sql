@@ -108,7 +108,7 @@ COMMENT ON TABLE workflow.contribution_batch IS
 COMMENT ON COLUMN workflow.contribution_batch.batch_id IS
     'UUIDv5(organizationId, objectKey + 0x1f + checksumSha256) — derived, not generated, so two concurrent submissions of one file converge on one id rather than racing to create two. Scoped under the organization''s own id, so no batch id can collide across tenants and no third derivation namespace has to be configured and kept forever.';
 COMMENT ON COLUMN workflow.contribution_batch.declared_total_minor_units IS
-    'MXN cents, from the file header. bigint, never numeric: cash is a long in cents everywhere (AGENTS.md §4). What the employer DECLARED — the reconciliation gate compares it against money read from the ledger, and this column is never one side of a balance.';
+    'MXN cents, from the file header. bigint, never numeric: cash is a long in cents everywhere (docs/ENGINEERING-RULES.md §4). What the employer DECLARED — the reconciliation gate compares it against money read from the ledger, and this column is never one side of a balance.';
 COMMENT ON COLUMN workflow.contribution_batch.status IS
     'RECEIVED -> VALIDATING -> VALIDATED | PENDING_RECONCILIATION | REJECTED. PENDING_RECONCILIATION is not terminal: the file is structurally sound and its cash has not arrived, so the poller re-runs the gate alone (the header fields above are stored precisely so it need not re-parse the file).';
 COMMENT ON COLUMN workflow.contribution_batch.validation_started_at IS
@@ -137,7 +137,7 @@ CREATE TABLE workflow.contribution_batch_cash_claim (
     batch_id        uuid        NOT NULL REFERENCES workflow.contribution_batch (batch_id),
     claimed_at      timestamptz NOT NULL,
 
-    -- Tenant first (AGENTS.md §4), and one receipt is claimed at most once. The
+    -- Tenant first (docs/ENGINEERING-RULES.md §4), and one receipt is claimed at most once. The
     -- foreign key above already scopes transfer_id to a single receipt, so this is
     -- the constraint that does the work: a second batch inserting the same
     -- transfer_id fails, and its whole claim rolls back rather than half-taking

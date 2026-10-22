@@ -29,9 +29,10 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * {@link ProjectionCheckpoint} against a real PostgreSQL (row 26e, ADR-0032 §1): one row per
  * consumer, the head query, and age-based pruning.
  *
- * <p>Fixtures are reused across runs (AGENTS.md §4), so nothing here reads a total over the table.
- * Rows are advanced under fresh consumer ids, and the {@link ProjectionCheckpoint#HEAD} query — an
- * aggregate — is exercised under a fresh {@code projection_name} that no other test or run writes.
+ * <p>Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4), so nothing here reads a total
+ * over the table. Rows are advanced under fresh consumer ids, and the {@link
+ * ProjectionCheckpoint#HEAD} query — an aggregate — is exercised under a fresh {@code
+ * projection_name} that no other test or run writes.
  */
 @Tag("integration")
 @SpringJUnitConfig(ProjectionCheckpointIntegrationTest.TestConfig.class)

@@ -46,9 +46,9 @@ import org.junit.jupiter.api.Test;
  * where the rows come from, which is what lets a single test say precisely what the file should
  * contain and then assert every byte of it.
  *
- * <p>Falling and volatile NAV series are exercised deliberately, not incidentally: AGENTS.md §4
- * requires it, and unrealised gain is the field that is wrong in exactly one direction if a suite
- * only ever prices upward.
+ * <p>Falling and volatile NAV series are exercised deliberately, not incidentally:
+ * docs/ENGINEERING-RULES.md §4 requires it, and unrealised gain is the field that is wrong in
+ * exactly one direction if a suite only ever prices upward.
  */
 class SnapshotServiceTest {
 
@@ -201,7 +201,7 @@ class SnapshotServiceTest {
       fixture.holdingWith("P-002", 40_00000000L, MONDAY);
       fixture.unitsInIssue(100_00000000L);
       // A volatile series across the whole run — rising, falling and flat — so a suite that only
-      // ever priced upward cannot pass here (AGENTS.md §4).
+      // ever priced upward cannot pass here (docs/ENGINEERING-RULES.md §4).
       for (int day = 0; day < 90; day++) {
         fixture.navOf(day + 1L, 1_00000000L + (day % 7 - 3) * 10_000_000L, MONDAY.plusDays(day));
       }
@@ -247,7 +247,8 @@ class SnapshotServiceTest {
       assertThat(line).contains("\"valueMinorUnits\":7500");
       assertThat(line).contains("\"costBasisMinorUnits\":10000");
       assertThat(line)
-          .as("values go down, and a loss is a number rather than a floor (AGENTS.md §4)")
+          .as(
+              "values go down, and a loss is a number rather than a floor (docs/ENGINEERING-RULES.md §4)")
           .contains("\"unrealisedGainMinorUnits\":-2500");
     }
 

@@ -108,7 +108,7 @@ class StructuredLoggingIntegrationTest extends ServiceIntegrationTest {
   }
 
   @Test
-  @DisplayName("every log line parses as JSON with AGENTS.md §7 fields")
+  @DisplayName("every log line parses as JSON with docs/ENGINEERING-RULES.md §7 fields")
   void everyLogLineParsesAsJson() throws Exception {
     org.slf4j.Logger logger =
         LoggerFactory.getLogger("dev.fondaria.contribution.test.JsonValidation");

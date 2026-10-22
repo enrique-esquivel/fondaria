@@ -44,7 +44,7 @@ import org.springframework.stereotype.Component;
  *   <li><b>{@code units_scaled}</b> is the account's post-event balance, {@code creditsPosted −
  *       debitsPosted}. A holding account carries {@code debits_must_not_exceed_credits}, so it is
  *       never negative; the column {@code CHECK} is the backstop and a negative value is failed
- *       loudly here rather than clamped (AGENTS.md §4).
+ *       loudly here rather than clamped (docs/ENGINEERING-RULES.md §4).
  *   <li><b>{@code effective_date}</b> is the entry's <i>value date</i> (O-4) — for v1 the business
  *       date of the ledger timestamp, never {@code LocalDate.now()}. The same rule Task 5.4 applies
  *       to a transfer's {@code value_date}.
@@ -93,7 +93,8 @@ import org.springframework.stereotype.Component;
  * {@code prev_row_hash}, so an unauthorized edit to any row still invalidates every hash after it —
  * exactly as before. What changed is only which insert order that computation is stable under: it
  * no longer requires the CDC pipeline to deliver in ledger-timestamp order, only that every event
- * eventually arrives (`AGENTS.md` §4 — the platform never skips a message, so that always holds).
+ * eventually arrives (`docs/ENGINEERING-RULES.md` §4 — the platform never skips a message, so that
+ * always holds).
  *
  * <h2>Concurrency — an advisory lock replaces the single-consumer-per-account guarantee</h2>
  *
@@ -215,7 +216,7 @@ public class ParticipantUnitsProjection {
     if (unitsScaled < 0) {
       // A holding account carries debits_must_not_exceed_credits; a negative posted balance means
       // that ledger invariant was violated upstream. Throw (a transient failure -> retry) rather
-      // than clamp a unit balance to zero (AGENTS.md §4).
+      // than clamp a unit balance to zero (docs/ENGINEERING-RULES.md §4).
       throw new IllegalStateException(
           "unit holding account "
               + unit.accountId()

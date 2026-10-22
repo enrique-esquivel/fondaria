@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Test;
  * on the employer summary from two figures the API itself returned. When Phase 7 renders the field,
  * this is the arithmetic it must agree with.
  *
- * <p>A suite that only ever raises the price passes on a broken implementation (AGENTS.md §4). This
- * is the falling half for the Query API, end to end.
+ * <p>A suite that only ever raises the price passes on a broken implementation
+ * (docs/ENGINEERING-RULES.md §4). This is the falling half for the Query API, end to end.
  */
 @Tag("integration")
 class FallenValueEndToEndTest {

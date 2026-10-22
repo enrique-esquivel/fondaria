@@ -8,11 +8,11 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link OrganizationDirectory} over {@code master.organization}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Only the id is selected. The {@code RFC} and the organization's name are on the same row and
- * neither may leave this service (AGENTS.md §7), so they are not read at all rather than read and
- * carefully not logged.
+ * neither may leave this service (docs/ENGINEERING-RULES.md §7), so they are not read at all rather
+ * than read and carefully not logged.
  */
 @Repository
 public class JdbcOrganizationDirectory implements OrganizationDirectory {

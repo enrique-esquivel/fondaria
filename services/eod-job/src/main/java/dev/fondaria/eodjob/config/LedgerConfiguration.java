@@ -31,7 +31,7 @@ import org.springframework.context.annotation.Configuration;
  * need it because the tie-out aggregates per fund and never asks a per-participant question.
  *
  * <p>This is the only place in {@code eod-job} that names a TigerBeetle type; everything downstream
- * depends on {@link LedgerPort} alone (AGENTS.md §4).
+ * depends on {@link LedgerPort} alone (docs/ENGINEERING-RULES.md §4).
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({LedgerClientProperties.class, IdentityProperties.class})

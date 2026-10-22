@@ -7,7 +7,7 @@ import java.util.Optional;
 /**
  * What a caller must supply to register an organization. The tax identifier arrives here once, in a
  * request body, and is the last time it travels: everything afterwards carries the derived {@code
- * OrganizationId} instead (AGENTS.md §7).
+ * OrganizationId} instead (docs/ENGINEERING-RULES.md §7).
  */
 public record RegisterOrganizationCommand(
     TaxIdentifier taxIdentifier,

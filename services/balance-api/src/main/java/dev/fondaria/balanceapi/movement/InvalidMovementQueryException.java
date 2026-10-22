@@ -7,8 +7,9 @@ import java.io.Serial;
  *
  * <p><b>The message is authored here, never assembled from the caller's input.</b> Everything on
  * this route arrives in a URL, reaches an access log and may name a person; a problem detail that
- * echoed it back would put it somewhere else again (AGENTS.md §7). So the constructor takes a fixed
- * reason chosen from this codebase's own text, and the offending value is not carried at all.
+ * echoed it back would put it somewhere else again (docs/ENGINEERING-RULES.md §7). So the
+ * constructor takes a fixed reason chosen from this codebase's own text, and the offending value is
+ * not carried at all.
  */
 public final class InvalidMovementQueryException extends RuntimeException {
 

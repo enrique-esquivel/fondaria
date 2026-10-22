@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link MovementRepository} over {@code projection.transfer}, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link MovementRepository} over {@code projection.transfer}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>The statement itself is built by {@link MovementPageStatement}, which carries the reasoning
  * about branches, indexes and the cursor predicate. This class is the execution and the row
@@ -53,7 +53,7 @@ public class JdbcMovementRepository implements MovementRepository {
         // getString, not getBigDecimal: these are u128/u64 *identifiers* stored as numeric(_,0),
         // and PostgreSQL already renders them in the canonical unsigned decimal the rest of the
         // platform uses. Going through BigDecimal would put a decimal type in a file next to money
-        // for no gain (AGENTS.md §4).
+        // for no gain (docs/ENGINEERING-RULES.md §4).
         rs.getString("transfer_id"),
         rs.getString("ledger_timestamp"),
         rs.getString("account_id"),

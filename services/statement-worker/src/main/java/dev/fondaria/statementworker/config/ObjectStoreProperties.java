@@ -13,21 +13,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@code eod-job}'s own {@code ObjectStoreProperties} javadoc argues for: a different producer, a
  * different retention, a different access pattern.
  *
- * <p>Absence is a startup failure naming the variable (AGENTS.md §4). Deliberately a copy of {@code
- * eod-job}'s record of a similar name rather than a shared type: each service binds its own
- * environment, and duplicating four fields is cheaper than a library coupling two services' startup
- * failures together.
+ * <p>Absence is a startup failure naming the variable (docs/ENGINEERING-RULES.md §4). Deliberately
+ * a copy of {@code eod-job}'s record of a similar name rather than a shared type: each service
+ * binds its own environment, and duplicating four fields is cheaper than a library coupling two
+ * services' startup failures together.
  *
  * @param endpoint S3 API endpoint, e.g. {@code http://object-store:8333}. SeaweedFS is the pinned
- *     object store (ADR-0031) (AGENTS.md §5); the endpoint is configuration so the same client
- *     speaks to whatever runs it.
+ *     object store (ADR-0031) (docs/ENGINEERING-RULES.md §5); the endpoint is configuration so the
+ *     same client speaks to whatever runs it.
  * @param region signing region. The object store ignores it, but SigV4 requires one to sign with.
  * @param snapshotBucket the bucket Task 7.4's dense snapshots are read from. This service never
  *     writes here.
  * @param statementBucket the bucket rendered statements are written to. This service never reads an
- *     object here before writing it — every write is idempotent by content (AGENTS.md §4: rerun
- *     produces an identical hash), so there is nothing to check first.
- * @param callTimeout explicit per-call timeout (AGENTS.md §4).
+ *     object here before writing it — every write is idempotent by content
+ *     (docs/ENGINEERING-RULES.md §4: rerun produces an identical hash), so there is nothing to
+ *     check first.
+ * @param callTimeout explicit per-call timeout (docs/ENGINEERING-RULES.md §4).
  */
 @ConfigurationProperties(prefix = "fondaria.statement-object-store")
 public record ObjectStoreProperties(

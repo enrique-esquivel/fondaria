@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
  *
  * <p>This is the only place in {@code contribution-api} that names a TigerBeetle type. Everything
  * downstream — services, repositories, controllers — depends on {@link LedgerPort} alone, so the
- * vendor client cannot leak into application code (AGENTS.md §4).
+ * vendor client cannot leak into application code (docs/ENGINEERING-RULES.md §4).
  *
  * <p>The adapter is wrapped in {@link ClusterAwareLedgerPort} even though v1 runs a single cluster.
  * For one cluster the wrapper is exactly one delegate call, and having it here from the start means

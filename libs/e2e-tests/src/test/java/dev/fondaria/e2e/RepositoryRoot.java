@@ -7,7 +7,7 @@ import java.nio.file.Paths;
 /**
  * Locates the repository root by walking up from the working directory, so a test can mount a
  * production script — {@code infrastructure/compose/cdc/run.sh} — into a container without a
- * machine-specific path (AGENTS.md §10).
+ * machine-specific path (docs/ENGINEERING-RULES.md §10).
  */
 final class RepositoryRoot {
 

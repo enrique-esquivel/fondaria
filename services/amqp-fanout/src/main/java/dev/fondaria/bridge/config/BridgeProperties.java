@@ -35,7 +35,9 @@ public record BridgeProperties(
         producerRetryBackoff == null ? Duration.ofSeconds(1) : producerRetryBackoff;
   }
 
-  /** Fails startup naming the absent variable. Never echoes a value (AGENTS.md §7). */
+  /**
+   * Fails startup naming the absent variable. Never echoes a value (docs/ENGINEERING-RULES.md §7).
+   */
   public void requireComplete() {
     requirePresent(amqpHost, AMQP_HOST_VARIABLE);
   }

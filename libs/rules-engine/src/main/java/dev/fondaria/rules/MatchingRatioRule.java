@@ -8,7 +8,7 @@ package dev.fondaria.rules;
  * <p>Cents only, ever. Cross-multiplying {@code employeeCents} by the ratio and rounding half-up —
  * the same convention {@code dev.fondaria.common.Money}/{@code Nav} use — is how a fraction is
  * applied to an integer amount without introducing {@code double} or {@code BigDecimal} into the
- * computation (AGENTS.md §4).
+ * computation (docs/ENGINEERING-RULES.md §4).
  */
 public final class MatchingRatioRule {
 

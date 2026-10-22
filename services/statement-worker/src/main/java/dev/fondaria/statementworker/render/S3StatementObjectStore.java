@@ -7,7 +7,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * The one {@link StatementObjectStore} implementation, speaking the S3 API to the object store
- * (AGENTS.md §5).
+ * (docs/ENGINEERING-RULES.md §5).
  *
  * <p>No conditional write, no read-before-write. Task 7.5b's own acceptance criterion — a rerun
  * produces an identical hash — is what makes a plain overwrite correct: the same {@link
@@ -42,7 +42,7 @@ public class S3StatementObjectStore implements StatementObjectStore {
     } catch (SdkException e) {
       metrics.requestCompleted("put", System.nanoTime() - start, true);
       // The key is safe to name: period + the opaque participantId, never the internal ref
-      // (AGENTS.md §7).
+      // (docs/ENGINEERING-RULES.md §7).
       throw new StatementObjectUnavailableException("could not store the object " + objectKey, e);
     }
   }

@@ -23,8 +23,8 @@ import java.util.Objects;
  * unit and no centavo moves either way.
  *
  * @param nav the price this position was valued at, carried whole so {@code navVersionId} and
- *     {@code stale} travel with the figures they produced (AGENTS.md §4: every value records which
- *     NAV version it used)
+ *     {@code stale} travel with the figures they produced (docs/ENGINEERING-RULES.md §4: every
+ *     value records which NAV version it used)
  */
 public record FundPosition(
     FundId fundId,
@@ -59,9 +59,9 @@ public record FundPosition(
    * <p><b>{@code != 0}, not {@code > 0}.</b> Today a holding cannot be negative: {@code
    * PARTICIPANT_HOLDINGS_*} carry {@code debitsMustNotExceedCredits}, so the adapter computes
    * {@code creditsPosted - debitsPosted} and the floor is enforced inside the ledger. But "every
-   * value is signed, never clamp" (AGENTS.md §4) is the rule, and {@code > 0} would silently drop a
-   * negative position and thereby <i>overstate</i> the balance — failing open, in the direction
-   * that favours us. {@code != 0} keeps it visible for nothing.
+   * value is signed, never clamp" (docs/ENGINEERING-RULES.md §4) is the rule, and {@code > 0} would
+   * silently drop a negative position and thereby <i>overstate</i> the balance — failing open, in
+   * the direction that favours us. {@code != 0} keeps it visible for nothing.
    */
   public boolean isHeld() {
     return vestedUnits.scaled() != 0 || unvestedUnits.scaled() != 0;

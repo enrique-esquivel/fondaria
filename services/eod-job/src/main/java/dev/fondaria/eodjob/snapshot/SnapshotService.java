@@ -180,7 +180,8 @@ public class SnapshotService {
       settleFailed(runId, businessDate, startedAt, e.reason());
       throw e;
     } catch (RuntimeException e) {
-      // The reason an operator reads carries no exception text (AGENTS.md §7); the stack goes to
+      // The reason an operator reads carries no exception text (docs/ENGINEERING-RULES.md §7); the
+      // stack goes to
       // the log, which is not the audit trail.
       settleFailed(runId, businessDate, startedAt, "the pass did not complete");
       LOGGER.error("snapshot failed to complete: runId={} businessDate={}", runId, businessDate, e);

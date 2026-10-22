@@ -8,7 +8,7 @@ import java.io.Serial;
  * trace.
  *
  * <p>Carries the variable's name, never its value: a JDBC URL and a bootstrap-servers list both
- * carry hostnames, and hostnames stay out of error output (AGENTS.md §7).
+ * carry hostnames, and hostnames stay out of error output (docs/ENGINEERING-RULES.md §7).
  */
 public final class ConfigurationException extends RuntimeException {
 

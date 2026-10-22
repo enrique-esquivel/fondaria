@@ -151,7 +151,8 @@ public class ProjectionCheckpoint {
       return removed;
     } catch (RuntimeException e) {
       // Housekeeping only: a failed pass leaves stale rows for the next one. The exception's
-      // message is not logged -- a driver message can carry a hostname (AGENTS.md §7).
+      // message is not logged -- a driver message can carry a hostname (docs/ENGINEERING-RULES.md
+      // §7).
       LOGGER.warn("stale checkpoint cleanup failed: {}", e.getClass().getSimpleName());
       return 0;
     }

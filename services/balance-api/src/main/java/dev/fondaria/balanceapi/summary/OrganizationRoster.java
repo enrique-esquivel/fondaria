@@ -15,9 +15,9 @@ import java.util.List;
  * the index that serves them is stored in the collation it was <i>built</i> under. Let those drift
  * — a glibc or ICU version change without a {@code REINDEX} — and a page boundary lands in the
  * wrong place, participants are never returned by any page, and the employer's total is quietly
- * short with nothing raising. That is the intermittent-and-about-money failure {@code AGENTS.md} §4
- * calls the worst available. Pinning {@code COLLATE "C"} would fix the ordering but cost a sort per
- * page.
+ * short with nothing raising. That is the intermittent-and-about-money failure {@code
+ * docs/ENGINEERING-RULES.md} §4 calls the worst available. Pinning {@code COLLATE "C"} would fix
+ * the ordering but cost a sort per page.
  *
  * <p>So there is no cursor and no {@code ORDER BY} at all: one equality on the partition-leading
  * key, every row of it, and no ordering for anything to disagree about. What made paging attractive

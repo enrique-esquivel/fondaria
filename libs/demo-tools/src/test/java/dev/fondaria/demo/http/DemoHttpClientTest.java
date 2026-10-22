@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Exercises the real client against a JDK {@link HttpServer} stub -- no framework and no
- * Testcontainers needed for this module's own HTTP plumbing (`AGENTS.md` §4: this module names no
- * new dependency, and {@code com.sun.net.httpserver} ships with the JDK).
+ * Testcontainers needed for this module's own HTTP plumbing (`docs/ENGINEERING-RULES.md` §4: this
+ * module names no new dependency, and {@code com.sun.net.httpserver} ships with the JDK).
  */
 class DemoHttpClientTest {
 

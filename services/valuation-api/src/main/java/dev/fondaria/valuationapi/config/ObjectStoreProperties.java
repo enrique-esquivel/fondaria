@@ -7,9 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Object-storage settings for valuation files, bound from the environment (ADR-0009's transport,
  * reused by Task 20.3).
  *
- * <p>Absence is a startup failure naming the variable, per AGENTS.md §4: a service that started
- * without a bucket would accept upload-slot requests it cannot honour and leave every fund
- * unpriced. The local-development values live in {@code infrastructure/compose/.env.example}.
+ * <p>Absence is a startup failure naming the variable, per docs/ENGINEERING-RULES.md §4: a service
+ * that started without a bucket would accept upload-slot requests it cannot honour and leave every
+ * fund unpriced. The local-development values live in {@code infrastructure/compose/.env.example}.
  *
  * @param bucket the bucket valuation files are uploaded to. A <b>separate bucket</b> from the
  *     contribution one: the two have different producers (an investment platform, not an employer),

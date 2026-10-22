@@ -13,7 +13,7 @@ spec:
   # requests (SigV4), so there is no second image to keep pullable (ADR-0031).
   # Idempotent: an existing bucket answers 409 BucketAlreadyExists/OwnedByYou.
   backoffLimit: 20
-  # Every call below also carries its own curl timeout (AGENTS.md section 4);
+  # Every call below also carries its own curl timeout (docs/ENGINEERING-RULES.md section 4);
   # this bounds the Job as a whole, retries included.
   activeDeadlineSeconds: 600
   ttlSecondsAfterFinished: 3600

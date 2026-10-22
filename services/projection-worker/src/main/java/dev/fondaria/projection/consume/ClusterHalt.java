@@ -101,7 +101,7 @@ public class ClusterHalt implements SmartLifecycle {
             "a cluster halt was already active; this pod's poison ({}) adds none", reasonCode);
       }
     } catch (RuntimeException e) {
-      // A driver message can carry a hostname (AGENTS.md §7): log the type only.
+      // A driver message can carry a hostname (docs/ENGINEERING-RULES.md §7): log the type only.
       LOGGER.error(
           "could not raise the cluster halt ({}); this pod stays halted, retrying in {}",
           e.getClass().getSimpleName(),

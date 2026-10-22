@@ -12,7 +12,7 @@ import java.util.Objects;
  * CustodianCloseBlockedException} (Task 7.3) for the final gate. Carries the date and nothing else
  * — why a date is not signed off is answered by which of the three upstream gates is closed, and
  * that is in the reconciliation, custodian and snapshot run tables, not in an exception message
- * (AGENTS.md §7).
+ * (docs/ENGINEERING-RULES.md §7).
  */
 public final class CloseNotSignedOffException extends RuntimeException {
 

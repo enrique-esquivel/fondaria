@@ -184,7 +184,7 @@ class ValuationBatchValidatorTest {
     accepted.seed(fund, wednesday, 105_000_000L);
 
     // Thursday's pool is worth less than Wednesday's. This must be an ordinary accepted
-    // valuation — AGENTS.md §4: values go down, and nothing floors a loss at zero.
+    // valuation — docs/ENGINEERING-RULES.md §4: values go down, and nothing floors a loss at zero.
     List<AcceptedValuation> toRecord =
         validator.validate(batch(1), file(row(fund, THURSDAY, 71_500_000L)));
 

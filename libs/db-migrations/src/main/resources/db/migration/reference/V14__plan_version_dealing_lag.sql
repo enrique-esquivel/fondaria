@@ -3,7 +3,7 @@
 -- "A staged batch is allotted at the NAV strike for a valuation date determined by
 -- the batch's value date and the plan's DEALING LAG, never by LocalDate.now()."
 --
--- WHY reference.plan_version AND NOT CONFIGURATION. AGENTS.md §4: contribution
+-- WHY reference.plan_version AND NOT CONFIGURATION. docs/ENGINEERING-RULES.md §4: contribution
 -- caps, product configuration and plan rules are effective-dated versioned data --
 -- never constants, never environment config. A dealing lag is a plan rule: two
 -- employers on the same platform can deal at different lags, and an employer that

@@ -8,17 +8,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p><b>Absence is a startup failure, but an outage is not a request failure.</b> The two are
  * different problems: a deployment that forgot to configure Redis should say so loudly and refuse
- * to start (AGENTS.md §4 — production must fail to start when a required value is absent), whereas
- * a Redis that goes down at three in the morning must cost latency and nothing else. Binding is
- * permissive here for the same reason as {@link DatabaseProperties}: an absent variable becomes a
- * {@link ConfigurationException} naming it, rather than a binder stack trace.
+ * to start (docs/ENGINEERING-RULES.md §4 — production must fail to start when a required value is
+ * absent), whereas a Redis that goes down at three in the morning must cost latency and nothing
+ * else. Binding is permissive here for the same reason as {@link DatabaseProperties}: an absent
+ * variable becomes a {@link ConfigurationException} naming it, rather than a binder stack trace.
  *
  * @param url Redis URL <b>without credentials</b>, e.g. {@code redis://redis:6379}. The password is
  *     supplied separately so a secret never has to be embedded in a URL, where it would reach any
  *     log line that renders the connection target.
  * @param password the Redis password
- * @param commandTimeout explicit per-command timeout (AGENTS.md §4). Short on purpose: this is a
- *     cache, and waiting on it is worse than missing it.
+ * @param commandTimeout explicit per-command timeout (docs/ENGINEERING-RULES.md §4). Short on
+ *     purpose: this is a cache, and waiting on it is worse than missing it.
  * @param cashReceiptTtl how long a resolved cash receipt is replayable from cache — 24 hours, per
  *     Task 3.3 and docs/DESIGN-DECISIONS.md
  * @param traceCorrelationTtl how long a {@code transferId -> traceparent} entry survives (Task

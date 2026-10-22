@@ -23,8 +23,8 @@ import org.springframework.context.annotation.Bean;
  * divides a cash amount by a NAV that valuation-api already struck ({@code NavPerUnit#strike},
  * unchanged), floors to the unit scale, and posts the {@code CONTRIBUTION_ALLOTMENT}
  * chart-of-accounts chain. The one thing it must never do is move a NAV: a contribution changes
- * units in issue and pool cash proportionally, never the price (AGENTS.md §4, asserted in {@code
- * AllotmentServiceTest}).
+ * units in issue and pool cash proportionally, never the price (docs/ENGINEERING-RULES.md §4,
+ * asserted in {@code AllotmentServiceTest}).
  */
 @SpringBootApplication
 @EnableConfigurationProperties(LedgerProperties.class)

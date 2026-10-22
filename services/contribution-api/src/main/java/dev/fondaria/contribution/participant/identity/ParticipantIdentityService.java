@@ -26,10 +26,10 @@ import org.springframework.stereotype.Component;
  * uses. The outcome and {@code asOfDate} are both stored on the row itself ({@link
  * ParticipantIdentity#dateOfBirthRequired()}, {@link ParticipantIdentity#identityCapturedAsOf()}),
  * so the decision is reproducible years later without re-running current code or depending on
- * today's fund configuration (AGENTS.md §4). {@code vehicleType} is a free-text configuration
- * value, not an enum ({@code reference.fund}'s own design) — a retirement fund registered under any
- * spelling other than exactly {@code "RETIREMENT_FUND"} silently resolves to "not required" rather
- * than failing loudly; this mirrors the same exact-match convention {@code
+ * today's fund configuration (docs/ENGINEERING-RULES.md §4). {@code vehicleType} is a free-text
+ * configuration value, not an enum ({@code reference.fund}'s own design) — a retirement fund
+ * registered under any spelling other than exactly {@code "RETIREMENT_FUND"} silently resolves to
+ * "not required" rather than failing loudly; this mirrors the same exact-match convention {@code
  * OrganizationPlanRules#isRetirement} already uses in {@code libs/demo-tools}, and closing that gap
  * for every caller is a larger change (a real vehicle-type registry) than this task's scope.
  */

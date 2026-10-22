@@ -131,7 +131,8 @@ abstract class LedgerPortConformanceSuite {
                     amount));
 
     assertThat(result).isInstanceOf(TransferResult.Created.class);
-    // Sigma participant units = units in issue (AGENTS.md Section 2) - both sides report the same
+    // Sigma participant units = units in issue (docs/ENGINEERING-RULES.md Section 2) - both sides
+    // report the same
     // non-negative magnitude despite UNITS_IN_ISSUE being a contra account.
     assertThat(unitBalance(unitsInIssue)).isEqualTo(amount);
     assertThat(unitBalance(holdings)).isEqualTo(amount);

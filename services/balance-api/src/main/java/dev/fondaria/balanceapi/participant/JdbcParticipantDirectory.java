@@ -7,8 +7,8 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * {@link ParticipantDirectory} over {@code master.participant}, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link ParticipantDirectory} over {@code master.participant}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Served by {@code participant_id_unique} ({@code V22__participant_id.sql}): an index lookup,
  * not a scan, because this sits in front of every balance read. It is also the only PostgreSQL

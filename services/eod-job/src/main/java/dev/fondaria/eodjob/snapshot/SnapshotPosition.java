@@ -21,24 +21,25 @@ import java.util.Objects;
  *
  * <h2>Value is a multiplication, cost basis is a sum of them</h2>
  *
- * <p>{@code value = Money.value(units, nav)} — the one place units × NAV becomes pesos (AGENTS.md
- * §2), never re-derived here. {@code costBasis} arrives already summed by {@link CostBasisSource}
- * over the holding's allotment lots, each lot valued at the NAV that priced it.
+ * <p>{@code value = Money.value(units, nav)} — the one place units × NAV becomes pesos
+ * (docs/ENGINEERING-RULES.md §2), never re-derived here. {@code costBasis} arrives already summed
+ * by {@link CostBasisSource} over the holding's allotment lots, each lot valued at the NAV that
+ * priced it.
  *
  * <p>{@code unrealisedGain = value − costBasis}, and it is <b>signed</b>. On a falling NAV it is
- * negative, and nothing anywhere clamps it (AGENTS.md §4). A suite that only ever exercised a
- * rising series would pass on an implementation that did.
+ * negative, and nothing anywhere clamps it (docs/ENGINEERING-RULES.md §4). A suite that only ever
+ * exercised a rising series would pass on an implementation that did.
  *
  * @param organizationId the employer whose participant this is
  * @param participantInternalRef the employer's own reference for the participant. Never rendered
- *     into a log line (AGENTS.md §7) — it is written to the snapshot file, which is the artefact
- *     statements are built from, and read nowhere else.
+ *     into a log line (docs/ENGINEERING-RULES.md §7) — it is written to the snapshot file, which is
+ *     the artefact statements are built from, and read nowhere else.
  * @param fundId the fund held
  * @param unitLedgerId that fund's unit ledger, carried so the file ties per fund without a lookup
  * @param units vested plus unvested, at 1e-8
  * @param nav the price this position is valued at
  * @param navVersionId which {@code reference.fund_nav} row that price came from. Without this the
- *     snapshot could not be re-derived after a NAV correction (AGENTS.md §4).
+ *     snapshot could not be re-derived after a NAV correction (docs/ENGINEERING-RULES.md §4).
  * @param value {@code units × nav}, MXN cents
  * @param costBasis what the units held cost, MXN cents
  * @param unrealisedGain {@code value − costBasis}, signed

@@ -86,7 +86,7 @@ class OpenApiContractTest {
 
   @Test
   @DisplayName(
-      "no schema property is typed as a JSON number (AGENTS.md §4: never a float or a decimal)")
+      "no schema property is typed as a JSON number (docs/ENGINEERING-RULES.md §4: never a float or a decimal)")
   void noSchemaPropertyIsANumber() {
     Map<String, Object> schemas =
         (Map<String, Object>) navigate(loadContract(), "components", "schemas");

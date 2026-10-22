@@ -12,8 +12,8 @@ import org.springframework.test.context.DynamicPropertySource;
  * valuation-api's classes of the same name.
  *
  * <p>{@code LEDGER_NAMESPACE} is random per JVM, the same reason contribution-api's is: fixtures
- * are reused across local runs and TigerBeetle cannot be reset (AGENTS.md §4). This service never
- * registers an organization, so unlike contribution-api's version there is no {@code
+ * are reused across local runs and TigerBeetle cannot be reset (docs/ENGINEERING-RULES.md §4). This
+ * service never registers an organization, so unlike contribution-api's version there is no {@code
  * ORGANIZATION_NAMESPACE} here — a test that needs an organization row derives its id with its own
  * namespace and writes {@code master.organization} directly, since organization registration is
  * contribution-api's endpoint, not this service's.
@@ -37,7 +37,8 @@ public abstract class ServiceIntegrationTest {
     // An hour, so the scheduled sweep never fires during a test — every test drives the
     // runner explicitly, the same reason contribution-api's base class does this.
     registry.add("fondaria.allotment.poll-interval", () -> "1h");
-    // Fixtures are reused across runs (AGENTS.md §4): workflow.contribution_batch still
+    // Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4): workflow.contribution_batch
+    // still
     // holds whatever earlier runs left STAGED. Claiming the leftovers too is harmless --
     // every assertion in this suite is over an id it created itself -- but the production
     // batch size could crowd a test's own batch out of its own sweep.

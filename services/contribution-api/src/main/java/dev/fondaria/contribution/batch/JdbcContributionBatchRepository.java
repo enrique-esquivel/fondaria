@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link ContributionBatchRepository} over {@code workflow.contribution_batch}, using {@code
- * JdbcClient} (AGENTS.md §5 — no ORM).
+ * JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p><b>No amount is ever summed here, and no balance is ever read here.</b> {@code
  * declared_total_minor_units} is selected as a single {@code long} for a single batch, because it

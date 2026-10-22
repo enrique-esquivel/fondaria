@@ -36,7 +36,7 @@ ALTER TABLE workflow.contribution_batch
 
 -- A part number is 1-based and the submitted row is part 1, so the two columns are
 -- present or absent together and a part is never numbered below 2. Nullable, and
--- checked rather than defaulted: Flyway expand/contract (AGENTS.md §4) -- the previous
+-- checked rather than defaulted: Flyway expand/contract (docs/ENGINEERING-RULES.md §4) -- the previous
 -- application version writes neither column, and every row it writes is a whole file,
 -- which is exactly what NULL means here.
 ALTER TABLE workflow.contribution_batch
@@ -82,7 +82,7 @@ CREATE UNIQUE INDEX contribution_batch_part_unique
 -- V4's full index is deliberately left in place rather than replaced. The previous
 -- application version's sweep does not carry the predicate and so cannot use a partial
 -- index -- dropping the full one would leave it on a sequential scan, and expand/
--- contract (AGENTS.md §4) asks that the previous version keep running, not merely keep
+-- contract (docs/ENGINEERING-RULES.md §4) asks that the previous version keep running, not merely keep
 -- returning the right answer. Contracting it is a later migration, once no version
 -- that sweeps without the predicate is deployed.
 CREATE INDEX contribution_batch_files_by_status_submitted

@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * A forbidden field surviving into an exported span attribute or metric tag is a privacy incident,
- * not a bug report — every case here is a field {@code AGENTS.md} §7 names explicitly.
+ * not a bug report — every case here is a field {@code docs/ENGINEERING-RULES.md} §7 names
+ * explicitly.
  */
 class TelemetryRedactionFilterTest {
 

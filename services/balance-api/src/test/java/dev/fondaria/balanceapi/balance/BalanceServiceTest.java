@@ -198,7 +198,10 @@ class BalanceServiceTest {
     assertThat(balance.investedValue()).isEqualTo(Money.of(3_000L, CurrencyCode.MXN));
   }
 
-  /** Every priced figure must name the {@code reference.fund_nav} row behind it (AGENTS.md §4). */
+  /**
+   * Every priced figure must name the {@code reference.fund_nav} row behind it
+   * (docs/ENGINEERING-RULES.md §4).
+   */
   @Test
   void carriesTheNavVersionThatProducedEachFundsFigures() {
     FundId first = FundId.of(UUID.randomUUID());
@@ -302,7 +305,7 @@ class BalanceServiceTest {
   /**
    * "Balance matches units × NAV exactly after any sequence of contributions", over a volatile
    * series that genuinely falls — a suite that only ever raises the price passes on a broken
-   * implementation (AGENTS.md §4).
+   * implementation (docs/ENGINEERING-RULES.md §4).
    */
   @Test
   void matchesUnitsTimesNavOverAVolatileFallingSeries() {

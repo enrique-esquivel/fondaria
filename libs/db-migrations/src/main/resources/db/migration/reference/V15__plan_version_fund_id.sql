@@ -8,7 +8,7 @@
 -- Without it Task 21.2's allotment run has no way to know which fund's NAV a
 -- staged row strikes against.
 --
--- NULLABLE, DELIBERATELY. Flyway expand/contract (AGENTS.md §4): the previous
+-- NULLABLE, DELIBERATELY. Flyway expand/contract (docs/ENGINEERING-RULES.md §4): the previous
 -- application version publishes a plan version without knowing this column
 -- exists, so a NOT NULL here would stop that version dead. A plan version
 -- published before this migration -- or by code that has not picked up the new

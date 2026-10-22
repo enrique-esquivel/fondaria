@@ -10,8 +10,9 @@ import java.io.Serial;
  * broadly would let a parse failure anywhere downstream be reported as the caller's malformed date.
  *
  * <p>Carries no value: the offending text came from a URL and must not reach a problem detail or a
- * log (AGENTS.md §7). A date is not itself sensitive, but it arrives as raw caller input and
- * reflecting raw input into an error body is how a problem detail becomes an injection surface.
+ * log (docs/ENGINEERING-RULES.md §7). A date is not itself sensitive, but it arrives as raw caller
+ * input and reflecting raw input into an error body is how a problem detail becomes an injection
+ * surface.
  */
 public final class MalformedDateException extends RuntimeException {
 

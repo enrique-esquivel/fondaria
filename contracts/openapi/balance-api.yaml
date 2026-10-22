@@ -6,7 +6,7 @@ info:
     Balance and history reads that scale to millions of participants without
     touching PostgreSQL on the hot path (`phase-06-query-api.md`).
 
-    **The balance is a multiplication, not a query** (`AGENTS.md` §2). Units
+    **The balance is a multiplication, not a query** (`docs/ENGINEERING-RULES.md` §2). Units
     come from the ledger (`LedgerPort.lookupAccount`, O(1), sub-millisecond);
     NAV per unit comes from an in-memory cache, one number per fund. Value is
     `units × NAV`, computed on read and never stored. `getParticipantBalance`
@@ -17,7 +17,7 @@ info:
 
     **Every monetary amount is an integer of minor units (MXN cents), every
     unit quantity and every NAV is an integer at scale 1e-8, all in a JSON
-    number.** Never a decimal, never a float, never a string (`AGENTS.md`
+    number.** Never a decimal, never a float, never a string (`docs/ENGINEERING-RULES.md`
     §4). A ledger transfer id is the one exception: it is a 128-bit
     TigerBeetle identifier that does not fit a JSON number's safe integer
     range, so it travels as a canonical unsigned-decimal string, the same
@@ -39,7 +39,7 @@ info:
     **`participantId` is an opaque, platform-issued identifier — never
     `participant_internal_ref` or a payroll reference.** Neither of those
     appears anywhere in this contract, in a path, a query parameter or a
-    response body: `AGENTS.md` §7 already keeps a tax identifier out of
+    response body: `docs/ENGINEERING-RULES.md` §7 already keeps a tax identifier out of
     every URL for the same reason (an access log, a proxy log and a trace
     all see a URL), and an internal ref identifies a person exactly as a tax
     identifier does. How `participantId` is produced from
@@ -460,7 +460,7 @@ components:
       description: |
         Stable internal identifier of the client organization (tenant),
         derived from its tax identifier at registration. Never the tax
-        identifier itself (`AGENTS.md` §7).
+        identifier itself (`docs/ENGINEERING-RULES.md` §7).
       schema:
         type: string
         format: uuid
@@ -519,7 +519,7 @@ components:
   schemas:
     Problem:
       type: object
-      description: RFC 9457 problem details (`AGENTS.md` §7). Never carries an exception message, stack trace, SQL fragment, or hostname.
+      description: RFC 9457 problem details (`docs/ENGINEERING-RULES.md` §7). Never carries an exception message, stack trace, SQL fragment, or hostname.
       required: [type, title, status]
       properties:
         type:
@@ -867,7 +867,7 @@ components:
             rule (Task 21.3) — a sub-tick remainder is never issued to a
             participant and is folded into the fund's NAV at the next strike
             instead. Authored text, never a template string built from raw
-            figures (`AGENTS.md` §7).
+            figures (`docs/ENGINEERING-RULES.md` §7).
           example: "El remanente de redondeo de unidades no se asigna a los participantes; ver docs/rounding-policy.md."
 
     OrganizationFundSummary:

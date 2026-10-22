@@ -21,7 +21,7 @@ import java.util.Objects;
  *
  * <p>Carries the fund id and nothing else. A fund is a platform object, not a person, so it may be
  * logged so an operator knows which price is missing; the requested date and the participant may
- * not, and neither reaches the response (AGENTS.md §7).
+ * not, and neither reaches the response (docs/ENGINEERING-RULES.md §7).
  */
 public final class PriceNotOnRecordException extends RuntimeException {
 

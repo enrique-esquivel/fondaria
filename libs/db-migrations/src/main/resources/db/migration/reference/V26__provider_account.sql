@@ -47,7 +47,7 @@ COMMENT ON TABLE reference.provider_account IS
 COMMENT ON COLUMN reference.provider_account.scope_type IS
     'ALL_PARTICIPANTS -- omnibus, one row per fund, resolves to units_in_issue directly. ORGANIZATION -- segregated, one row per fund per employer, resolves by summing that organization''s holdings from workflow.allotment. Never PLAN: plan-to-fund linkage is still open (O-24/O-28).';
 COMMENT ON COLUMN reference.provider_account.provider_ref IS
-    'The external identifier for this account at the provider (account number, mandate reference). Descriptive data about a counterparty relationship, not money or a ledger link -- lives here, never in TigerBeetle user data (AGENTS.md Sec 4).';
+    'The external identifier for this account at the provider (account number, mandate reference). Descriptive data about a counterparty relationship, not money or a ledger link -- lives here, never in TigerBeetle user data (docs/ENGINEERING-RULES.md Sec 4).';
 COMMENT ON COLUMN reference.provider_account.version IS
     'Disambiguates two versions published with the same effective_from. The higher value wins resolution; the lower one remains readable.';
 

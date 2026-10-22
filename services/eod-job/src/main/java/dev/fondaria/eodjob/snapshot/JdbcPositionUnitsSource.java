@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link PositionUnitsSource} over {@code projection.participant_units}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>One statement per page, not one branch per account</h2>
  *
@@ -71,7 +71,8 @@ public class JdbcPositionUnitsSource implements PositionUnitsSource {
         .query(
             rs -> {
               // getString, not getBigDecimal: participant_id is a u128 identifier held in
-              // numeric(39,0) and is never arithmetic (AGENTS.md §4 confines BigDecimal to the
+              // numeric(39,0) and is never arithmetic (docs/ENGINEERING-RULES.md §4 confines
+              // BigDecimal to the
               // display boundary).
               byAccount.put(rs.getString("account_id"), rs.getLong("units_scaled"));
             });

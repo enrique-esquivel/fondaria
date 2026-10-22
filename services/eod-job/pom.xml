@@ -137,7 +137,7 @@
         </dependency>
 
         <!--
-            The S3 API client, for object storage only — AGENTS.md §4 bans cloud
+            The S3 API client, for object storage only — docs/ENGINEERING-RULES.md §4 bans cloud
             provider SDKs and carves out exactly this. Task 7.4 writes the dense
             daily snapshot and its manifest to the object store, never to AWS; the endpoint
             is configuration. Both default HTTP clients are excluded and

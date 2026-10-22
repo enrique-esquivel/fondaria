@@ -6,7 +6,7 @@
 -- keeping it that way: the internal ref is stable, never reused, and is what
 -- makes auto-enrolment idempotent on INSERT. None of that changes here. This
 -- column is additive and exists for one reason: an internal ref identifies a
--- person exactly as an RFC does, and AGENTS.md §7 keeps such a value out of
+-- person exactly as an RFC does, and docs/ENGINEERING-RULES.md §7 keeps such a value out of
 -- every URL, access log, proxy log and trace. Something else has to travel.
 --
 -- RANDOM, NOT DERIVED. OrganizationId is UUIDv5(namespace, taxId) because
@@ -21,7 +21,7 @@
 -- external natural key to derive from).
 --
 -- The DEFAULT is what backfills existing rows and what keeps this migration
--- expand/contract safe (AGENTS.md §4): a volatile default makes PostgreSQL
+-- expand/contract safe (docs/ENGINEERING-RULES.md §4): a volatile default makes PostgreSQL
 -- rewrite the table and evaluate gen_random_uuid() once per existing row, so
 -- every row emerges with its own id, and the previous application version --
 -- which never names this column in its INSERT -- keeps running unchanged.
@@ -57,4 +57,4 @@ CREATE UNIQUE INDEX participant_id_unique
     ON master.participant (participant_id);
 
 COMMENT ON COLUMN master.participant.participant_id IS
-    'Opaque, randomly assigned identifier carried by external contracts (contracts/openapi/query-api.yaml). Assigned once at enrolment by the column default and never reassigned -- a URL naming it must keep resolving to the same person forever. Deliberately NOT derived from (organization_id, participant_internal_ref): a derivable id would let anyone holding the namespace test whether a payroll reference exists. Never itself logged; it is an identifier for a person (AGENTS.md §7).';
+    'Opaque, randomly assigned identifier carried by external contracts (contracts/openapi/query-api.yaml). Assigned once at enrolment by the column default and never reassigned -- a URL naming it must keep resolving to the same person forever. Deliberately NOT derived from (organization_id, participant_internal_ref): a derivable id would let anyone holding the namespace test whether a payroll reference exists. Never itself logged; it is an identifier for a person (docs/ENGINEERING-RULES.md §7).';

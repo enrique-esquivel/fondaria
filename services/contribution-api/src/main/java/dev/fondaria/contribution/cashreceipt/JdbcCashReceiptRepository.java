@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link CashReceiptRepository} over {@code workflow.cash_receipt}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p><b>No amount is ever summed here.</b> Every query is by primary key. A balance comes from
  * {@code LedgerPort.lookupAccount} and from nowhere else, and a {@code SUM(amount_minor_units)}
@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p><b>Money crosses this boundary as {@code long} cents.</b> {@code amount_minor_units} is {@code
  * bigint} and is read with {@code getLong}, so no {@code numeric}, {@code BigDecimal} or {@code
- * double} is involved at any point (AGENTS.md §4).
+ * double} is involved at any point (docs/ENGINEERING-RULES.md §4).
  */
 @Repository
 public class JdbcCashReceiptRepository implements CashReceiptRepository {

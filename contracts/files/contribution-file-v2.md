@@ -8,7 +8,7 @@ payroll period. It is uploaded to object storage and submitted to
 v2 and rejects a v1 file. Nothing was ever live on v1, so no migration path is
 owed. §6 records what changed and why.
 
-Background: `AGENTS.md` §2 (units, not pesos), `docs/chart-of-accounts.md`
+Background: `docs/ENGINEERING-RULES.md` §2 (units, not pesos), `docs/chart-of-accounts.md`
 §6 (worked example this document reuses), `ADR-0004` (employee/employer
 contribution lots), `ADR-0009` (transport).
 
@@ -111,7 +111,7 @@ the file.
 
 Every amount is a non-negative integer of MXN cents: no decimal point, no
 thousands separator, no currency symbol. Amounts are always MXN — the file
-carries no currency column because the platform is MXN-only (`AGENTS.md` §1).
+carries no currency column because the platform is MXN-only (`docs/ENGINEERING-RULES.md` §1).
 
 A row whose three amounts are all `0` is malformed: a participant
 contributing nothing this period simply has no row. A single zero column is
@@ -139,7 +139,7 @@ prerequisite (Phase 13.5).
 ## 4. Rejection contract
 
 **Whole-batch rejection** — the file or its declarations are wrong; no row is
-staged, no partial allotment ever occurs (`AGENTS.md` §1's "never a partial
+staged, no partial allotment ever occurs (`docs/ENGINEERING-RULES.md` §1's "never a partial
 allotment" via Task 3.4). Checked in this order, cheapest first, before any
 plan-rule evaluation:
 
@@ -185,7 +185,7 @@ format error.
 **Nothing in a rejection message or its details names a participant.** A
 rejection body is logged by everything it passes through, and
 `participantInternalRef`, `participantPayrollRef` and the employment dates
-all identify a person (`AGENTS.md` §7).
+all identify a person (`docs/ENGINEERING-RULES.md` §7).
 
 ## 5. Worked example
 

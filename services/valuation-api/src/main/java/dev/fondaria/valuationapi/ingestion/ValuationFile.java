@@ -24,7 +24,7 @@ public record ValuationFile(List<ValuationRow> rows) {
    *
    * @param reportedValueMinorUnits MXN cents, integer, non-negative. A pooled balance is not
    *     negative — but the NAV struck from it is free to fall, and nothing downstream clamps it
-   *     (AGENTS.md §4).
+   *     (docs/ENGINEERING-RULES.md §4).
    * @param providerReference the provider's own identifier for this valuation. Carried, never
    *     parsed, and never compared when deciding whether a redelivery contradicts an accepted
    *     valuation — a provider restating the same balance under a new reference is still the same

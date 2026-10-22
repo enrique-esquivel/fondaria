@@ -15,12 +15,12 @@ import java.util.Objects;
  * <p>Two groups of fields, deliberately not the same lifecycle. {@code unitLedgerId}, {@code
  * baseCurrency}, {@code unitScale}, {@code inceptionDate} and {@code openingNav} are assigned once,
  * at the fund's first registration, and never change — a fund is never split across TigerBeetle
- * clusters and its unit ledger id is never reused (AGENTS.md §4, {@code LedgerPort} resolves a
- * cluster by fund). {@code name}, {@code vehicleType} and {@code status} are effective-dated and
- * append-only, the pattern {@link PlanVersion} set: a correction is a new version, never an edit.
- * {@link FundRepository#publish} carries both every time, because a caller resolving a fund as of a
- * date needs the whole picture in one read, but only the second group ever varies between two
- * versions of the same fund.
+ * clusters and its unit ledger id is never reused (docs/ENGINEERING-RULES.md §4, {@code LedgerPort}
+ * resolves a cluster by fund). {@code name}, {@code vehicleType} and {@code status} are
+ * effective-dated and append-only, the pattern {@link PlanVersion} set: a correction is a new
+ * version, never an edit. {@link FundRepository#publish} carries both every time, because a caller
+ * resolving a fund as of a date needs the whole picture in one read, but only the second group ever
+ * varies between two versions of the same fund.
  *
  * @param effectiveFrom the date this version takes effect. Resolution ({@link
  *     FundRepository#resolveAsOf}) picks the version with the latest {@code effectiveFrom} not
@@ -32,7 +32,7 @@ import java.util.Objects;
  *     registration and never reused by another fund.
  * @param unitScale the fixed-point scale units are stored at. Always {@link Units#SCALE} — carried
  *     as data, not a constant, so a stored row reproduces its own arithmetic without rerunning
- *     current code (AGENTS.md §4).
+ *     current code (docs/ENGINEERING-RULES.md §4).
  * @param openingNav the price the fund's first contribution buys at, declared at inception.
  */
 public record Fund(

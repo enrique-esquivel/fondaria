@@ -176,7 +176,7 @@ services:
       - ./cdc/run.sh:/run.sh:ro
     entrypoint: ["/bin/sh", "/run.sh"]
     # Same as the `tigerbeetle` service: the stock image's `io_uring` probe fails
-    # under the default seccomp profile (AGENTS.md §"Local Infrastructure").
+    # under the default seccomp profile (docs/ENGINEERING-RULES.md §"Local Infrastructure").
     security_opt:
       - seccomp=unconfined
     environment:

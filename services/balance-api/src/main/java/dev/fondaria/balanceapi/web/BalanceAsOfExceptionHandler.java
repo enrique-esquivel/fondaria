@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the balance-as-of endpoint (AGENTS.md §7).
+ * RFC 9457 problem details for the balance-as-of endpoint (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Its own advice rather than an extension of {@link BalanceExceptionHandler}, for the reason
  * {@link MovementExceptionHandler} gives: the routes fail in different ways — this one never
@@ -81,7 +81,9 @@ public class BalanceAsOfExceptionHandler {
     return problem(HttpStatus.FORBIDDEN, FORBIDDEN_TYPE, "Forbidden", e.detail());
   }
 
-  /** Never echoes the id: it came from a URL and identifies a person (AGENTS.md §7). */
+  /**
+   * Never echoes the id: it came from a URL and identifies a person (docs/ENGINEERING-RULES.md §7).
+   */
   @ExceptionHandler(ParticipantNotFoundException.class)
   public ProblemDetail participantNotFound(ParticipantNotFoundException e) {
     return problem(

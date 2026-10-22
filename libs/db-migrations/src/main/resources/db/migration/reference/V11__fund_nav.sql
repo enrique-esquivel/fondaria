@@ -9,7 +9,7 @@
 --
 -- units_in_issue travels with the price rather than being looked up again later: a stored
 -- row reproduces its own arithmetic years afterward from data alone, never by rerunning
--- current code (AGENTS.md §4).
+-- current code (docs/ENGINEERING-RULES.md §4).
 
 CREATE TABLE reference.fund_nav (
     nav_version_id   bigserial   PRIMARY KEY,
@@ -31,7 +31,7 @@ CREATE TABLE reference.fund_nav (
 );
 
 COMMENT ON TABLE reference.fund_nav IS
-    'Struck NAV per fund per valuation date (Task 20.4), append-only and versioned. Never a balance and never the ledger -- the price sits outside the double-entry system (AGENTS.md §2).';
+    'Struck NAV per fund per valuation date (Task 20.4), append-only and versioned. Never a balance and never the ledger -- the price sits outside the double-entry system (docs/ENGINEERING-RULES.md §2).';
 COMMENT ON COLUMN reference.fund_nav.units_in_issue IS
     'Read from LedgerPort.lookupAccount at strike time, never summed from PostgreSQL (ADR-0008), and stored so the division is reproducible without rerunning current code.';
 COMMENT ON COLUMN reference.fund_nav.source IS

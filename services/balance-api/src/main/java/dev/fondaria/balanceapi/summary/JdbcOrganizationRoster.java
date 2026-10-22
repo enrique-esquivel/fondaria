@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link OrganizationRoster} over {@code master.organization} and {@code master.participant}, using
- * {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p><b>Both statements are scoped by {@code organization_id} in their own {@code WHERE} clause,
  * and there is no other way into either.</b> That is the whole of this endpoint's tenant isolation

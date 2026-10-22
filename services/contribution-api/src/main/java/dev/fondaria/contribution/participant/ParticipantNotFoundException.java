@@ -4,7 +4,8 @@ import java.io.Serial;
 
 /**
  * No participant resolves under the reference a caller supplied. The message never echoes the
- * reference itself — it identifies a person exactly as an {@code RFC} does (AGENTS.md §7).
+ * reference itself — it identifies a person exactly as an {@code RFC} does
+ * (docs/ENGINEERING-RULES.md §7).
  */
 public final class ParticipantNotFoundException extends RuntimeException {
 

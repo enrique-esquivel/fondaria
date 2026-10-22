@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link SignoffRepository} over {@code workflow.close_signoff} ({@code V29}), using {@code
- * JdbcClient} (AGENTS.md §5 — no ORM).
+ * JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>No transaction wraps a method here. {@link #insertIfAbsent} is one statement; {@link
  * #markAnnounced} is one statement; and the two-step "write then announce" of {@link

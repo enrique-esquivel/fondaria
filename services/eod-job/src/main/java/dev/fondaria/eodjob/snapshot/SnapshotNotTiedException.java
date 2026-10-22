@@ -36,7 +36,7 @@ public class SnapshotNotTiedException extends SnapshotFailedException {
    *
    * <p>A fund id is not personal data and belongs in the reason an operator reads; which
    * participants are behind the drift is in the snapshot's own inputs, behind authentication
-   * (AGENTS.md §7).
+   * (docs/ENGINEERING-RULES.md §7).
    */
   private static String describe(List<SnapshotFundTotal> untiedFunds) {
     StringBuilder reason =

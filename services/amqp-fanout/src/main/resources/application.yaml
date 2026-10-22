@@ -43,7 +43,7 @@ management:
     health:
       probes:
         enabled: true
-      # Never render component details: they would expose broker hostnames (AGENTS.md §7).
+      # Never render component details: they would expose broker hostnames (docs/ENGINEERING-RULES.md §7).
       show-details: never
       show-components: never
 

@@ -86,7 +86,10 @@ public enum TaxIdScheme {
     return country;
   }
 
-  /** The scheme's own name as the issuing authority writes it, e.g. {@code RFC} (AGENTS.md §4a). */
+  /**
+   * The scheme's own name as the issuing authority writes it, e.g. {@code RFC}
+   * (docs/ENGINEERING-RULES.md §4a).
+   */
   public String code() {
     return code;
   }
@@ -94,7 +97,7 @@ public enum TaxIdScheme {
   /**
    * Canonicalizes {@code raw}, throwing {@link IllegalArgumentException} if it is not a well-formed
    * value in this scheme. Never include the offending value in the message: a tax identifier is on
-   * the never-log list (AGENTS.md §7), and an exception message reaches a log.
+   * the never-log list (docs/ENGINEERING-RULES.md §7), and an exception message reaches a log.
    */
   public abstract String canonicalize(String raw);
 

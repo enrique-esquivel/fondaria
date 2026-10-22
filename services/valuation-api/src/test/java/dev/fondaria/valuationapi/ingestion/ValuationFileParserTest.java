@@ -74,7 +74,7 @@ class ValuationFileParserTest {
   @DisplayName("a negative reported value is refused rather than floored at zero")
   void refusesANegativeReportedValue() {
     // Note what this is NOT: a clamp. Nothing floors the value — the file is refused. A
-    // NAV struck from an accepted value is free to fall (AGENTS.md §4).
+    // NAV struck from an accepted value is free to fall (docs/ENGINEERING-RULES.md §4).
     assertThat(rejectionCodeOf(header() + FUND + ",2026-08-20,-1,ACME-001\n"))
         .isEqualTo(ValuationRejectionCode.MALFORMED_FILE);
   }

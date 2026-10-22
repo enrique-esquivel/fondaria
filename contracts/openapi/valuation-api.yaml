@@ -9,7 +9,7 @@ info:
 
     **We do not manage the portfolio.** Every number this API accepts was
     computed by somebody else. Nothing here prices a security, and nothing
-    here computes a per-participant amount (`AGENTS.md` §2).
+    here computes a per-participant amount (`docs/ENGINEERING-RULES.md` §2).
 
     Transport is reference-based and asynchronous, reusing `ADR-0009`
     unchanged rather than inventing a second ingestion mechanism: the caller
@@ -21,7 +21,7 @@ info:
     **Every monetary amount in this contract is an integer of minor units
     (MXN cents), in a JSON number.** Never a decimal, never a float, never a
     string — a decimal `reportedValueCents` is rejected with
-    `DECIMAL_AMOUNT` and never rounded (`AGENTS.md` §4).
+    `DECIMAL_AMOUNT` and never rounded (`docs/ENGINEERING-RULES.md` §4).
 
     **This API does not strike, publish or correct a NAV.** It stops at an
     accepted valuation. Striking `nav_per_unit = reported value ÷ units in
@@ -171,7 +171,7 @@ paths:
       summary: Business dates with no accepted valuation.
       description: |
         **A silently absent NAV is worse than a late one.** Every balance in
-        a fund is `units × NAV` (`AGENTS.md` §2), so a fund with no valuation
+        a fund is `units × NAV` (`docs/ENGINEERING-RULES.md` §2), so a fund with no valuation
         for a business date has every participant's balance quietly stale.
         This report is what makes that visible, and it is the valuation-side
         counterpart of Task 3.4's cash reconciliation ageing report.
@@ -361,7 +361,7 @@ components:
           description: |
             Authored by this service, never a parser, driver or SDK message
             — those carry hostnames, SQL fragments and file contents
-            (`AGENTS.md` §7).
+            (`docs/ENGINEERING-RULES.md` §7).
         details:
           type: object
           additionalProperties: true

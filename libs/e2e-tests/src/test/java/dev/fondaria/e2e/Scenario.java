@@ -63,11 +63,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * this chain's scope (see {@link PlatformStack}).
  *
  * <p><b>Every scenario is a fresh organization and participant, and by default a fresh fund.</b>
- * Fixtures are reused across runs and TigerBeetle cannot be reset (AGENTS.md §4), so no assertion
- * in this module may be a total over a table, a topic or a ledger — only over ids the scenario
- * itself created. A series of scenarios may share one {@link TargetFund}, in which case that fund's
- * pooled accounts total <i>those</i> scenarios and nothing else, because the fund is still one
- * nothing before this run had ever registered.
+ * Fixtures are reused across runs and TigerBeetle cannot be reset (docs/ENGINEERING-RULES.md §4),
+ * so no assertion in this module may be a total over a table, a topic or a ledger — only over ids
+ * the scenario itself created. A series of scenarios may share one {@link TargetFund}, in which
+ * case that fund's pooled accounts total <i>those</i> scenarios and nothing else, because the fund
+ * is still one nothing before this run had ever registered.
  *
  * @param navScaled the price the units were bought at, 1e-8 scaled
  * @param dealingDate the date the batch dealt at, computed by {@link DealingDateRule} from the
@@ -365,8 +365,8 @@ record Scenario(
    * also opens its {@code EMPLOYER_COLLECTIONS} ledger account, as a real onboarding does.
    *
    * <p>A fresh {@code RFC} every time: fixtures are reused across runs and TigerBeetle cannot be
-   * reset (AGENTS.md §4), so a fixed identifier would have the second run assert against an
-   * organization and a ledger account the first one created.
+   * reset (docs/ENGINEERING-RULES.md §4), so a fixed identifier would have the second run assert
+   * against an organization and a ledger account the first one created.
    */
   static OrganizationId registerOrganization(PlatformStack stack) {
     return stack

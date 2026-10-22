@@ -11,11 +11,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 /**
  * The service's one {@link DataSource}, and the {@link JdbcClient} every projection write uses.
  *
- * <p>JDBC and {@code JdbcClient} by name (AGENTS.md §5): no ORM, no JPA, no R2DBC. Flyway's
- * autoconfiguration picks this bean up and migrates the shared tree in {@code libs/db-migrations}
- * at startup — during context refresh, which completes before the Kafka listener containers start
- * their {@code SmartLifecycle} phase. So the worker never consumes an event against a schema it has
- * not migrated ("Flyway runs at startup, before consuming" — phase-05 Task 5.1).
+ * <p>JDBC and {@code JdbcClient} by name (docs/ENGINEERING-RULES.md §5): no ORM, no JPA, no R2DBC.
+ * Flyway's autoconfiguration picks this bean up and migrates the shared tree in {@code
+ * libs/db-migrations} at startup — during context refresh, which completes before the Kafka
+ * listener containers start their {@code SmartLifecycle} phase. So the worker never consumes an
+ * event against a schema it has not migrated ("Flyway runs at startup, before consuming" — phase-05
+ * Task 5.1).
  *
  * <p>Every timeout is explicit. A pool that waits forever for a connection turns a database blip
  * into an unbounded queue of parked virtual threads.

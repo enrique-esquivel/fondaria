@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Wires the one {@code LedgerPort} implementation (ADR-0008). {@code BalanceService} depends on
- * {@link LedgerPort} alone (AGENTS.md §4).
+ * {@link LedgerPort} alone (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>One other class names a TigerBeetle type:</b> {@code BalanceExceptionHandler} imports
  * {@code LedgerUnavailableException} to map it to a {@code 503}. That type lives in {@code
@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Configuration;
  * service outside the adapter module to depend on it. Moving it to {@code libs/ledger-client}
  * beside {@code LedgerPort} would decouple every future service's error handling from the one
  * implementation — a follow-up this task deliberately does not take, since it touches merged code
- * in three services that this task does not name (AGENTS.md §10).
+ * in three services that this task does not name (docs/ENGINEERING-RULES.md §10).
  *
  * <p><b>Read-only by construction of what this service does</b>, not by a wrapper that forbids
  * writes: nothing here calls {@code createTransfer} or {@code createAccount}. In particular this

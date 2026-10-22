@@ -104,7 +104,7 @@
             <scope>test</scope>
         </dependency>
         <!--
-            Property-based testing, pinned in AGENTS.md ss5 alongside JUnit 5 and
+            Property-based testing, pinned in docs/ENGINEERING-RULES.md ss5 alongside JUnit 5 and
             AssertJ. Same version libs/platform-common, libs/rules-engine,
             libs/valuation and libs/ledger-tigerbeetle already use.
         -->

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link FundDirectory} over {@code reference.fund} and {@code reference.fund_identity}, using
- * {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Resolution mirrors {@code JdbcFundRepository#resolveAsOf} and valuation-api's {@code
  * JdbcFundDirectory} exactly — the latest {@code (effective_from, version)} not after the date

@@ -57,8 +57,8 @@ import org.yaml.snakeyaml.Yaml;
  * reimplemented connector, and never on a retry count this test invented.
  *
  * <p>The TigerBeetle ledger and the RabbitMQ broker are reused across runs, so every assertion is
- * scoped to transfer ids this test generated ({@code AGENTS.md} §4). "Full history" in the replay
- * test means "contains every id I created", never a total count.
+ * scoped to transfer ids this test generated ({@code docs/ENGINEERING-RULES.md} §4). "Full history"
+ * in the replay test means "contains every id I created", never a total count.
  */
 @Tag("integration")
 class CdcJobIntegrationTest {

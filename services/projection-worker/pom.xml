@@ -90,7 +90,7 @@
 
         <!--
             The projection is a Postgres write. JDBC + JdbcClient by name
-            (AGENTS.md §5): no ORM, no JPA, no R2DBC.
+            (docs/ENGINEERING-RULES.md §5): no ORM, no JPA, no R2DBC.
         -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -168,7 +168,7 @@
             Shared Testcontainers fixtures: PostgresFixture (runs Flyway on start),
             RedpandaFixture, and (Task 11.2) RedisFixture for the trace-correlation
             read path. Integration tests never hand-run a broker or a database
-            (AGENTS.md §4). Object-store- and ledger-related transitive jars stay
+            (docs/ENGINEERING-RULES.md §4). Object-store- and ledger-related transitive jars stay
             excluded — this service has neither, unlike Redis, which it now takes on
             directly above. Lettuce itself stays excluded here too, even though it is
             now a direct dependency: two resolved versions of the same jar (one via

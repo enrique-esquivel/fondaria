@@ -10,9 +10,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * One row of {@code workflow.allotment} (V16) — the audit trail AGENTS.md §4 requires: "every unit
- * allotment records which NAV version it used." One record corresponds to exactly one unit-ledger
- * transfer in the {@code CONTRIBUTION_ALLOTMENT} chain (chart-of-accounts.md §4).
+ * One row of {@code workflow.allotment} (V16) — the audit trail docs/ENGINEERING-RULES.md §4
+ * requires: "every unit allotment records which NAV version it used." One record corresponds to
+ * exactly one unit-ledger transfer in the {@code CONTRIBUTION_ALLOTMENT} chain
+ * (chart-of-accounts.md §4).
  *
  * @param source which of a participant's contribution sources this record is for — {@code EMPLOYEE}
  *     and {@code VOLUNTARY} always land vested, {@code EMPLOYER} depends on {@link #vested}

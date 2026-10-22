@@ -5,10 +5,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * The master key (KEK) wrapping every participant's own data key (Task 9.5's envelope encryption).
  *
- * <p><b>No default here, on purpose (AGENTS.md §4).</b> A default master key would be a fixed value
- * anyone reading this repository could decrypt every participant's identity data with, in every
- * environment that forgot to override it — the opposite of what a secret is for. The local-dev
- * value lives in {@code infrastructure/compose/.env.example} only.
+ * <p><b>No default here, on purpose (docs/ENGINEERING-RULES.md §4).</b> A default master key would
+ * be a fixed value anyone reading this repository could decrypt every participant's identity data
+ * with, in every environment that forgot to override it — the opposite of what a secret is for. The
+ * local-dev value lives in {@code infrastructure/compose/.env.example} only.
  *
  * @param masterKeyBase64 base64-encoded, exactly 32 bytes (AES-256) once decoded
  */

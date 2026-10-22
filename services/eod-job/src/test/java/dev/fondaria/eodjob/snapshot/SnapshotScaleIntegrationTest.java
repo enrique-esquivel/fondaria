@@ -123,7 +123,8 @@ class SnapshotScaleIntegrationTest extends ServiceIntegrationTest {
 
     // Reaching here at all is the tie: a fund that did not tie throws SnapshotNotTiedException and
     // stores nothing. What is asserted below is this test's own fund — the pass checks every
-    // registered fund, and a reused fixture holds dozens from other suites (AGENTS.md §4).
+    // registered fund, and a reused fixture holds dozens from other suites
+    // (docs/ENGINEERING-RULES.md §4).
     assertThat(result.ties()).isTrue();
     SnapshotFundTotal total =
         result.fundTotals().stream()
@@ -166,8 +167,8 @@ class SnapshotScaleIntegrationTest extends ServiceIntegrationTest {
    * <p>The projection side goes by dropping the tenant's own partitions, which is how Task 6.4's
    * ten-million-row fixture and Task 7.2's scale test both clean up — {@code
    * projection.participant_units} carries a {@code BEFORE DELETE} trigger that raises for every
-   * role. It matters that this happens: fixtures are reused across runs (AGENTS.md §4), and a
-   * million rows left behind would be scanned again by every later pass.
+   * role. It matters that this happens: fixtures are reused across runs (docs/ENGINEERING-RULES.md
+   * §4), and a million rows left behind would be scanned again by every later pass.
    *
    * <p><b>The ledger has to be returned to zero, and that is the part that is easy to get
    * wrong.</b> TigerBeetle cannot be reset and this fund's rows in {@code reference.fund_identity}

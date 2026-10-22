@@ -57,7 +57,8 @@ public interface FundNavRepository {
    *
    * <p><b>Never rewrites {@code workflow.allotment}.</b> Every allotment already made under the
    * superseded price keeps naming it, unchanged — re-allotment against a corrected NAV is a Phase
-   * 14 concern, not a side effect of this method (`AGENTS.md` §4, Task 20.5's own requirements).
+   * 14 concern, not a side effect of this method (`docs/ENGINEERING-RULES.md` §4, Task 20.5's own
+   * requirements).
    *
    * @throws IllegalArgumentException {@code candidate.supersedesId()} is null
    * @throws IllegalStateException the row {@code candidate.supersedesId()} names does not exist,

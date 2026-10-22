@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link CustodianStatementRepository} over {@code workflow.custodian_statement} ({@code V27}),
- * using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * using {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  */
 @Repository
 public class JdbcCustodianStatementRepository implements CustodianStatementRepository {

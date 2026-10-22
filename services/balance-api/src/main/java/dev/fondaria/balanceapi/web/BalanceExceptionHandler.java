@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * RFC 9457 problem details for the balance endpoint (AGENTS.md §7).
+ * RFC 9457 problem details for the balance endpoint (docs/ENGINEERING-RULES.md §7).
  *
  * <p>Only messages this codebase authored are rendered — never an exception's own, which can carry
  * a SQL fragment, a hostname or a participant identifier. The real cause is logged.
@@ -80,7 +80,9 @@ public class BalanceExceptionHandler {
     return problem(HttpStatus.FORBIDDEN, FORBIDDEN_TYPE, "Forbidden", e.detail());
   }
 
-  /** Never echoes the id: it came from a URL and identifies a person (AGENTS.md §7). */
+  /**
+   * Never echoes the id: it came from a URL and identifies a person (docs/ENGINEERING-RULES.md §7).
+   */
   @ExceptionHandler(ParticipantNotFoundException.class)
   public ProblemDetail participantNotFound(ParticipantNotFoundException e) {
     return problem(

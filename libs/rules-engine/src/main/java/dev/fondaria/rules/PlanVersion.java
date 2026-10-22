@@ -15,8 +15,8 @@ import java.util.Objects;
  * needs — the employer matching ratio, which {@link MatchingRatioRule} enforces against
  * contribution rows, and the vesting schedule, which {@link VestingScheduleCalculator} reads but
  * nothing here enforces yet. Both are stored as versioned data rather than constants because
- * AGENTS.md §4 forbids treating plan rules as code constants, and ADR-0004 states the vesting
- * schedule specifically is "per-organization, effective-dated configuration."
+ * docs/ENGINEERING-RULES.md §4 forbids treating plan rules as code constants, and ADR-0004 states
+ * the vesting schedule specifically is "per-organization, effective-dated configuration."
  *
  * <p>{@code planId} is a free-text identifier, matching the convention already established by
  * {@code BatchDeclaration.planId} and {@code master.participant.plan_id} — not a new derived-id
@@ -35,10 +35,10 @@ import java.util.Objects;
  *     at which a graded vesting schedule reaches 100%. Zero means immediate vesting.
  * @param dealingLagBusinessDays business days between a batch's value date and the valuation date
  *     it deals at (Task 21.1). Zero means same-day dealing. Versioned rather than configured for
- *     the reason AGENTS.md §4 gives for every plan rule: an employer that renegotiates its lag
- *     needs the old value to stay readable, because a batch allotted last March was priced under
- *     the lag in force last March and that has to be reproducible years later from stored data.
- *     Read by {@link DealingDateRule}, which is bounded by the same {@link
+ *     the reason docs/ENGINEERING-RULES.md §4 gives for every plan rule: an employer that
+ *     renegotiates its lag needs the old value to stay readable, because a batch allotted last
+ *     March was priced under the lag in force last March and that has to be reproducible years
+ *     later from stored data. Read by {@link DealingDateRule}, which is bounded by the same {@link
  *     DealingDateRule#MAXIMUM_DEALING_LAG_BUSINESS_DAYS} this constructor enforces.
  * @param fundId the fund this plan's contributions allot into ({@code ADR-0012}: one fund per plan
  *     version for v1 — no participant-chosen allocation, switching or rebalancing). Versioned

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link OpeningSnapshotRepository} over {@code workflow.snapshot_run} ({@code V28}, Task 7.4),
- * using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * using {@code JdbcClient} (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>Same query {@code eod-job}'s own {@code SnapshotRepository#latestCompletedBefore} runs, served
  * by the same {@code snapshot_run_by_date} index — reimplemented here rather than shared, because

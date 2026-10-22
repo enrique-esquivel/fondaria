@@ -20,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link SnapshotRepository} over {@code workflow.snapshot_run} and {@code
- * workflow.snapshot_fund_total} ({@code V28}), using {@code JdbcClient} (AGENTS.md §5 — no ORM).
+ * workflow.snapshot_fund_total} ({@code V28}), using {@code JdbcClient} (docs/ENGINEERING-RULES.md
+ * §5 — no ORM).
  *
  * <p>{@link #complete} is one transaction over both tables, for the reason {@code
  * JdbcReconciliationRepository#complete} is: a run marked {@code COMPLETED} whose fund totals had

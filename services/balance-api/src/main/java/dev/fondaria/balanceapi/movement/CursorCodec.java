@@ -35,9 +35,9 @@ import javax.crypto.spec.SecretKeySpec;
  *
  * <h2>The secret</h2>
  *
- * <p>Configuration with no default (AGENTS.md §4). Rotating it invalidates every outstanding
- * cursor, which shows up as a {@code 400} on the next page rather than as wrong data — the failure
- * mode a rotation should have.
+ * <p>Configuration with no default (docs/ENGINEERING-RULES.md §4). Rotating it invalidates every
+ * outstanding cursor, which shows up as a {@code 400} on the next page rather than as wrong data —
+ * the failure mode a rotation should have.
  */
 public final class CursorCodec {
 

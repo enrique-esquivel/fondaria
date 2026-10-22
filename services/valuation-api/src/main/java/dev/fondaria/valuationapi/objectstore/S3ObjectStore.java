@@ -18,8 +18,9 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 /**
- * The one {@link ObjectStore} implementation, speaking the S3 API to the object store (AGENTS.md
- * §5). The S3 API client is the single cloud-provider SDK AGENTS.md §4 permits, and only for this.
+ * The one {@link ObjectStore} implementation, speaking the S3 API to the object store
+ * (docs/ENGINEERING-RULES.md §5). The S3 API client is the single cloud-provider SDK
+ * docs/ENGINEERING-RULES.md §4 permits, and only for this.
  *
  * <p>This class does not create buckets. The bucket is provisioned by the deployment, so the
  * service's credentials never need {@code s3:CreateBucket}.

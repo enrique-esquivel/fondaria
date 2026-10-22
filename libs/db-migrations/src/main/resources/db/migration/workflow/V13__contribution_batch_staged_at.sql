@@ -13,7 +13,7 @@
 -- JdbcContributionBatchRepository.resolve writes COALESCE(staged_at, :stagedAt).
 -- A re-resolve by a later sweep therefore cannot re-date an unallotted batch.
 --
--- NULLABLE, DELIBERATELY. Flyway expand/contract (AGENTS.md §4): the previous
+-- NULLABLE, DELIBERATELY. Flyway expand/contract (docs/ENGINEERING-RULES.md §4): the previous
 -- application version writes STAGED without this column, so a NOT NULL or a CHECK
 -- tying it to status would stop that version dead. Rows staged before this
 -- migration carry NULL and report no dealing date -- honest, and Phase 21 has

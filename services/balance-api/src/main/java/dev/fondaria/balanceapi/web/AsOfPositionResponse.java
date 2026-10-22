@@ -12,7 +12,8 @@ import dev.fondaria.balanceapi.asof.AsOfPosition;
  * that quantity times the rendered NAV, rounded once, so a reader who repeats the multiplication
  * lands on the same centavo (ADR-0013).
  *
- * <p>Units at scale 1e-8, cash in MXN cents, both as plain JSON integers (AGENTS.md §4).
+ * <p>Units at scale 1e-8, cash in MXN cents, both as plain JSON integers (docs/ENGINEERING-RULES.md
+ * §4).
  */
 public record AsOfPositionResponse(
     String fundId, long unitsScaled, long valueCents, AsOfFundNavResponse nav) {

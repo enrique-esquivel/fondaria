@@ -11,8 +11,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link HoldingAccountSource} over {@code workflow.allotment}, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link HoldingAccountSource} over {@code workflow.allotment}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>Why a row-wise keyset predicate rather than {@code OFFSET}</h2>
  *

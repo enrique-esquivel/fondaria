@@ -19,7 +19,7 @@
 #
 # Backend is this cluster's own Valkey (infrastructure/k8s/base/valkey/),
 # addressed by its in-cluster Service DNS name -- no new dependency, per
-# AGENTS.md ("No new dependency unless the task names it").
+# docs/ENGINEERING-RULES.md ("No new dependency unless the task names it").
 # `funds_dev_pass` is the same local-dev-only default already committed in
 # overlays/local/kustomization.yaml's `valkey-credentials` secretGenerator;
 # this file is bootstrap/-only tooling (kind, local development), so it
@@ -37,7 +37,7 @@
 # precedent for every other Valkey consumer (infrastructure/k8s/base/valkey/
 # valkey-cluster.yaml: "each of them treats an outage as a cache miss, never
 # a fault"); rate limiting is an abuse control, not a money-correctness
-# control (AGENTS.md's "correctness of participants' money outranks
+# control (docs/ENGINEERING-RULES.md's "correctness of participants' money outranks
 # everything" governs the ledger and NAV, not this), so losing it
 # temporarily is the smaller cost next to an availability outage over a
 # cache dependency. Verified live this session (TASK-LOG.md): scaling Valkey

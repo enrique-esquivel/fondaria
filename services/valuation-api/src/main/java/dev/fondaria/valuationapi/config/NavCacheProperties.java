@@ -18,8 +18,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param password the Redis password. Required when {@code url} is set — supplied separately so a
  *     secret never has to be embedded in a URL, where it would reach any log line rendering the
  *     connection target.
- * @param commandTimeout explicit per-command timeout (AGENTS.md §4). Short: this is a cache, and
- *     waiting on it is worse than missing it.
+ * @param commandTimeout explicit per-command timeout (docs/ENGINEERING-RULES.md §4). Short: this is
+ *     a cache, and waiting on it is worse than missing it.
  * @param refreshInterval how long an instance may go before it picks up a price struck elsewhere —
  *     the bound the acceptance criterion means by "the documented interval".
  * @param staleAfter how old a published price may be before it is served marked stale. Above 24

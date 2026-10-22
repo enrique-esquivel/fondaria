@@ -2,13 +2,13 @@
 --
 -- Pseudonymous: an internal ref, a payroll ref, the two employment dates and
 -- the statuses that govern them. No name, RFC or CURP — Phase 16, after
--- Phase 13.5's crypto-shredding (AGENTS.md §1, phase-02b "Scope decisions
+-- Phase 13.5's crypto-shredding (docs/ENGINEERING-RULES.md §1, phase-02b "Scope decisions
 -- taken for v1").
 --
 -- The primary key is (organization_id, participant_internal_ref) rather than
 -- a surrogate id: the internal ref is already stable, never reused and never
 -- reassigned (contribution-file-v2.md §3), and every table here is tenant
--- scoped by organization_id first (AGENTS.md §4). That primary key is also
+-- scoped by organization_id first (docs/ENGINEERING-RULES.md §4). That primary key is also
 -- what makes auto-enrolment idempotent: a row naming a participant already
 -- known collides on INSERT and is matched instead of duplicated, whether the
 -- second sighting is a re-swept batch or a later payroll period.
@@ -45,7 +45,7 @@ CREATE TABLE master.participant (
 COMMENT ON TABLE master.participant IS
     'Pseudonymous participant records (Task 2b.3). Created by auto-enrolment from a contribution file''s rows; never carries a name, RFC or CURP.';
 COMMENT ON COLUMN master.participant.participant_internal_ref IS
-    'The platform''s stable reference for this participant. Never reused, never reassigned (contribution-file-v2.md §3). Not logged (AGENTS.md §7) even though it carries no name — it still identifies a person.';
+    'The platform''s stable reference for this participant. Never reused, never reassigned (contribution-file-v2.md §3). Not logged (docs/ENGINEERING-RULES.md §7) even though it carries no name — it still identifies a person.';
 COMMENT ON COLUMN master.participant.participant_payroll_ref IS
     'The payroll system''s own reference, carried alongside the internal ref so a re-mapping never requires re-keying history (Task 2b.6). Unique within an organization, never globally.';
 COMMENT ON COLUMN master.participant.employment_start_date IS

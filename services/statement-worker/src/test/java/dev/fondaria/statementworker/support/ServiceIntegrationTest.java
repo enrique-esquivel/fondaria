@@ -26,8 +26,8 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  *
  * <p>Buckets are per-JVM-random, and the settlement sweep runs on a one-second interval rather than
  * the production default, so a test does not wait multiple seconds for a run to settle. Every test
- * still asserts only over the period and participants it created itself (AGENTS.md §4): fixtures
- * are reused across local runs.
+ * still asserts only over the period and participants it created itself (docs/ENGINEERING-RULES.md
+ * §4): fixtures are reused across local runs.
  */
 @Tag("integration")
 public abstract class ServiceIntegrationTest {

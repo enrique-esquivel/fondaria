@@ -14,8 +14,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * {@link AllotmentNavSource} over {@code reference.fund_nav}, using {@code JdbcClient} (AGENTS.md
- * §5 — no ORM).
+ * {@link AllotmentNavSource} over {@code reference.fund_nav}, using {@code JdbcClient}
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <p>{@code supersedes_id IS NULL} is exactly what makes a row "original" — the partial unique
  * index on {@code (fund_id, valuation_date) WHERE supersedes_id IS NULL} (V11) guarantees at most

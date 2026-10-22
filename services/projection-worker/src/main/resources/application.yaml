@@ -48,7 +48,7 @@ management:
       probes:
         enabled: true
       # Never render component details: the halt reason names a topic/partition/offset and
-      # the db component would carry a hostname (AGENTS.md §7).
+      # the db component would carry a hostname (docs/ENGINEERING-RULES.md §7).
       show-details: never
       show-components: never
       group:
@@ -88,7 +88,7 @@ management:
 fondaria:
   database:
     # No defaults. Production must fail to start when a required secret is absent
-    # (AGENTS.md §4); local-dev values live in infrastructure/compose/.env.example.
+    # (docs/ENGINEERING-RULES.md §4); local-dev values live in infrastructure/compose/.env.example.
     # The login role must be a member of fondaria_cdc — the role with INSERT on the
     # projection tables and UPDATE/DELETE on projection_consumer_checkpoint (V35).
     url: ${POSTGRES_URL:}

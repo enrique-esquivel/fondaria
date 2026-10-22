@@ -232,7 +232,7 @@ class ContributionBatchValidatorTest {
   @Test
   void every_amount_in_a_rejection_detail_is_an_integer_never_a_decimal() {
     // The OpenAPI contract says so, and a decimal here would be the first float in a
-    // money path (AGENTS.md §4).
+    // money path (docs/ENGINEERING-RULES.md §4).
     BatchRejection rejection =
         rejectionOf(
             rows("P-1,PAY-1,2019-03-01,2026-01-15,300,0,0"),

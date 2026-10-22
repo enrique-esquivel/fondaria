@@ -15,9 +15,9 @@ import dev.fondaria.ledger.LedgerPort;
 /**
  * The ledger as a reader sees it: every account the {@code CONTRIBUTION_ALLOTMENT} chain touches,
  * read back through {@link LedgerPort#lookupAccount} — which is what Task 21.5's first criterion
- * asks for, and the only way the platform ever reads a balance (AGENTS.md §2: "balances are read
- * via {@code LedgerPort.lookupAccount}; never compute a participant balance by summing rows in
- * PostgreSQL").
+ * asks for, and the only way the platform ever reads a balance (docs/ENGINEERING-RULES.md §2:
+ * "balances are read via {@code LedgerPort.lookupAccount}; never compute a participant balance by
+ * summing rows in PostgreSQL").
  *
  * <p><b>The account ids are re-derived here, never remembered from the write.</b> {@code
  * AllotmentService} opened these accounts under its own {@link AccountIdDeriver}; this class

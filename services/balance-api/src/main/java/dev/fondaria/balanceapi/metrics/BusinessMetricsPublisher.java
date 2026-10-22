@@ -36,12 +36,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 /**
  * Periodically exports business telemetry metrics to Prometheus via Micrometer (Task 30.10).
  *
- * <p><b>Cardinal Rule:</b> The metrics pipeline is observational and non-authoritative (AGENTS.md
- * §2, ADR-0008). Participants hold units, not pesos. A balance or AUM is never summed from
- * PostgreSQL. Authoritative units come from TigerBeetle's {@code UNITS_IN_ISSUE} contra account;
- * authoritative price comes from {@link NavCache} (converged on {@code reference.fund_nav}); and
- * AUM is computed via exact integer arithmetic ({@link Money#value(Units, Nav)}) before being
- * formatted to floating point at the export boundary.
+ * <p><b>Cardinal Rule:</b> The metrics pipeline is observational and non-authoritative
+ * (docs/ENGINEERING-RULES.md §2, ADR-0008). Participants hold units, not pesos. A balance or AUM is
+ * never summed from PostgreSQL. Authoritative units come from TigerBeetle's {@code UNITS_IN_ISSUE}
+ * contra account; authoritative price comes from {@link NavCache} (converged on {@code
+ * reference.fund_nav}); and AUM is computed via exact integer arithmetic ({@link Money#value(Units,
+ * Nav)}) before being formatted to floating point at the export boundary.
  *
  * <p><b>No expensive per-sweep query</b> (BACKLOG row 26k). The participant headcount -- a {@code
  * COUNT(DISTINCT …)} over {@code master.participant} and {@code projection.participant_units} every

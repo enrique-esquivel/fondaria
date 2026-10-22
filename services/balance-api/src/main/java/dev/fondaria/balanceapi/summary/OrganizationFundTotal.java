@@ -29,7 +29,7 @@ import java.util.Objects;
  * governs entitlement, never whether a unit is priced (ADR-0004).
  *
  * @param nav the price these figures were produced at, carried whole so {@code navVersionId} and
- *     {@code stale} travel with them (AGENTS.md §4)
+ *     {@code stale} travel with them (docs/ENGINEERING-RULES.md §4)
  */
 public record OrganizationFundTotal(
     FundId fundId, Units totalUnits, CachedNav nav, Money totalValue) {

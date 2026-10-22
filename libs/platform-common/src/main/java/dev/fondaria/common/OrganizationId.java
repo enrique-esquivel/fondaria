@@ -14,9 +14,9 @@ import java.util.UUID;
  * is, not of the order in which rows happened to be inserted.
  *
  * <p><b>This, not the tax identifier, is what travels.</b> An {@code RFC} is on the never-log list
- * (AGENTS.md §7), and anything in a URL path reaches an access log, a proxy log and a trace. So the
- * tax identifier is supplied once, in a request body, and everything downstream — paths, log
- * fields, message keys, ledger account scopes — carries this UUID instead.
+ * (docs/ENGINEERING-RULES.md §7), and anything in a URL path reaches an access log, a proxy log and
+ * a trace. So the tax identifier is supplied once, in a request body, and everything downstream —
+ * paths, log fields, message keys, ledger account scopes — carries this UUID instead.
  *
  * <p>The namespace comes from configuration and must never change: it is what ties this id to the
  * ledger accounts already holding that organization's money.

@@ -19,9 +19,9 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  * valuation-api's and allotment-job's classes of the same name.
  *
  * <p>{@code LEDGER_NAMESPACE} is random per JVM, for the reason every one of those states: fixtures
- * are reused across local runs and TigerBeetle cannot be reset (AGENTS.md §4). It matters
- * particularly here — a shared namespace would let this suite read holding accounts an earlier run
- * opened and report their units as this run's drift.
+ * are reused across local runs and TigerBeetle cannot be reset (docs/ENGINEERING-RULES.md §4). It
+ * matters particularly here — a shared namespace would let this suite read holding accounts an
+ * earlier run opened and report their units as this run's drift.
  *
  * <p><b>The poll intervals are an hour, and that is not the same as "nothing fires".</b> A {@code
  * fixedDelay} schedule with no initial delay runs <i>once immediately</i> when the context starts;

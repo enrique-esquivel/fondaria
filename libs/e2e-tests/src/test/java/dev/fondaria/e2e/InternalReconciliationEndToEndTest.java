@@ -45,11 +45,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <h2>Why the assertions are scoped to this suite's own fund and organization</h2>
  *
  * <p>A reconciliation pass is, by construction, a total over the whole platform — and the fixtures
- * here are shared and never reset (AGENTS.md §4), so the platform-wide verdict is a statement about
- * every run that ever used this database, not about this one. Every figure asserted below is
- * therefore read from the tie for <b>this run's own fund</b> and the breaks naming it. That is not
- * a weakening: a fund nothing before this run had registered has exactly this suite's units in it,
- * and "these three derivations of my fund agree to the unit" is the criterion in full.
+ * here are shared and never reset (docs/ENGINEERING-RULES.md §4), so the platform-wide verdict is a
+ * statement about every run that ever used this database, not about this one. Every figure asserted
+ * below is therefore read from the tie for <b>this run's own fund</b> and the breaks naming it.
+ * That is not a weakening: a fund nothing before this run had registered has exactly this suite's
+ * units in it, and "these three derivations of my fund agree to the unit" is the criterion in full.
  *
  * <h2>Why the soak is one file</h2>
  *

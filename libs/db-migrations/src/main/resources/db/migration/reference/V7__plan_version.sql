@@ -12,7 +12,7 @@
 -- carries only the employer matching ratio -- the one rule step 5 enforces
 -- -- and the vesting schedule, which is versioned configuration per
 -- ADR-0004 ("A vesting schedule is per-organization, effective-dated
--- configuration") and AGENTS.md §4's ban on treating plan rules as code
+-- configuration") and docs/ENGINEERING-RULES.md §4's ban on treating plan rules as code
 -- constants, even though nothing in this step enforces it against a
 -- contribution row.
 --

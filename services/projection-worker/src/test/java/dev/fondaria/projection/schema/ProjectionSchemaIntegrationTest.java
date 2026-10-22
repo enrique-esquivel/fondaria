@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test;
  * The projection schema (V20) and its append-only enforcement (V21), against a real PostgreSQL.
  *
  * <p>Tagged {@code integration}: it boots Postgres and is about DDL, not money, so it stays out of
- * the plain {@code make verify} loop. Fixtures are reused across runs (AGENTS.md §4), so every
- * assertion is scoped to ids this test generated — never a count over a whole table.
+ * the plain {@code make verify} loop. Fixtures are reused across runs (docs/ENGINEERING-RULES.md
+ * §4), so every assertion is scoped to ids this test generated — never a count over a whole table.
  */
 @Tag("integration")
 class ProjectionSchemaIntegrationTest {

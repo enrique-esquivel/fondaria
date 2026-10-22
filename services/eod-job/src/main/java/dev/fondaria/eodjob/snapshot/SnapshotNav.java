@@ -12,9 +12,10 @@ import java.util.Objects;
  * @param valuationDate the date the price was struck for, which is at or before the snapshot's
  *     business date and is often earlier — a fund is not struck on a day the market did not price
  *     it, and the last struck price is the right one to carry forward
- * @param navVersionId the row this price is, recorded on every position. AGENTS.md §4: without the
- *     link from an amount to the NAV version that produced it, correcting a NAV error is impossible
- *     — and a snapshot is the one artefact a correction has to be replayed against.
+ * @param navVersionId the row this price is, recorded on every position. docs/ENGINEERING-RULES.md
+ *     §4: without the link from an amount to the NAV version that produced it, correcting a NAV
+ *     error is impossible — and a snapshot is the one artefact a correction has to be replayed
+ *     against.
  */
 public record SnapshotNav(FundId fundId, long navVersionId, Nav nav, LocalDate valuationDate) {
 

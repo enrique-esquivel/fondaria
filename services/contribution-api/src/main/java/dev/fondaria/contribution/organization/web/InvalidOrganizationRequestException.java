@@ -8,7 +8,7 @@ import java.io.Serial;
  *
  * <p>This type exists so that only <i>vetted</i> messages reach a response body. Any other
  * exception is reported generically, because a stray message from a driver, a parser or the JDK
- * could carry the very value that must not leave the process (AGENTS.md §7).
+ * could carry the very value that must not leave the process (docs/ENGINEERING-RULES.md §7).
  */
 public final class InvalidOrganizationRequestException extends RuntimeException {
 

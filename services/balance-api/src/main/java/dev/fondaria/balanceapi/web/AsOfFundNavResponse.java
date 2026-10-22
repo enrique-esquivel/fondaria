@@ -22,7 +22,7 @@ import java.time.LocalDate;
  * so nothing is marked.
  *
  * <p>{@code navScaled} is a plain JSON integer at scale 1e-8 — never a decimal, never a float
- * (AGENTS.md §4).
+ * (docs/ENGINEERING-RULES.md §4).
  */
 public record AsOfFundNavResponse(
     String fundId,

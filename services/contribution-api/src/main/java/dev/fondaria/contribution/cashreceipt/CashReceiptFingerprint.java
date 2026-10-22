@@ -19,7 +19,7 @@ import java.util.HexFormat;
  * requests must fingerprint identically for years, across formatter changes, field reordering,
  * whitespace, and any future rewrite of the request DTO. Hashing the received JSON would make all
  * of those a false 422. So the fields are written here in a fixed order, in a fixed encoding, with
- * the amount as integer cents — never a float or a decimal string (AGENTS.md §4).
+ * the amount as integer cents — never a float or a decimal string (docs/ENGINEERING-RULES.md §4).
  *
  * <p><b>The version prefix is load-bearing.</b> Changing the canonical form changes every future
  * fingerprint while stored ones keep the old form. The prefix makes that visible instead of silent:

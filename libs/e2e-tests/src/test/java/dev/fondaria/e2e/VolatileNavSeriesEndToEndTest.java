@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
  * <p>{@code docs/DOMAIN.md} §1.1 tells this story rising: Ana buys at one price, the pool grows,
  * Bruno buys at the grown price and gets fewer units for the same money, so Bruno receives none of
  * Ana's gain. This suite tells it with the pool falling afterwards as well, because a suite that
- * only ever raises the price passes on a broken implementation (AGENTS.md §4) — and because a fall
- * is the case where the temptation to clamp a figure at zero exists at all.
+ * only ever raises the price passes on a broken implementation (docs/ENGINEERING-RULES.md §4) — and
+ * because a fall is the case where the temptation to clamp a figure at zero exists at all.
  *
  * <p>Four participants wire an identical MXN 15,000.00 into <b>one fund</b> on four dealing dates,
  * priced MXN 10.00 → 12.50 → 8.00 → 6.25. Every unit count below is exact at these prices, so a
@@ -114,7 +114,7 @@ class VolatileNavSeriesEndToEndTest {
     assertThat(falls)
         .as(
             "a suite that only exercises rising prices passes on a broken implementation"
-                + " (AGENTS.md §4); this one must keep falling prices in it")
+                + " (docs/ENGINEERING-RULES.md §4); this one must keep falling prices in it")
         .isGreaterThanOrEqualTo(2);
     assertThat(SERIES_SCALED[SERIES_SCALED.length - 1])
         .as("and must end below where it started, or no participant is ever under water")

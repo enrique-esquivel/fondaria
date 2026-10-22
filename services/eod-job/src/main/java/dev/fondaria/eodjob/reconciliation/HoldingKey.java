@@ -17,7 +17,7 @@ import java.util.Objects;
  * that the cause is a string.
  *
  * <p>Organization first, because {@code participantInternalRef} is unique only within an
- * organization, never globally (AGENTS.md §4).
+ * organization, never globally (docs/ENGINEERING-RULES.md §4).
  */
 public record HoldingKey(
     OrganizationId organizationId, String participantInternalRef, FundId fundId) {
@@ -35,7 +35,7 @@ public record HoldingKey(
     return organizationId.scope() + ":" + participantInternalRef + ":" + fundId;
   }
 
-  /** {@code participantInternalRef} identifies a person (AGENTS.md §7). */
+  /** {@code participantInternalRef} identifies a person (docs/ENGINEERING-RULES.md §7). */
   @Override
   public String toString() {
     return "HoldingKey[organizationId=" + organizationId + ", fundId=" + fundId + ", REDACTED]";

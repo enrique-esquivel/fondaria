@@ -55,7 +55,7 @@ public record SnapshotFundTotal(
    *
    * <p>Negative means the file holds fewer units than the ledger issued — a position missing from
    * the snapshot, which is the failure this check exists to catch. Positive means the opposite, and
-   * is just as much a finding. Deliberately unclamped (AGENTS.md §4).
+   * is just as much a finding. Deliberately unclamped (docs/ENGINEERING-RULES.md §4).
    */
   public long driftScaled() {
     return Math.subtractExact(units.scaled(), unitsInIssue.scaled());

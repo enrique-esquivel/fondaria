@@ -31,7 +31,7 @@ management:
       probes:
         enabled: true
       # Never render component details: they would expose ledger hostnames
-      # (AGENTS.md §7). The probe only needs the aggregate status.
+      # (docs/ENGINEERING-RULES.md §7). The probe only needs the aggregate status.
       show-details: never
       show-components: never
       group:
@@ -85,7 +85,7 @@ fondaria:
 
   database:
     # No defaults. Production must fail to start when a required secret is
-    # absent (AGENTS.md §4); the local-dev values live in
+    # absent (docs/ENGINEERING-RULES.md §4); the local-dev values live in
     # infrastructure/compose/.env.example.
     url: ${POSTGRES_URL:}
     username: ${POSTGRES_USER:}

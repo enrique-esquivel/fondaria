@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Configuration;
  * — so it holds a {@link TransferIdDeriver}, matching contribution-api's bean-for-bean.
  *
  * <p>This is the only place in {@code allotment-job} that names a TigerBeetle type; everything
- * downstream depends on {@link LedgerPort} alone (AGENTS.md §4).
+ * downstream depends on {@link LedgerPort} alone (docs/ENGINEERING-RULES.md §4).
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({LedgerClientProperties.class, IdentityProperties.class})

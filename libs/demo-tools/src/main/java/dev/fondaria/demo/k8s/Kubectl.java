@@ -27,9 +27,9 @@ import java.util.concurrent.TimeoutException;
  * <p>Reaches things no API exposes on purpose (the {@code postgres-app} credential CloudNativePG
  * generates) and services with no public API at all ({@code allotment-job}, {@code eod-job}, {@code
  * statement-worker}, and now {@code keycloak}). All of it goes through non-interactive, single-shot
- * {@code kubectl exec}/{@code port-forward} calls -- never {@code -it} (`AGENTS.md` testing rules
- * ban interactive flags for this session, and there is no reason for a demo tool to need one
- * either).
+ * {@code kubectl exec}/{@code port-forward} calls -- never {@code -it} (`docs/ENGINEERING-RULES.md`
+ * testing rules ban interactive flags for this session, and there is no reason for a demo tool to
+ * need one either).
  */
 public final class Kubectl {
 
@@ -78,7 +78,7 @@ public final class Kubectl {
    * machine and inside the pod -- an accepted, industry-common trade-off for a short-lived
    * operational command. What this class does control, and does: the password never appears in any
    * exception message or log line this module produces (see {@link #redacted}), which is the actual
-   * `AGENTS.md` §7 boundary ("never log ... tokens").
+   * `docs/ENGINEERING-RULES.md` §7 boundary ("never log ... tokens").
    */
   public void execSql(Credential credential, String sql) {
     runCapturing(
@@ -198,8 +198,8 @@ public final class Kubectl {
    * Runs {@code kubectl <args>}, bounded by {@code timeout} end to end. Draining stdout happens on
    * a background thread rather than inline: reading to EOF before calling {@code waitFor} would let
    * a hung {@code kubectl} (an unreachable API server, a firewalled cluster) block forever on the
-   * read, past any {@code waitFor} timeout that never gets a chance to run (`AGENTS.md` §4: "every
-   * external call has an explicit timeout").
+   * read, past any {@code waitFor} timeout that never gets a chance to run
+   * (`docs/ENGINEERING-RULES.md` §4: "every external call has an explicit timeout").
    */
   private String runCapturing(Duration timeout, String... args) {
     List<String> command = baseCommand();

@@ -1,7 +1,7 @@
 # Backend-facing timeouts for every route through fondaria-gateway (Task 10.1:
 # "Request and header size limits, and timeouts, on every route" -- the other
 # half of clienttrafficpolicy.yaml, which covers the client-facing side).
-# `AGENTS.md` also requires an explicit timeout on every external call; this
+# `docs/ENGINEERING-RULES.md` also requires an explicit timeout on every external call; this
 # is that timeout for the one call this platform does not make itself --
 # the gateway proxying to a backend Service.
 apiVersion: gateway.envoyproxy.io/v1alpha1

@@ -4,8 +4,9 @@ import java.util.Random;
 
 /**
  * A well-formed persona-moral RFC, deterministic from {@code (seed, organizationIndex)} so a
- * `--seed` rerun registers the same organizations rather than a fresh 12 every time (`AGENTS.md`
- * §4's check-digit-not-enforced rule means any well-formed string is accepted).
+ * `--seed` rerun registers the same organizations rather than a fresh 12 every time
+ * (`docs/ENGINEERING-RULES.md` §4's check-digit-not-enforced rule means any well-formed string is
+ * accepted).
  */
 public final class FreshRfc {
 

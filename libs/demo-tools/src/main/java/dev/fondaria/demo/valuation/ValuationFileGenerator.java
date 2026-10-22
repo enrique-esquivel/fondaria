@@ -77,7 +77,8 @@ public final class ValuationFileGenerator {
 
   /**
    * {@code previous × (1 + moveScaled ÷ MOVE_SCALE)}, half-up, exact {@link BigInteger} arithmetic
-   * -- the same convention {@code Money.value} uses, never a {@code double} (AGENTS.md §4).
+   * -- the same convention {@code Money.value} uses, never a {@code double}
+   * (docs/ENGINEERING-RULES.md §4).
    */
   private static long movedValue(long previousReportedValueCents, long moveScaled) {
     BigInteger previous = BigInteger.valueOf(previousReportedValueCents);

@@ -11,7 +11,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Wires the movement history (Task 6.3). Constructor injection only (AGENTS.md §4). */
+/**
+ * Wires the movement history (Task 6.3). Constructor injection only (docs/ENGINEERING-RULES.md §4).
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(CursorProperties.class)
 public class MovementConfiguration {

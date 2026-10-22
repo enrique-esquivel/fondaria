@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link ContributionTotalRepository} over {@code projection.transfer}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  *
  * <h2>How the statement is pruned and served</h2>
  *
@@ -28,10 +28,10 @@ import org.springframework.stereotype.Repository;
  *
  * <p><b>The sum is cast back to {@code bigint} in SQL.</b> PostgreSQL widens {@code SUM(bigint)} to
  * {@code numeric}, and reading that through {@code BigDecimal} would put a decimal type in the path
- * of a cash figure (AGENTS.md §4). The cast keeps it an integer all the way to {@link Money}, and a
- * total that genuinely exceeded a {@code long} <i>fails</i> with {@code bigint out of range} rather
- * than narrowing silently, which is what matters: a wrong number about money is the outcome being
- * excluded.
+ * of a cash figure (docs/ENGINEERING-RULES.md §4). The cast keeps it an integer all the way to
+ * {@link Money}, and a total that genuinely exceeded a {@code long} <i>fails</i> with {@code bigint
+ * out of range} rather than narrowing silently, which is what matters: a wrong number about money
+ * is the outcome being excluded.
  *
  * <p>It is not, however, a <i>loud</i> failure at the edge. Every {@code DataAccessException} on
  * this path — a permanent one like this or a broken statement, as much as a real outage — is

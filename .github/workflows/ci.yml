@@ -185,7 +185,7 @@ jobs:
 
       # phase-05 Task 5.1: "flyway validate passes in CI". migrate proves the whole
       # tree (ADR-0011's four schemas) applies from an empty database; validate proves
-      # no merged migration has drifted from its recorded checksum (AGENTS.md §4 -- a
+      # no merged migration has drifted from its recorded checksum (docs/ENGINEERING-RULES.md §4 -- a
       # versioned migration is never edited after merge).
       - name: Apply and validate migrations
         run: >-

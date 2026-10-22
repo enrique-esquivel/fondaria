@@ -30,7 +30,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
  * <p>Path-style access, and the synchronous URL-connection HTTP client, for the reasons
  * contribution-api's pom and configuration record: virtual-hosted style needs wildcard DNS a
  * self-hosted object store does not have, and an async Netty transport would add a second
- * concurrency model to blocking code on virtual threads (AGENTS.md §4).
+ * concurrency model to blocking code on virtual threads (docs/ENGINEERING-RULES.md §4).
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ObjectStoreProperties.class)
@@ -47,7 +47,8 @@ public class ObjectStoreConfiguration {
         .region(Region.of(properties.region()))
         .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
         .httpClientBuilder(UrlConnectionHttpClient.builder())
-        // Explicit, per AGENTS.md §4. Generous compared with an API's: this writes a file that can
+        // Explicit, per docs/ENGINEERING-RULES.md §4. Generous compared with an API's: this writes
+        // a file that can
         // run to tens of megabytes, and a timeout tuned for a small object would fail the close on
         // a large book rather than on a real fault.
         .overrideConfiguration(

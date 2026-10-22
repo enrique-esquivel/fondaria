@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link ParticipantRepository} over {@code master.participant}, using {@code JdbcClient}
- * (AGENTS.md §5 — no ORM).
+ * (docs/ENGINEERING-RULES.md §5 — no ORM).
  */
 @Repository
 public class JdbcParticipantRepository implements ParticipantRepository {
