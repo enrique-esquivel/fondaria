@@ -75,6 +75,14 @@ make demo-onboard    # onboard a 200,000-employee employer live
 make demo-reset      # tear down and reseed from scratch (~4 min)
 ```
 
+Tests run in a random class order, one seed per build, printed at the start and
+end of `make verify` / `make verify-all` (and in the CI job summary). To replay
+an order-dependent failure from CI, run the printed line locally, e.g.
+`make verify-all TEST_SEED=123456789`. `make verify-all` matches the CI
+integration job: container reuse off, a Temurin JDK check, and `-fae` so every
+failing module is reported in one run. Stop the kind cluster first
+(`docker stop fondaria-control-plane`).
+
 A fresh clone needs no secret material: `make k8s-up`, `make skaffold-run` and
 `make verify` first run `make local-secrets`, which generates the local
 cluster's private keys (see Security below) and does nothing once they exist.
