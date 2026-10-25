@@ -134,7 +134,7 @@ class NoIncrByFloatTest {
   private static Path repositoryRoot() {
     Path candidate = Path.of("").toAbsolutePath();
     while (candidate != null) {
-      if (Files.isDirectory(candidate.resolve(".git"))) {
+      if (Files.exists(candidate.resolve(".git"))) {
         return candidate;
       }
       candidate = candidate.getParent();
@@ -142,6 +142,6 @@ class NoIncrByFloatTest {
     throw new IllegalStateException(
         "Could not locate the repository root: no ancestor of "
             + Path.of("").toAbsolutePath()
-            + " contains a .git directory");
+            + " contains .git (a directory, or a file in a git worktree)");
   }
 }
