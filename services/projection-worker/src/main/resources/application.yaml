@@ -141,6 +141,10 @@ fondaria:
     # this often, so this bounds how long another replica keeps consuming after a halt is raised.
     halt:
       poll-interval: ${PROJECTION_HALT_POLL_INTERVAL:1s}
+    # ADR-0035: one INFO line per replica this often -- batches and messages committed per queue,
+    # owned entries queues, CDC lag, and each queue's ready depth read from the broker.
+    activity:
+      log-interval: ${PROJECTION_ACTIVITY_LOG_INTERVAL:1m}
 
   trace-redis:
     # Task 11.2. Optional -- absent disables CDC-boundary trace links entirely, never startup.

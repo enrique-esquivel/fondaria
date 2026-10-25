@@ -85,6 +85,7 @@ public class LedgerEventListener {
   private final Duration retryMaxBackoff;
   private final Counter poisonCounter;
   private final CdcLagMetrics lag;
+  private final ProjectionActivity activity;
   private final String instanceId;
 
   public LedgerEventListener(
@@ -97,6 +98,7 @@ public class LedgerEventListener {
       ProjectionConsumerProperties properties,
       MeterRegistry meterRegistry,
       CdcLagMetrics lag,
+      ProjectionActivity activity,
       CheckpointProperties checkpointProperties) {
     this.decoder = decoder;
     this.sink = sink;
@@ -116,6 +118,7 @@ public class LedgerEventListener {
                 "CDC messages the projection could not decode and dead-lettered before halting")
             .register(meterRegistry);
     this.lag = lag;
+    this.activity = activity;
     this.instanceId = checkpointProperties.instanceId();
   }
 
@@ -172,6 +175,7 @@ public class LedgerEventListener {
         return;
       }
       channel.basicAck(lastTag, true);
+      activity.batchCommitted(clean.get(0).getMessageProperties().getConsumerQueue(), clean.size());
     }
 
     if (poison != null) {
