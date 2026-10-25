@@ -18,10 +18,15 @@
 # Called by `make k8s-up` (via up.sh), `make skaffold-run`/`skaffold-dev` and
 # `make verify` (the validation tests render overlays/local). Run it by hand
 # with `make local-secrets`.
+#
+# An optional first argument names a different output directory: the GKE
+# load-test overlay (infrastructure/gke/secrets.sh) generates its own pair into
+# overlays/gke/generated/, because kustomize cannot read files outside an
+# overlay's own directory.
 set -eu
 
 here="$(cd "$(dirname "$0")" && pwd)"
-out="${here}/../overlays/local/generated"
+out="${1:-${here}/../overlays/local/generated}"
 
 command -v openssl >/dev/null 2>&1 || { echo "local-secrets: openssl is not installed" >&2; exit 1; }
 
@@ -66,4 +71,4 @@ if [ ! -s "${out}/linkerd-ca.crt" ] || [ ! -s "${out}/linkerd-issuer.crt" ] \
     -out "${out}/linkerd-issuer.crt" -days 3650 -extfile "${work}/issuer.ext" 2>/dev/null
 fi
 
-echo "local-secrets: keys and certificates present in overlays/local/generated/"
+echo "local-secrets: keys and certificates present in ${out}"

@@ -230,7 +230,7 @@ class LedgerEventDecoderTest {
   private static Path repositoryRoot() {
     Path candidate = Path.of("").toAbsolutePath();
     while (candidate != null) {
-      if (Files.isDirectory(candidate.resolve(".git"))) {
+      if (Files.exists(candidate.resolve(".git"))) {
         return candidate;
       }
       candidate = candidate.getParent();

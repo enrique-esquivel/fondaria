@@ -286,12 +286,26 @@ class LogRedactorTest {
         .ofLength(32);
   }
 
+  /**
+   * A span id that happens to be all digits (about 1 in 1,800) can be a card-shaped 16-digit number
+   * — {@code 4000000000000000} is a Visa test PAN — and the redactor is right to mask it: it cannot
+   * tell the two apart, and masking fails closed. Such ids are excluded here and pinned by {@link
+   * #masksSpanIdIndistinguishableFromPan()}.
+   */
   @net.jqwik.api.Provide
   net.jqwik.api.Arbitrary<String> spanIds() {
     return net.jqwik.api.Arbitraries.strings()
         .withCharRange('0', '9')
         .withCharRange('a', 'f')
-        .ofLength(16);
+        .ofLength(16)
+        .filter(id -> id.chars().anyMatch(Character::isLetter));
+  }
+
+  @Test
+  @DisplayName("an all-digit span id shaped like a card number is masked, failing closed")
+  void masksSpanIdIndistinguishableFromPan() {
+    assertThat(LogRedactor.redact("trace ab12f3577b34da6a3ce929d0e0e47360 span 4000000000000000"))
+        .isEqualTo("trace ab12f3577b34da6a3ce929d0e0e47360 span " + LogRedactor.REDACTED);
   }
 
   @net.jqwik.api.Provide

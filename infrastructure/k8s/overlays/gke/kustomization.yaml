@@ -1,0 +1,219 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The throwaway GKE load-test environment (ADR-0036), built by
+# infrastructure/gke/up.sh and deployed by `make gke-deploy`.
+#
+# It is the PROD topology -- 6 TigerBeetle replicas one per node, 3 Postgres
+# instances with synchronous replication, 3 RabbitMQ nodes, 3 Valkey nodes,
+# strict zone spread, node-pool taints and tolerations -- because a load test is
+# only worth running against the shape production will have. This file changes
+# only what a bare GKE cluster cannot supply and what a load test needs:
+#
+#   - credentials: generated Secrets (random, infrastructure/gke/secrets.sh)
+#     replace the base's ExternalSecrets; there is no External Secrets Operator;
+#   - TLS: a self-signed gateway pair replaces cert-manager's ACME Certificate;
+#     nothing here has a public hostname to validate;
+#   - storage: the base's tigerbeetle-nvme class becomes GKE's pd-ssd CSI class;
+#   - exposure: the gateway Service is ClusterIP, never a LoadBalancer -- the
+#     environment has no public endpoint at all (infrastructure/gke/tunnel.sh);
+#   - the demo clock and pg_stat_statements, as in overlays/local, so the
+#     demo-* load generators and the row 26o method run unchanged.
+namespace: fondaria
+
+resources:
+  - ../prod
+
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  - name: object-store-credentials
+    envs:
+      - generated/object-store-credentials.env
+  - name: grafana-admin-secret
+    envs:
+      - generated/grafana-admin-secret.env
+  - name: balance-api-secret
+    envs:
+      - generated/balance-api-secret.env
+  - name: contribution-api-secret
+    envs:
+      - generated/contribution-api-secret.env
+  - name: valkey-credentials
+    envs:
+      - generated/valkey-credentials.env
+  - name: keycloak-admin-secret
+    envs:
+      - generated/keycloak-admin-secret.env
+  - name: keycloak-client-secrets
+    envs:
+      - generated/keycloak-client-secrets.env
+  - name: fondaria-gateway-tls
+    type: kubernetes.io/tls
+    files:
+      - tls.crt=generated/gateway-tls.crt
+      - tls.key=generated/gateway-tls.key
+
+patches:
+  # No External Secrets Operator -- see secretGenerator above.
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: object-store-credentials
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: grafana-admin-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: balance-api-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: valkey-credentials
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: contribution-api-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: keycloak-admin-secret
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: keycloak-client-secrets
+
+  # No cert-manager -- the generated fondaria-gateway-tls Secret above has the
+  # name prod's Certificate would produce, so gateway.yaml needs no patch.
+  - patch: |-
+      $patch: delete
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: letsencrypt-prod
+  - patch: |-
+      $patch: delete
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      metadata:
+        name: fondaria-prod-tls
+
+  # Every PVC in the base names tigerbeetle-nvme. Prod backs it with
+  # pre-provisioned local NVMe PersistentVolumes; this environment uses GKE's
+  # SSD persistent disks instead (ADR-0036: TigerBeetle runs with Direct IO on
+  # them, at network-disk latency -- ledger numbers from this environment are a
+  # pessimistic bound, not production's). Delete, not Retain: the disks must die
+  # with the project.
+  - target:
+      kind: StorageClass
+      name: tigerbeetle-nvme
+    patch: |-
+      - op: replace
+        path: /provisioner
+        value: pd.csi.storage.gke.io
+      - op: replace
+        path: /reclaimPolicy
+        value: Delete
+      - op: add
+        path: /parameters
+        value:
+          type: pd-ssd
+      - op: add
+        path: /allowVolumeExpansion
+        value: true
+
+  # Never a cloud load balancer: that would put a public IP in front of the
+  # platform. Reached only through `kubectl port-forward` (tunnel.sh).
+  - target:
+      kind: EnvoyProxy
+      name: fondaria-gateway-proxy-config
+    patch: |-
+      - op: replace
+        path: /spec/provider/kubernetes/envoyService/type
+        value: ClusterIP
+
+  # Same raise as overlays/local (Task D.3): the base 4Gi limit OOM-kills a
+  # replica under the demo's 60,000-row contribution batches.
+  - target:
+      kind: StatefulSet
+      name: tigerbeetle
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 6Gi
+
+  # Row 26o's per-statement timings, as in overlays/local.
+  - target:
+      kind: Cluster
+      name: postgres
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: postgres
+      spec:
+        postgresql:
+          parameters:
+            pg_stat_statements.track: "top"
+            pg_stat_statements.max: "5000"
+
+  # The demo's accelerated clock (Task D.1), as in overlays/local: the demo-*
+  # load generators advance business days through it.
+  - target:
+      kind: ConfigMap
+      name: contribution-api-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+  - target:
+      kind: ConfigMap
+      name: allotment-job-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+  - target:
+      kind: ConfigMap
+      name: valuation-api-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+  - target:
+      kind: ConfigMap
+      name: eod-job-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+  - target:
+      kind: ConfigMap
+      name: statement-worker-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"
+  - target:
+      kind: ConfigMap
+      name: balance-api-config
+    patch: |-
+      - op: replace
+        path: /data/DEMO_CLOCK_ENABLED
+        value: "true"

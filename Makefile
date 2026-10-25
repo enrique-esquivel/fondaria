@@ -17,7 +17,7 @@ TEST_SEED_BANNER = echo ""; \
 	echo ""
 MVN_TEST_SEED = -Dsurefire.runOrder.random.seed=$(TEST_SEED)
 
-.PHONY: help jdk-check hooks up up-all down clean logs psql migrate local-secrets verify verify-all verify-cold verify-module rebuild-projection test-fixtures-clean fmt lint k8s-up k8s-down k8s-status skaffold-dev skaffold-run skaffold-delete demo-tools-build demo-port-forward demo-seed demo-day demo-onboard demo-reset
+.PHONY: help jdk-check hooks up up-all down clean logs psql migrate local-secrets verify verify-all verify-cold verify-module rebuild-projection test-fixtures-clean fmt lint k8s-up k8s-down k8s-status gke-up gke-deploy gke-tunnel gke-status gke-down skaffold-dev skaffold-run skaffold-delete demo-tools-build demo-port-forward demo-seed demo-day demo-onboard demo-reset
 
 .DEFAULT_GOAL := help
 
@@ -98,8 +98,9 @@ migrate: ## Show how database migrations are applied
 	@echo "never serve traffic against a schema it has not migrated. There is deliberately"
 	@echo "no separate apply step to forget to run."
 
-local-secrets: ## Generate the local cluster's TLS and Linkerd keys into infrastructure/k8s/overlays/local/generated/ (gitignored; only when absent)
+local-secrets: ## Generate the local cluster's TLS and Linkerd keys into infrastructure/k8s/overlays/local/generated/ (gitignored; only when absent), and the GKE overlay's random credentials into overlays/gke/generated/
 	./infrastructure/k8s/bootstrap/local-secrets.sh
+	./infrastructure/gke/secrets.sh
 
 jdk-check: ## Fail unless JAVA_HOME (or java on PATH) is a Temurin JDK -- Homebrew openjdk@21 crashes Spotless
 	@echo "JAVA_HOME=$(JAVA_HOME)"
@@ -167,7 +168,8 @@ verify-k8s: local-secrets ## Validate Kubernetes manifests, security policies, a
 	@if command -v kubectl >/dev/null 2>&1; then \
 		kubectl kustomize infrastructure/k8s/base > /dev/null && \
 		kubectl kustomize infrastructure/k8s/overlays/local > /dev/null && \
-		kubectl kustomize infrastructure/k8s/overlays/prod > /dev/null; \
+		kubectl kustomize infrastructure/k8s/overlays/prod > /dev/null && \
+		kubectl kustomize infrastructure/k8s/overlays/gke > /dev/null; \
 	fi
 	@! grep -r "kind: Secret$$" infrastructure/k8s/base/ infrastructure/k8s/overlays/
 	mvn test -pl libs/e2e-tests -Dtest="KustomizeBaseValidationTest,KustomizeOverlaysValidationTest"
@@ -182,6 +184,23 @@ k8s-down: ## Delete the local kind cluster and everything in it
 k8s-status: ## Pods, operators and HPAs on the local cluster
 	kubectl --context kind-fondaria -n fondaria get pods,hpa
 	kubectl --context kind-fondaria -n fondaria get cluster.postgresql.cnpg.io,rabbitmqcluster
+
+gke-up: ## Create the throwaway GKE load-test environment in a new project (ADR-0036; needs GKE_BILLING_ACCOUNT). Deletes itself after GKE_TTL_HOURS (default 5)
+	./infrastructure/gke/up.sh
+
+gke-deploy: local-secrets ## Build amd64 images, push to the environment's registry and deploy overlays/gke
+	./infrastructure/gke/deploy.sh
+
+gke-tunnel: ## Port-forward Grafana (30001) and the three demo APIs (30080-30082) from the GKE environment
+	./infrastructure/gke/tunnel.sh
+
+gke-status: ## Nodes, pods and stateful clusters on the GKE environment
+	. infrastructure/gke/.state && kubectl --context "$$GKE_CONTEXT" get nodes -L fondaria.example/node-pool,topology.kubernetes.io/zone && \
+	kubectl --context "$$GKE_CONTEXT" -n fondaria get pods -o wide && \
+	kubectl --context "$$GKE_CONTEXT" -n fondaria get cluster.postgresql.cnpg.io,rabbitmqcluster
+
+gke-down: ## Delete the GKE environment's whole project and revoke this machine's gcloud login (ARGS=--keep-login to keep it)
+	./infrastructure/gke/down.sh $(ARGS)
 
 skaffold-dev: local-secrets ## Run Skaffold in development mode with live sync, port-forwarding and log streaming (Task 12.6)
 	skaffold dev --kube-context kind-fondaria --port-forward

@@ -25,7 +25,8 @@ Ideas and known gaps, not commitments. Nothing here is scheduled or prioritised;
 |---|---|---|
 | Retirement mechanism for provider accounts (`effective_to` or sentinel) | Needed before the first real segregated integration | ADR-0019 |
 | Per-datastore TLS (Postgres `sslmode=verify-full`) | WireGuard encrypts the link but does not authenticate the peer | ADR-0029, ADR-0030 |
-| Verify WireGuard on a multi-node cluster | Only a single-node cluster has been checked | ADR-0030 |
+| Verify Calico WireGuard on a multi-node cluster | Only a single-node cluster has been checked; the GKE environment checks Dataplane V2's equivalent instead | ADR-0030, ADR-0036 |
+| First live run of the GKE load-test environment | Built and validated offline only | ADR-0036 |
 | Prove multi-replica TigerBeetle formation on kind | The IP-literal scheme has run with one replica | ADR-0025 |
 | Quorum queues with an explicit queue type per declaring service | RabbitMQ node loss currently interrupts the classic queues | ADR-0025 |
 | Tighter seccomp profile for TigerBeetle clients | Replace `Unconfined` with a profile that allows `io_uring` | ADR-0025 |
