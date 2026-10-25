@@ -44,6 +44,7 @@ class ContributionApiAuthorizationTest {
 
   private Logger auditLogger;
   private ListAppender<ILoggingEvent> appender;
+  private Level originalAuditLevel;
 
   @BeforeEach
   void setUp() {
@@ -51,6 +52,7 @@ class ContributionApiAuthorizationTest {
     appender = new ListAppender<>();
     appender.start();
     auditLogger.addAppender(appender);
+    originalAuditLevel = auditLogger.getLevel();
     auditLogger.setLevel(Level.INFO);
 
     AdminController adminController = new AdminController();
@@ -74,6 +76,7 @@ class ContributionApiAuthorizationTest {
   @AfterEach
   void tearDown() {
     auditLogger.detachAppender(appender);
+    auditLogger.setLevel(originalAuditLevel);
   }
 
   private String createToken(String sub, List<String> roles, Map<String, Object> extraClaims)

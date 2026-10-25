@@ -110,6 +110,10 @@
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
                         <excludedGroups>${excluded.test.groups}</excludedGroups>
+                        <!-- Picks up libs/testing's LoggerStateGuard in every module that depends on it -->
+                        <properties>
+                            <configurationParameters>junit.jupiter.extensions.autodetection.enabled=true</configurationParameters>
+                        </properties>
                     </configuration>
                 </plugin>
                 <plugin>

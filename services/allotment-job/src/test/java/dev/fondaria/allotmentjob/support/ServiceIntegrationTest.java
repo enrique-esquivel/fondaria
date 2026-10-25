@@ -37,6 +37,10 @@ public abstract class ServiceIntegrationTest {
     // An hour, so the scheduled sweep never fires during a test — every test drives the
     // runner explicitly, the same reason contribution-api's base class does this.
     registry.add("fondaria.allotment.poll-interval", () -> "1h");
+    // The vesting sweep too: at its default minute it vests every pending candidate in the
+    // shared database in the background, racing the sweeps VestingServiceIntegrationTest
+    // drives itself, in whichever class happens to be running when it fires.
+    registry.add("fondaria.vesting.poll-interval", () -> "1h");
     // Fixtures are reused across runs (docs/ENGINEERING-RULES.md §4): workflow.contribution_batch
     // still
     // holds whatever earlier runs left STAGED. Claiming the leftovers too is harmless --

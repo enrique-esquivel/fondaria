@@ -59,6 +59,13 @@
             <version>1.9.2</version>
             <scope>test</scope>
         </dependency>
+        <!-- For LoggerStateGuard: this module's logging tests touch JVM-wide logback state -->
+        <dependency>
+            <groupId>dev.fondaria</groupId>
+            <artifactId>testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

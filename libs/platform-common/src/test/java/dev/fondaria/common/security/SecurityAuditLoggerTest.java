@@ -16,6 +16,7 @@ class SecurityAuditLoggerTest {
 
   private Logger auditLogger;
   private ListAppender<ILoggingEvent> appender;
+  private Level originalAuditLevel;
 
   @BeforeEach
   void setUp() {
@@ -23,12 +24,14 @@ class SecurityAuditLoggerTest {
     appender = new ListAppender<>();
     appender.start();
     auditLogger.addAppender(appender);
+    originalAuditLevel = auditLogger.getLevel();
     auditLogger.setLevel(Level.INFO);
   }
 
   @AfterEach
   void tearDown() {
     auditLogger.detachAppender(appender);
+    auditLogger.setLevel(originalAuditLevel);
   }
 
   @Test
