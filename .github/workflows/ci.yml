@@ -26,6 +26,24 @@ name: CI
 #     slowly and the scan is slow and rate-limit-flaky; weekly is enough pre-release.
 #   - docs-only pushes and PRs no longer start a run.
 #
+# Test-class order and reproducing a CI failure locally (2026-10):
+#   - Every Maven run (make verify, make verify-all) runs test classes in a random
+#     order from ONE seed per build, so a test that leaks JVM-wide state (logger
+#     levels, system properties, statics) into a later class fails here instead of
+#     hiding behind a lucky filesystem order. The seed is in the job summary and
+#     at the start and end of the "make ..." step log:
+#       ==> Test classes run in random order, seed 123456789. Replay: make verify-all TEST_SEED=123456789
+#     Run that line locally to get the same class order per module. To replay it in
+#     CI instead, dispatch the workflow with the `testSeed` input.
+#   - make verify-all runs Maven with -fae, so one run lists every failing module
+#     (the modules downstream of a failure are still SKIPPED -- fix upstream first).
+#   - make verify-all locally matches this job: TESTCONTAINERS_REUSE_ENABLE=false
+#     and a Temurin JDK check. Stop the kind cluster first (docker stop
+#     fondaria-control-plane): it competes for CPU and causes false timing failures.
+#   - On an integration failure the run uploads `integration-container-logs`: every
+#     Testcontainers container's log (RabbitMQ, Postgres, TigerBeetle, the CDC job,
+#     ...), kept through journald because Ryuk deletes the containers at JVM exit.
+#
 # If a month still runs over, the knobs, cheapest first: widen the integration cron
 # (e.g. Fri only), then drop `verify` from `push: main` (the PR already ran it on the
 # branch head). Watch usage at Settings -> Billing -> Actions.
@@ -55,6 +73,10 @@ on:
         description: 'Run the OWASP dependency scan'
         type: boolean
         default: false
+      testSeed:
+        description: 'Test-class order seed to replay (blank = a fresh random seed)'
+        type: string
+        default: ''
 
 concurrency:
   # Include the schedule expression so the two crons never cancel each other, and
@@ -89,6 +111,16 @@ jobs:
         # without -am (Jib's goal fails on modules with no main class), so balance-api's sibling
         # modules must already be in ~/.m2. A local machine usually has them; a fresh runner does not.
         run: mvn install -DskipTests -Dspotless.check.skip=true
+
+      - name: Pick the test-class order seed
+        # One seed for the whole reactor (root pom: surefire.runOrder=random). The
+        # Makefile prints it too; the summary keeps it findable without the log.
+        env:
+          INPUT_SEED: ${{ inputs.testSeed }}
+        run: |
+          seed="${INPUT_SEED:-$(( (RANDOM << 15) | RANDOM ))}"
+          echo "TEST_SEED=$seed" >> "$GITHUB_ENV"
+          echo "Test-class order seed: \`$seed\` -- replay locally with \`make verify TEST_SEED=$seed\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run system verification (make verify)
         run: make verify
@@ -142,11 +174,56 @@ jobs:
         # modules must already be in ~/.m2. A local machine usually has them; a fresh runner does not.
         run: mvn install -DskipTests -Dspotless.check.skip=true
 
+      - name: Pick the test-class order seed
+        # One seed for the whole reactor (root pom: surefire.runOrder=random). The
+        # Makefile prints it too; the summary keeps it findable without the log.
+        env:
+          INPUT_SEED: ${{ inputs.testSeed }}
+        run: |
+          seed="${INPUT_SEED:-$(( (RANDOM << 15) | RANDOM ))}"
+          echo "TEST_SEED=$seed" >> "$GITHUB_ENV"
+          echo "Test-class order seed: \`$seed\` -- replay locally with \`make verify-all TEST_SEED=$seed\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep container logs after Testcontainers removes the containers
+        # Ryuk deletes every container when its test JVM exits, and with the default
+        # json-file driver the logs go with it. The journald driver keeps them on the
+        # host (docker logs, and so Testcontainers' log wait strategies, still work).
+        # Rate limiting is off so a chatty broker cannot drop lines.
+        run: |
+          sudo mkdir -p /etc/systemd/journald.conf.d
+          printf '[Journal]\nRateLimitIntervalSec=0\nRateLimitBurst=0\n' | sudo tee /etc/systemd/journald.conf.d/ci.conf
+          sudo systemctl restart systemd-journald
+          [ -s /etc/docker/daemon.json ] || echo '{}' | sudo tee /etc/docker/daemon.json
+          sudo jq '. + {"log-driver": "journald"}' /etc/docker/daemon.json | sudo tee /etc/docker/daemon.json.new
+          sudo mv /etc/docker/daemon.json.new /etc/docker/daemon.json
+          sudo systemctl restart docker
+          docker info --format 'Docker logging driver: {{.LoggingDriver}}'
+
       - name: Run every test, including integration-tagged (make verify-all)
+        # -fae (in the Makefile): every failing module is reported in one run.
         env:
           # 200,000 rows took ~10 minutes on a shared runner; the 5-minute default fits a dev machine.
           ALLOTMENT_TARGET_WINDOW_MINUTES: '30'
         run: make verify-all
+
+      - name: Collect container logs on failure
+        if: failure()
+        # One file per container, named <image>__<container id>.log; index.tsv maps
+        # each id to its image, name and first/last log time, to line it up with the
+        # surefire report of the test class that started it.
+        run: |
+          mkdir -p container-logs
+          printf 'container_id\timage\tname\tfirst\tlast\n' > container-logs/index.tsv
+          for id in $(sudo journalctl -F CONTAINER_ID); do
+            meta=$(sudo journalctl CONTAINER_ID="$id" -n 1 -o json | jq -r '[.IMAGE_NAME // "unknown", .CONTAINER_NAME // ""] | @tsv')
+            image=$(cut -f1 <<<"$meta"); name=$(cut -f2 <<<"$meta")
+            file="container-logs/$(tr '/:@' '___' <<<"$image")__${id}.log"
+            sudo journalctl CONTAINER_ID="$id" -o short-iso-precise --no-pager > "$file"
+            first=$(head -n 1 "$file" | cut -d' ' -f1); last=$(tail -n 1 "$file" | cut -d' ' -f1)
+            printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$image" "$name" "$first" "$last" >> container-logs/index.tsv
+          done
+          sudo journalctl -u docker -o short-iso-precise --no-pager > container-logs/dockerd.log
+          ls -la container-logs
 
       - name: Upload test reports on failure
         if: failure()
@@ -156,6 +233,13 @@ jobs:
           path: |
             **/target/surefire-reports/
             **/target/failsafe-reports/
+
+      - name: Upload container logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-container-logs
+          path: container-logs/
 
   migrations:
     name: Validate the Flyway migration tree

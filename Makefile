@@ -6,7 +6,18 @@ ifeq ($(origin JAVA_HOME), undefined)
 endif
 export JAVA_HOME
 
-.PHONY: help hooks up up-all down clean logs psql migrate local-secrets verify verify-all verify-cold verify-module rebuild-projection test-fixtures-clean fmt lint k8s-up k8s-down k8s-status skaffold-dev skaffold-run skaffold-delete demo-tools-build demo-port-forward demo-seed demo-day demo-onboard demo-reset
+# One seed for the whole build's test-class order (root pom: surefire.runOrder=random).
+# A fresh one per build unless given: replay a CI or local order with TEST_SEED=<seed>.
+ifeq ($(strip $(TEST_SEED)),)
+  TEST_SEED := $(shell echo $$(( (RANDOM << 15) | RANDOM )))
+endif
+export TEST_SEED
+TEST_SEED_BANNER = echo ""; \
+	echo "==> Test classes run in random order, seed $(TEST_SEED). Replay: make $@ TEST_SEED=$(TEST_SEED)"; \
+	echo ""
+MVN_TEST_SEED = -Dsurefire.runOrder.random.seed=$(TEST_SEED)
+
+.PHONY: help jdk-check hooks up up-all down clean logs psql migrate local-secrets verify verify-all verify-cold verify-module rebuild-projection test-fixtures-clean fmt lint k8s-up k8s-down k8s-status skaffold-dev skaffold-run skaffold-delete demo-tools-build demo-port-forward demo-seed demo-day demo-onboard demo-reset
 
 .DEFAULT_GOAL := help
 
@@ -90,17 +101,30 @@ migrate: ## Show how database migrations are applied
 local-secrets: ## Generate the local cluster's TLS and Linkerd keys into infrastructure/k8s/overlays/local/generated/ (gitignored; only when absent)
 	./infrastructure/k8s/bootstrap/local-secrets.sh
 
-verify: local-secrets ## Run system verification checks (excludes integration-tagged tests)
+jdk-check: ## Fail unless JAVA_HOME (or java on PATH) is a Temurin JDK -- Homebrew openjdk@21 crashes Spotless
 	@echo "JAVA_HOME=$(JAVA_HOME)"
-	mvn verify
+	@java_bin="$${JAVA_HOME:+$$JAVA_HOME/bin/}java"; \
+	vendor=$$("$$java_bin" -XshowSettings:properties -version 2>&1 | sed -n 's/^ *java\.vendor = //p'); \
+	if [ "$$vendor" != "Eclipse Adoptium" ]; then \
+		echo "ERROR: $$java_bin is '$$vendor', not Temurin (Eclipse Adoptium). CI builds on Temurin 21;" >&2; \
+		echo "       point JAVA_HOME at a Temurin 21 JDK (Homebrew openjdk@21 crashes Spotless)." >&2; \
+		exit 1; \
+	fi
 
-verify-all: local-secrets ## Run every check, including integration-tagged tests (needs infrastructure up)
-	@echo "JAVA_HOME=$(JAVA_HOME)"
-	mvn verify -Pintegration
+verify: local-secrets jdk-check ## Run system verification checks (excludes integration-tagged tests). Random class order; replay with TEST_SEED=<seed>
+	@$(TEST_SEED_BANNER)
+	mvn verify $(MVN_TEST_SEED) || { $(TEST_SEED_BANNER); exit 1; }
+	@$(TEST_SEED_BANNER)
 
-verify-cold: local-secrets ## Run make verify with container reuse off, as CI does
-	@echo "JAVA_HOME=$(JAVA_HOME)"
-	TESTCONTAINERS_REUSE_ENABLE=false mvn verify
+verify-all: local-secrets jdk-check ## Run every check incl. integration-tagged tests, as the CI integration job does: container reuse off, every failing module reported (-fae). Replay a CI order with TEST_SEED=<seed>
+	@$(TEST_SEED_BANNER)
+	TESTCONTAINERS_REUSE_ENABLE=$${TESTCONTAINERS_REUSE_ENABLE:-false} mvn -fae verify -Pintegration $(MVN_TEST_SEED) || { $(TEST_SEED_BANNER); exit 1; }
+	@$(TEST_SEED_BANNER)
+
+verify-cold: local-secrets jdk-check ## Run make verify with container reuse off, as CI does
+	@$(TEST_SEED_BANNER)
+	TESTCONTAINERS_REUSE_ENABLE=false mvn verify $(MVN_TEST_SEED) || { $(TEST_SEED_BANNER); exit 1; }
+	@$(TEST_SEED_BANNER)
 
 verify-module: local-secrets ## Fast local loop: verify one module + its dependencies only (usage: make verify-module MODULE=services/balance-api). Not a substitute for `make verify` before a PR -- it does not test modules that depend on what changed.
 	@if [ -z "$(MODULE)" ]; then \

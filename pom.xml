@@ -42,6 +42,17 @@
         -->
         <excluded.test.groups>integration</excluded.test.groups>
 
+        <!--
+            Test classes run in a random order so a test that leaks JVM-wide state
+            (a logger level, a system property, a static) into the next class fails
+            here instead of only under CI's Linux filesystem order. The Makefile
+            picks one seed per build, prints it, and passes it as
+            -Dsurefire.runOrder.random.seed; replay a run with
+            `make verify-all TEST_SEED=<seed>` (or `make verify ...`). A bare
+            `mvn verify` gets a fresh seed per module, which surefire prints.
+        -->
+        <surefire.runOrder>random</surefire.runOrder>
+
         <!-- Maven Plugins -->
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
@@ -110,6 +121,7 @@
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
                         <excludedGroups>${excluded.test.groups}</excludedGroups>
+                        <runOrder>${surefire.runOrder}</runOrder>
                         <!-- Picks up libs/testing's LoggerStateGuard in every module that depends on it -->
                         <properties>
                             <configurationParameters>junit.jupiter.extensions.autodetection.enabled=true</configurationParameters>
