@@ -220,6 +220,12 @@ class MetricNamesAreRealIntegrationTest {
       registry.gauge("ledger.head.timestamp", 1000000000L);
       registry.gauge("last.timestamp", Tags.of("group", "projection-worker"), 1000000000L);
 
+      // ADR-0035: projection-worker's ProjectionActivity, registered under its exact meter names
+      Tags entriesQueue = Tags.of("queue", "projection.entries.v1.0");
+      registry.counter("projection_batches_total", entriesQueue).increment();
+      registry.counter("projection_messages_total", entriesQueue).increment(50);
+      registry.gauge("projection_queue_owned", entriesQueue, 1);
+
       // Task 30.10: Business overview telemetry metrics
       Tags sampleFundTags =
           Tags.of(
@@ -276,6 +282,8 @@ class MetricNamesAreRealIntegrationTest {
               "projection_drift_minor",
               "eod_hash_chain_valid",
               "idempotency_conflict_total",
+              "projection_messages_total",
+              "projection_queue_owned",
               "fondaria_fund_nav_pesos",
               "fondaria_fund_units_in_issue",
               "fondaria_fund_aum_pesos",

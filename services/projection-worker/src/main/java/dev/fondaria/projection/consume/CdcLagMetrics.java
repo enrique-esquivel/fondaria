@@ -145,7 +145,8 @@ public class CdcLagMetrics {
     holder.updateAndGet(current -> Math.max(current, candidate));
   }
 
-  private double lagSeconds() {
+  /** {@code ledger_cdc_lag_seconds}'s value; also logged by {@link ProjectionActivity}. */
+  double lagSeconds() {
     long lastNanos = podHeadNanos();
     if (lastNanos == 0L) {
       // Nothing consumed yet this process. Reporting a multi-decade lag against the epoch

@@ -3,6 +3,9 @@ package dev.fondaria.projection.consume;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -30,11 +33,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -540,6 +546,152 @@ class LedgerEventListenerIntegrationTest {
         .during(Duration.ofSeconds(2))
         .atMost(Duration.ofSeconds(10))
         .untilAsserted(() -> assertThat(TRANSFERS_SEEN).doesNotContain(after));
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // ADR-0035: a backlog is visible in this service's own metrics and logs
+  // -------------------------------------------------------------------------------------------
+
+  /**
+   * 20 October's e2e run drained a 200,000-row backlog and logged one line. With the consumers
+   * slowed and a batch smaller than the queue, the summary reports the queue's ready depth while it
+   * drains and what was consumed, and the counters add up to exactly what was published.
+   */
+  @Test
+  void theSummaryShowsTheBacklogWhileItDrainsAndTheCountersAddUp() {
+    ENTRY_DELAY = Duration.ofMillis(100);
+    context =
+        start(
+            "listener-test-pod",
+            Map.of("PROJECTION_BATCH_SIZE", "5", "PROJECTION_ACTIVITY_LOG_INTERVAL", "1h"));
+    ProjectionActivity activity = context.getBean(ProjectionActivity.class);
+    ListAppender<ILoggingEvent> logs = captureActivityLogs();
+    try {
+      List<String> ids = new ArrayList<>();
+      for (int i = 0; i < 100; i++) {
+        String id = freshId();
+        ids.add(id);
+        produceTransfer(transfersExchange, id, transferJson(id));
+      }
+
+      await()
+          .atMost(Duration.ofSeconds(20))
+          .untilAsserted(
+              () -> {
+                activity.logSummary();
+                assertThat(lastSummary(logs)).containsPattern(transfersQueue + "=[1-9]");
+              });
+      await()
+          .atMost(Duration.ofSeconds(60))
+          .untilAsserted(() -> assertThat(TRANSFERS_SEEN).containsAll(ids));
+      await()
+          .atMost(Duration.ofSeconds(10))
+          .untilAsserted(() -> assertThat(messagesCounted(context, transfersQueue)).isEqualTo(100));
+      activity.logSummary();
+      assertThat(lastSummary(logs))
+          .contains("consumed [" + transfersQueue + "=", "ready []", "not draining []");
+    } finally {
+      releaseActivityLogs(logs);
+    }
+  }
+
+  /**
+   * The owner of every entries queue reports owning it, the standby reports owning none, and when
+   * the owner stops, the hand-over is one INFO line on each side rather than nothing. Captured from
+   * stdout: each context start resets logback, which detaches any appender a test added.
+   */
+  @Test
+  @ExtendWith(OutputCaptureExtension.class)
+  void queueOwnershipIsAGaugeAndEveryHandOverIsLogged(CapturedOutput output) throws Exception {
+    String shard = entriesQueuePrefix + ".0";
+    String acquired = "acquired entries queue " + shard + ":";
+    context = start("replica-a");
+    await().atMost(Duration.ofSeconds(20)).until(() -> ownedQueues(context) == 4);
+    otherReplica = start("replica-b");
+    await().atMost(Duration.ofSeconds(20)).until(() -> containersRunning(otherReplica));
+    await()
+        .during(Duration.ofSeconds(6))
+        .atMost(Duration.ofSeconds(10))
+        .until(() -> ownedQueues(otherReplica) == 0);
+    assertThat(occurrences(output.getOut(), acquired))
+        .as("the standby's refusals every recovery interval log nothing")
+        .isEqualTo(1);
+
+    context.close();
+    context = null;
+
+    await().atMost(Duration.ofSeconds(30)).until(() -> ownedQueues(otherReplica) == 4);
+    await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(
+            () -> {
+              assertThat(output.getOut()).contains("released entries queue " + shard + " (");
+              assertThat(occurrences(output.getOut(), acquired)).isEqualTo(2);
+            });
+  }
+
+  private static int occurrences(String text, String needle) {
+    int count = 0;
+    for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
+      count++;
+    }
+    return count;
+  }
+
+  private int ownedQueues(ConfigurableApplicationContext replica) {
+    MeterRegistry meters = replica.getBean(MeterRegistry.class);
+    int owned = 0;
+    for (int i = 0; i < 4; i++) {
+      owned +=
+          (int)
+              meters
+                  .get(ProjectionActivity.OWNED_GAUGE)
+                  .tag("queue", entriesQueuePrefix + "." + i)
+                  .gauge()
+                  .value();
+    }
+    return owned;
+  }
+
+  private static double messagesCounted(ConfigurableApplicationContext replica, String queue) {
+    return replica
+        .getBean(MeterRegistry.class)
+        .get(ProjectionActivity.MESSAGES_COUNTER)
+        .tag("queue", queue)
+        .counter()
+        .count();
+  }
+
+  private static ListAppender<ILoggingEvent> captureActivityLogs() {
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    activityLogger().addAppender(appender);
+    return appender;
+  }
+
+  private static void releaseActivityLogs(ListAppender<ILoggingEvent> appender) {
+    activityLogger().detachAppender(appender);
+  }
+
+  private static ch.qos.logback.classic.Logger activityLogger() {
+    return (ch.qos.logback.classic.Logger)
+        org.slf4j.LoggerFactory.getLogger(ProjectionActivity.class);
+  }
+
+  private static List<String> infoLines(ListAppender<ILoggingEvent> appender) {
+    // AppenderBase.doAppend holds the appender's own lock while it adds to the list.
+    synchronized (appender) {
+      return appender.list.stream()
+          .filter(e -> e.getLevel() == Level.INFO)
+          .map(ILoggingEvent::getFormattedMessage)
+          .toList();
+    }
+  }
+
+  private static String lastSummary(ListAppender<ILoggingEvent> appender) {
+    List<String> summaries =
+        infoLines(appender).stream().filter(l -> l.startsWith("projection activity")).toList();
+    return summaries.isEmpty() ? "" : summaries.get(summaries.size() - 1);
   }
 
   // -------------------------------------------------------------------------------------------

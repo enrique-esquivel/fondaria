@@ -648,6 +648,12 @@ Also the runbook for `ProjectionQueueNotDraining` (warning): a `projection.*` qu
 
 ### First three diagnostic commands
 
+0. **Read each worker's activity line (ADR-0035).** Every projection-worker pod logs one INFO line a minute:
+   ```bash
+   kubectl -n fondaria logs deploy/projection-worker --since=3m | grep "projection activity"
+   ```
+   `ready [...]` is each queue's backlog from the broker, and `consumed [...]` is what this pod committed in the window. A queue under `not draining [...]` holds messages that this pod consumes from and committed none of: that pod is the one to look at. `entries queues owned N/16` summed across pods should be 16. Ownership hand-overs are logged as `acquired entries queue` / `released entries queue`. On the dashboard, the "Projection Queue Backlog", "Messages Committed per Second" and "Entries Queue Owners" panels show the same data over time.
+
 1. **Check consumer concurrency and queue depth:**
    ```bash
    # Depth and consumer count per projection queue (the transfers queue has PROJECTION_TRANSFER_CONSUMERS x replicas consumers; each entries queue has exactly one active exclusive consumer, ADR-0034 amendment)

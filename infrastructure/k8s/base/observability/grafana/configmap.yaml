@@ -465,6 +465,55 @@ data:
               "refId": "B"
             }
           ]
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Projection Queue Backlog (ready messages)",
+          "description": "rabbitmq_detailed_queue_messages_ready per projection queue, from the broker. A queue that grows while its messages-committed rate is flat is the stall ProjectionQueueNotDraining pages on (docs/runbooks/slo-cdc-lag.md). Each worker also logs these depths once a minute (ADR-0035).",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 30 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum by (queue) (rabbitmq_detailed_queue_messages_ready{queue=~\"projection\\\\..*\"})",
+              "legendFormat": "{{queue}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Projection Messages Committed per Second",
+          "description": "rate(projection_messages_total) per queue, summed over every projection-worker pod: what the projection actually committed and acknowledged (ADR-0035).",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 30 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum by (queue) (rate(projection_messages_total[5m]))",
+              "legendFormat": "{{queue}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "ops" } }
+        },
+        {
+          "id": 13,
+          "type": "timeseries",
+          "title": "Entries Queue Owners",
+          "description": "sum by (queue) (projection_queue_owned): how many pods hold each entries queue's exclusive consume (ADR-0034 amendment). 1 is healthy; 0 means nobody drains that shard; per-pod lines show which pod owns it.",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 30 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum by (queue) (projection_queue_owned)",
+              "legendFormat": "{{queue}}",
+              "refId": "A"
+            }
+          ]
         }
       ]
     }
