@@ -73,6 +73,9 @@ make demo-seed       # 3 funds, 12 employers, ~300,000 fictitious participants
 make demo-day        # one simulated business day: contributions, then a NAV move
 make demo-onboard    # onboard a 200,000-employee employer live
 make demo-reset      # tear down and reseed from scratch (~4 min)
+
+make gke-up          # throwaway three-zone GKE load-test cluster in a new project (ADR-0036)
+make gke-down        # delete that project; see infrastructure/gke/README.md
 ```
 
 Tests run in a random class order, one seed per build, printed at the start and

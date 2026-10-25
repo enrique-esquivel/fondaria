@@ -73,3 +73,16 @@ portForward:
     resourceName: valkey
     port: 6379
     localPort: 6379
+profiles:
+  # The throwaway GKE load-test environment (ADR-0036, infrastructure/gke/).
+  # `make gke-deploy` adds --default-repo (the environment's own Artifact
+  # Registry) and --platform=linux/amd64. The default (kind) config above is
+  # untouched: no profile, no push.
+  - name: gke
+    patches:
+      - op: replace
+        path: /build/local/push
+        value: true
+      - op: replace
+        path: /manifests/kustomize/paths/0
+        value: infrastructure/k8s/overlays/gke
