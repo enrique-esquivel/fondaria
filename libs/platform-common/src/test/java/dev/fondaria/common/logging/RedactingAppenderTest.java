@@ -27,6 +27,8 @@ class RedactingAppenderTest {
   private Logger logger;
   private RedactingConsoleAppender appender;
   private ByteArrayOutputStream outputStream;
+  private Level originalLevel;
+  private boolean originalAdditive;
 
   @BeforeEach
   void setUp() {
@@ -40,6 +42,8 @@ class RedactingAppenderTest {
     appender.setOutputStream(outputStream);
     appender.start();
 
+    originalLevel = logger.getLevel();
+    originalAdditive = logger.isAdditive();
     logger.setLevel(Level.DEBUG);
     logger.setAdditive(false);
     logger.addAppender(appender);
@@ -52,6 +56,8 @@ class RedactingAppenderTest {
     }
     if (logger != null) {
       logger.detachAppender(appender);
+      logger.setLevel(originalLevel);
+      logger.setAdditive(originalAdditive);
     }
   }
 
@@ -242,33 +248,39 @@ class RedactingAppenderTest {
   @DisplayName("log level is configurable per package at runtime without a restart")
   void logLevelConfigurablePerPackageAtRuntimeWithoutRestart() {
     Logger pkgLogger = context.getLogger("dev.fondaria.test.runtime");
-    pkgLogger.setAdditive(false);
-    pkgLogger.addAppender(appender);
+    Level pkgOriginalLevel = pkgLogger.getLevel();
+    boolean pkgOriginalAdditive = pkgLogger.isAdditive();
+    try {
+      pkgLogger.setAdditive(false);
+      pkgLogger.addAppender(appender);
 
-    org.slf4j.Logger slf4jLogger = LoggerFactory.getLogger("dev.fondaria.test.runtime");
+      org.slf4j.Logger slf4jLogger = LoggerFactory.getLogger("dev.fondaria.test.runtime");
 
-    // Initial level is INFO
-    pkgLogger.setLevel(Level.INFO);
+      // Initial level is INFO
+      pkgLogger.setLevel(Level.INFO);
 
-    outputStream.reset();
-    slf4jLogger.debug("debug-suppressed");
-    assertThat(outputStream.toString(StandardCharsets.UTF_8)).doesNotContain("debug-suppressed");
+      outputStream.reset();
+      slf4jLogger.debug("debug-suppressed");
+      assertThat(outputStream.toString(StandardCharsets.UTF_8)).doesNotContain("debug-suppressed");
 
-    // Reconfigure log level to DEBUG at runtime
-    pkgLogger.setLevel(Level.DEBUG);
-    outputStream.reset();
-    slf4jLogger.debug("debug-visible");
-    assertThat(outputStream.toString(StandardCharsets.UTF_8)).contains("debug-visible");
+      // Reconfigure log level to DEBUG at runtime
+      pkgLogger.setLevel(Level.DEBUG);
+      outputStream.reset();
+      slf4jLogger.debug("debug-visible");
+      assertThat(outputStream.toString(StandardCharsets.UTF_8)).contains("debug-visible");
 
-    // Reconfigure log level to WARN at runtime
-    pkgLogger.setLevel(Level.WARN);
-    outputStream.reset();
-    slf4jLogger.info("info-suppressed");
-    slf4jLogger.warn("warn-visible");
-    String warnOutput = outputStream.toString(StandardCharsets.UTF_8);
-    assertThat(warnOutput).doesNotContain("info-suppressed");
-    assertThat(warnOutput).contains("warn-visible");
-
-    pkgLogger.detachAppender(appender);
+      // Reconfigure log level to WARN at runtime
+      pkgLogger.setLevel(Level.WARN);
+      outputStream.reset();
+      slf4jLogger.info("info-suppressed");
+      slf4jLogger.warn("warn-visible");
+      String warnOutput = outputStream.toString(StandardCharsets.UTF_8);
+      assertThat(warnOutput).doesNotContain("info-suppressed");
+      assertThat(warnOutput).contains("warn-visible");
+    } finally {
+      pkgLogger.detachAppender(appender);
+      pkgLogger.setLevel(pkgOriginalLevel);
+      pkgLogger.setAdditive(pkgOriginalAdditive);
+    }
   }
 }

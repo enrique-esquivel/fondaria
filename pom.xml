@@ -122,6 +122,10 @@
                     <configuration>
                         <excludedGroups>${excluded.test.groups}</excludedGroups>
                         <runOrder>${surefire.runOrder}</runOrder>
+                        <!-- Picks up libs/testing's LoggerStateGuard in every module that depends on it -->
+                        <properties>
+                            <configurationParameters>junit.jupiter.extensions.autodetection.enabled=true</configurationParameters>
+                        </properties>
                     </configuration>
                 </plugin>
                 <plugin>

@@ -58,6 +58,7 @@ class BalanceApiAuthorizationTest {
 
   private Logger auditLogger;
   private ListAppender<ILoggingEvent> appender;
+  private Level originalAuditLevel;
 
   @BeforeEach
   void setUp() {
@@ -65,6 +66,7 @@ class BalanceApiAuthorizationTest {
     appender = new ListAppender<>();
     appender.start();
     auditLogger.addAppender(appender);
+    originalAuditLevel = auditLogger.getLevel();
     auditLogger.setLevel(Level.INFO);
 
     balanceService = Mockito.mock(BalanceService.class);
@@ -122,6 +124,7 @@ class BalanceApiAuthorizationTest {
   @AfterEach
   void tearDown() {
     auditLogger.detachAppender(appender);
+    auditLogger.setLevel(originalAuditLevel);
   }
 
   private String participantToken(ParticipantId id) {

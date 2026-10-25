@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.logging.LogLevel;
+import org.springframework.boot.logging.LoggerConfiguration;
 import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -202,28 +203,34 @@ class StructuredLoggingIntegrationTest extends ServiceIntegrationTest {
     assertThat(outputStream.toString(StandardCharsets.UTF_8))
         .doesNotContain("debug-marker-suppressed-1");
 
-    // 2. Change package level to DEBUG at runtime via LoggingSystem
-    assertThat(loggingSystem).isNotNull();
-    loggingSystem.setLogLevel("dev.fondaria.contribution.runtime", LogLevel.DEBUG);
+    // The level is JVM-wide and this context is cached: put back exactly what was configured
+    // (nothing, here — the package inherits), even if an assertion below fails.
+    LoggerConfiguration configured =
+        loggingSystem.getLoggerConfiguration("dev.fondaria.contribution.runtime");
+    LogLevel original = configured == null ? null : configured.getConfiguredLevel();
+    try {
+      // 2. Change package level to DEBUG at runtime via LoggingSystem
+      assertThat(loggingSystem).isNotNull();
+      loggingSystem.setLogLevel("dev.fondaria.contribution.runtime", LogLevel.DEBUG);
 
-    // 3. Now DEBUG logs are emitted without restarting the service
-    outputStream.reset();
-    logger.debug("debug-marker-visible-2");
-    assertThat(outputStream.toString(StandardCharsets.UTF_8)).contains("debug-marker-visible-2");
+      // 3. Now DEBUG logs are emitted without restarting the service
+      outputStream.reset();
+      logger.debug("debug-marker-visible-2");
+      assertThat(outputStream.toString(StandardCharsets.UTF_8)).contains("debug-marker-visible-2");
 
-    // 4. Change package level to WARN at runtime
-    loggingSystem.setLogLevel("dev.fondaria.contribution.runtime", LogLevel.WARN);
+      // 4. Change package level to WARN at runtime
+      loggingSystem.setLogLevel("dev.fondaria.contribution.runtime", LogLevel.WARN);
 
-    // 5. Now INFO and DEBUG logs are suppressed, but WARN is emitted
-    outputStream.reset();
-    logger.info("info-marker-suppressed-3");
-    logger.warn("warn-marker-visible-4");
-    String warnOutput = outputStream.toString(StandardCharsets.UTF_8);
-    assertThat(warnOutput).doesNotContain("info-marker-suppressed-3");
-    assertThat(warnOutput).contains("warn-marker-visible-4");
-
-    // Reset back to INFO
-    loggingSystem.setLogLevel("dev.fondaria.contribution.runtime", LogLevel.INFO);
+      // 5. Now INFO and DEBUG logs are suppressed, but WARN is emitted
+      outputStream.reset();
+      logger.info("info-marker-suppressed-3");
+      logger.warn("warn-marker-visible-4");
+      String warnOutput = outputStream.toString(StandardCharsets.UTF_8);
+      assertThat(warnOutput).doesNotContain("info-marker-suppressed-3");
+      assertThat(warnOutput).contains("warn-marker-visible-4");
+    } finally {
+      loggingSystem.setLogLevel("dev.fondaria.contribution.runtime", original);
+    }
   }
 
   private static String freshRfc() {
