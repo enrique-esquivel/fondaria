@@ -27,7 +27,12 @@ spring:
         concurrency: ${BRIDGE_AMQP_CONCURRENCY:1}
         max-concurrency: ${BRIDGE_AMQP_CONCURRENCY:1}
         prefetch: ${BRIDGE_AMQP_PREFETCH:64}
-        missing-queues-fatal: true
+        # false: keep retrying until bridge.ledger exists. The queue is declared by the
+        # rabbitmq-topology Job, which can finish after this pod starts; with true, Spring
+        # gives up after a few attempts and stops the consumer for good while the pod stays
+        # Ready, so every ledger event piles up unread and the projection silently stops.
+        # Found on the first GKE run (ADR-0036), where a 3-node RabbitMQ forms slower than kind's.
+        missing-queues-fatal: false
     observation-enabled: true
 
 server:
