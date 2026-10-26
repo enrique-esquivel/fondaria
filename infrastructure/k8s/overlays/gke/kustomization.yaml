@@ -23,6 +23,7 @@ namespace: fondaria
 
 resources:
   - ../prod
+  - allow-node-local-dns.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -138,6 +139,21 @@ patches:
         path: /allowVolumeExpansion
         value: true
 
+  # Unmeshed callers of the meshed datastores (tigerbeetle-cdc -> RabbitMQ,
+  # envoy-ratelimit -> Valkey, Postgres backups -> the object store) are let in
+  # by source network, and the base names kind's Calico pod pool. GKE's pods
+  # live in up.sh's GKE_PODS_RANGE; without this, Linkerd reset every such
+  # connection (found on the first GKE deploy: tigerbeetle-cdc could not reach
+  # RabbitMQ). GkeOverlayValidationTest ties the value to config.env.
+  - target:
+      kind: NetworkAuthentication
+      name: unmeshed-cluster-callers
+    patch: |-
+      - op: replace
+        path: /spec/networks
+        value:
+          - cidr: 10.64.0.0/14
+
   # Never a cloud load balancer: that would put a public IP in front of the
   # platform. Reached only through `kubectl port-forward` (tunnel.sh).
   - target:
@@ -158,7 +174,13 @@ patches:
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: 6Gi
 
-  # Row 26o's per-statement timings, as in overlays/local.
+  # Row 26o's per-statement timings, as in overlays/local. And a connection
+  # ceiling the prod topology fits: the base's 200 is exhausted by the services'
+  # pools at prod's MINIMUM replicas (3 x 10 per API, 4 x 10 statement-worker,
+  # 2 x 24 projection-worker, allotment, eod, plus Keycloak) -- found on the
+  # first GKE deploy, where projection-worker could not open its pool. 400
+  # covers every HPA at its maximum. Prod's own budget is an open finding
+  # (TASK-LOG), not decided here.
   - target:
       kind: Cluster
       name: postgres
@@ -170,6 +192,7 @@ patches:
       spec:
         postgresql:
           parameters:
+            max_connections: "400"
             pg_stat_statements.track: "top"
             pg_stat_statements.max: "5000"
 

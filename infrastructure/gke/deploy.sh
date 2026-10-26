@@ -20,8 +20,9 @@ gcloud auth configure-docker "${registry}" --quiet >/dev/null 2>&1
 "${here}/secrets.sh"
 
 cd "${root}"
-skaffold run --profile=gke \
+case "${GKE_PROFILE:-full}" in small) profile=gke-small ;; *) profile=gke ;; esac
+skaffold run --profile="${profile}" \
   --kube-context="${GKE_CONTEXT}" \
   --default-repo="${registry}/${GKE_PROJECT}/fondaria" \
   --platform=linux/amd64 \
-  --status-check=true --status-check-timeout=20m
+  --status-check=true

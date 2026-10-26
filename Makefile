@@ -169,7 +169,8 @@ verify-k8s: local-secrets ## Validate Kubernetes manifests, security policies, a
 		kubectl kustomize infrastructure/k8s/base > /dev/null && \
 		kubectl kustomize infrastructure/k8s/overlays/local > /dev/null && \
 		kubectl kustomize infrastructure/k8s/overlays/prod > /dev/null && \
-		kubectl kustomize infrastructure/k8s/overlays/gke > /dev/null; \
+		kubectl kustomize infrastructure/k8s/overlays/gke > /dev/null && \
+		kubectl kustomize infrastructure/k8s/overlays/gke-small > /dev/null; \
 	fi
 	@! grep -r "kind: Secret$$" infrastructure/k8s/base/ infrastructure/k8s/overlays/
 	mvn test -pl libs/e2e-tests -Dtest="KustomizeBaseValidationTest,KustomizeOverlaysValidationTest"
@@ -185,7 +186,7 @@ k8s-status: ## Pods, operators and HPAs on the local cluster
 	kubectl --context kind-fondaria -n fondaria get pods,hpa
 	kubectl --context kind-fondaria -n fondaria get cluster.postgresql.cnpg.io,rabbitmqcluster
 
-gke-up: ## Create the throwaway GKE load-test environment in a new project (ADR-0036; needs GKE_BILLING_ACCOUNT). Deletes itself after GKE_TTL_HOURS (default 5)
+gke-up: ## Create the throwaway GKE load-test environment in a new project, or in GKE_PROJECT if set (ADR-0036; needs GKE_BILLING_ACCOUNT). Shuts itself down after GKE_TTL_HOURS (default 5)
 	./infrastructure/gke/up.sh
 
 gke-deploy: local-secrets ## Build amd64 images, push to the environment's registry and deploy overlays/gke
@@ -199,7 +200,7 @@ gke-status: ## Nodes, pods and stateful clusters on the GKE environment
 	kubectl --context "$$GKE_CONTEXT" -n fondaria get pods -o wide && \
 	kubectl --context "$$GKE_CONTEXT" -n fondaria get cluster.postgresql.cnpg.io,rabbitmqcluster
 
-gke-down: ## Delete the GKE environment's whole project and revoke this machine's gcloud login (ARGS=--keep-login to keep it)
+gke-down: ## Delete the GKE environment (its whole project, or only what gke-up built in a kept GKE_PROJECT) and revoke this machine's gcloud login (ARGS=--keep-login to keep it)
 	./infrastructure/gke/down.sh $(ARGS)
 
 skaffold-dev: local-secrets ## Run Skaffold in development mode with live sync, port-forwarding and log streaming (Task 12.6)

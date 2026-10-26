@@ -1,0 +1,225 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The GKE load-test environment scaled to a new billing account's default
+# quota: 12 vCPUs in all regions and 250 GB of SSD per region (ADR-0036,
+# "small profile"). `GKE_PROFILE=small make gke-up` builds 3 nodes x 4 vCPU,
+# one per zone, and `make gke-deploy` applies this overlay.
+#
+# What it keeps from overlays/gke, and so from prod: every replicated datastore
+# runs three copies on three machines in three zones -- TigerBeetle consensus,
+# Postgres synchronous replication and RabbitMQ quorum all cross real network
+# hops, encrypted between nodes -- with the mesh, NetworkPolicies, private
+# nodes and no public endpoint. What it gives up: production sizing.
+# Throughput and latency from this profile are NOT comparable with the full
+# profile's or production's; it tests behaviour across machines, not capacity.
+#
+#   - TigerBeetle 3 replicas instead of 6 (its smallest fault-tolerant cluster),
+#     so the replica count and every client's address list name three IPs;
+#   - resource requests lowered like overlays/local, so ~25 pods fit in ~10
+#     allocatable vCPUs (limits are untouched: a pod can still burst);
+#   - Postgres, RabbitMQ and TigerBeetle stay on pd-ssd with smaller volumes;
+#     the object store and the observability stack move to GKE's built-in
+#     pd-standard class, which does not count against the SSD quota.
+namespace: fondaria
+
+resources:
+  - ../gke
+
+patches:
+  # ------------------------------------------------------------ TigerBeetle --
+  - target:
+      kind: StatefulSet
+      name: tigerbeetle
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 250m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 1024Mi
+  - target:
+      kind: ConfigMap
+      name: tigerbeetle-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_REPLICA_COUNT
+        value: "3"
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+  - target:
+      kind: ConfigMap
+      name: contribution-api-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+  - target:
+      kind: ConfigMap
+      name: allotment-job-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+  - target:
+      kind: ConfigMap
+      name: balance-api-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+  - target:
+      kind: ConfigMap
+      name: eod-job-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+  - target:
+      kind: ConfigMap
+      name: valuation-api-config
+    patch: |-
+      - op: replace
+        path: /data/TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+  - target:
+      kind: ConfigMap
+      name: tigerbeetle-cdc-config
+    patch: |-
+      - op: replace
+        path: /data/CDC_TIGERBEETLE_ADDRESSES
+        value: "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000"
+
+  # --------------------------------------------------------------- Postgres --
+  # shared_buffers must stay below the memory request (the operator refuses
+  # otherwise).
+  - target:
+      kind: Cluster
+      name: postgres
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: postgres
+      spec:
+        storage:
+          size: 20Gi
+        walStorage:
+          size: 5Gi
+        postgresql:
+          parameters:
+            shared_buffers: "512MB"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1024Mi
+
+  # --------------------------------------------------------------- RabbitMQ --
+  - target:
+      kind: RabbitmqCluster
+      name: rabbitmq
+    patch: |-
+      apiVersion: rabbitmq.com/v1beta1
+      kind: RabbitmqCluster
+      metadata:
+        name: rabbitmq
+      spec:
+        persistence:
+          storage: 10Gi
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+
+  # ------------------------------------------------------------ autoscalers --
+  # Three nodes: at most 3 pods per API, scaling up one pod a minute after 5
+  # minutes of sustained load, as in overlays/local. Unbounded, the start-up
+  # CPU spikes of crash-looping pods scaled balance-api to 8 on the first
+  # deploy, and the extra pools exhausted Postgres's connections.
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+      - op: add
+        path: /spec/behavior
+        value:
+          scaleUp:
+            stabilizationWindowSeconds: 300
+            policies:
+              - type: Pods
+                value: 1
+                periodSeconds: 60
+            selectPolicy: Min
+
+  # -------------------------------------------------- everything stateless --
+  # Same values as overlays/local: requests, not limits.
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+  - target:
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+
+  # ---------------------------------- object store and observability: HDD --
+  # GKE's built-in `standard` class is pd-standard. These hold demo files,
+  # metrics, traces and logs for a few hours; none is on a latency path the
+  # load test measures.
+  - target:
+      kind: StatefulSet
+      name: object-store
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard
+  - target:
+      kind: StatefulSet
+      name: prometheus
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+  - target:
+      kind: StatefulSet
+      name: loki
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+  - target:
+      kind: StatefulSet
+      name: tempo
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m

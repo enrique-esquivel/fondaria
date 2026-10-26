@@ -86,3 +86,31 @@ profiles:
       - op: replace
         path: /manifests/kustomize/paths/0
         value: infrastructure/k8s/overlays/gke
+      # Datastores come up over minutes (operators, 3-way replication): wait up
+      # to 20 min for every workload and tolerate crash-loops until then, the
+      # same "converges once its dependency exists" order the kind bootstrap has.
+      - op: add
+        path: /deploy
+        value:
+          kubectl: {}
+          statusCheckDeadlineSeconds: 1200
+          tolerateFailuresUntilDeadline: true
+  # GKE_PROFILE=small: the same environment within a new billing account's
+  # default quota (overlays/gke-small, ADR-0036).
+  - name: gke-small
+    patches:
+      - op: replace
+        path: /build/local/push
+        value: true
+      - op: replace
+        path: /manifests/kustomize/paths/0
+        value: infrastructure/k8s/overlays/gke-small
+      # Datastores come up over minutes (operators, 3-way replication): wait up
+      # to 20 min for every workload and tolerate crash-loops until then, the
+      # same "converges once its dependency exists" order the kind bootstrap has.
+      - op: add
+        path: /deploy
+        value:
+          kubectl: {}
+          statusCheckDeadlineSeconds: 1200
+          tolerateFailuresUntilDeadline: true

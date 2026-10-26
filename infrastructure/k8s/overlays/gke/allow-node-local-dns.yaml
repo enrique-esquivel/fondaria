@@ -1,0 +1,31 @@
+# GKE runs NodeLocal DNSCache: pods still send DNS to the kube-dns Service IP,
+# but the dataplane answers it from the node-local-dns pod on the same node,
+# labelled k8s-app=node-local-dns, not k8s-app=kube-dns. The base's
+# allow-dns-and-telemetry names only kube-dns, so under default-deny every
+# lookup timed out -- found on the first GKE deploy, where it showed up as
+# every Linkerd proxy failing to resolve its control plane (ADR-0036).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-node-local-dns
+  labels:
+    app.kubernetes.io/name: allow-node-local-dns
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

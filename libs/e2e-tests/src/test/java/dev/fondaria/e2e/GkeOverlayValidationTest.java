@@ -139,6 +139,28 @@ class GkeOverlayValidationTest {
   }
 
   @Test
+  @DisplayName(
+      "Unmeshed callers are admitted from up.sh's pod range, and DNS reaches node-local-dns")
+  void unmeshedCallersUseGkePodRangeAndDnsReachesNodeLocalCache() throws Exception {
+    String config = Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/config.env")));
+    Matcher matcher =
+        Pattern.compile("GKE_PODS_RANGE=\"\\$\\{GKE_PODS_RANGE:-([0-9./]+)}\"").matcher(config);
+    assertThat(matcher.find()).as("GKE_PODS_RANGE default in config.env").isTrue();
+
+    for (String overlay : List.of("gke", "gke-small")) {
+      List<Map<String, Object>> docs = renderOverlay(overlay);
+      Map<String, Object> callers = find(docs, "NetworkAuthentication", "unmeshed-cluster-callers");
+      assertThat(list(map(callers, "spec"), "networks"))
+          .as("%s: unmeshed-cluster-callers networks", overlay)
+          .extracting(n -> n.get("cidr"))
+          .containsExactly(matcher.group(1));
+      assertThat(find(docs, "NetworkPolicy", "allow-node-local-dns"))
+          .as("%s: DNS egress to GKE's NodeLocal DNSCache", overlay)
+          .isNotNull();
+    }
+  }
+
+  @Test
   @DisplayName("Skaffold's gke profile pushes images and deploys the GKE overlay")
   void skaffoldProfileTargetsGkeOverlay() throws Exception {
     Map<String, Object> skaffold;
@@ -160,6 +182,116 @@ class GkeOverlayValidationTest {
               assertThat(p.get("path")).isEqualTo("/manifests/kustomize/paths/0");
               assertThat(p.get("value")).isEqualTo("infrastructure/k8s/overlays/gke");
             });
+  }
+
+  @Test
+  @DisplayName("The small GKE profile keeps three copies of every datastore on three machines")
+  void smallProfileKeepsThreeCopiesOfEveryDatastore() throws Exception {
+    List<Map<String, Object>> docs = renderOverlay("gke-small");
+
+    Map<String, Object> tigerbeetle = find(docs, "StatefulSet", "tigerbeetle");
+    assertThat(map(tigerbeetle, "spec").get("replicas")).isEqualTo(3);
+    assertThat(tigerbeetle.toString())
+        .as("still one TigerBeetle replica per node")
+        .contains("requiredDuringSchedulingIgnoredDuringExecution")
+        .contains("kubernetes.io/hostname");
+    assertThat(map(find(docs, "ConfigMap", "tigerbeetle-config"), "data"))
+        .containsEntry("TIGERBEETLE_REPLICA_COUNT", "3");
+
+    // Every client must name exactly the three replicas the cluster formats with: a client
+    // listing a fourth address would wait on a replica that never exists.
+    String threeReplicas = "10.96.100.100:3000,10.96.100.101:3000,10.96.100.102:3000";
+    for (String configMap :
+        List.of(
+            "tigerbeetle-config",
+            "contribution-api-config",
+            "allotment-job-config",
+            "balance-api-config",
+            "eod-job-config",
+            "valuation-api-config")) {
+      assertThat(map(find(docs, "ConfigMap", configMap), "data").get("TIGERBEETLE_ADDRESSES"))
+          .as("TIGERBEETLE_ADDRESSES in %s", configMap)
+          .isEqualTo(threeReplicas);
+    }
+    assertThat(
+            map(find(docs, "ConfigMap", "tigerbeetle-cdc-config"), "data")
+                .get("CDC_TIGERBEETLE_ADDRESSES"))
+        .isEqualTo(threeReplicas);
+
+    assertThat(map(find(docs, "Cluster", "postgres"), "spec").get("instances")).isEqualTo(3);
+    assertThat(map(find(docs, "RabbitmqCluster", "rabbitmq"), "spec").get("replicas")).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("The small GKE profile fits a new billing account's 250 GB SSD quota")
+  void smallProfileFitsDefaultSsdQuota() throws Exception {
+    List<Map<String, Object>> docs = renderOverlay("gke-small");
+
+    // The ledger, the database and the broker stay on SSD.
+    assertThat(volumeClass(find(docs, "StatefulSet", "tigerbeetle"))).isEqualTo("tigerbeetle-nvme");
+    // Files, metrics, traces and logs move to GKE's built-in pd-standard class.
+    for (String statefulSet : List.of("object-store", "prometheus", "loki", "tempo")) {
+      assertThat(volumeClass(find(docs, "StatefulSet", statefulSet)))
+          .as("storage class of %s", statefulSet)
+          .isEqualTo("standard");
+    }
+
+    double ssdGib = 0;
+    for (Map<String, Object> statefulSet : ofKind(docs, "StatefulSet")) {
+      Map<String, Object> spec = map(statefulSet, "spec");
+      for (Map<String, Object> claim : list(spec, "volumeClaimTemplates")) {
+        Map<String, Object> claimSpec = map(claim, "spec");
+        if ("tigerbeetle-nvme".equals(claimSpec.get("storageClassName"))) {
+          ssdGib +=
+              gib(map(map(claimSpec, "resources"), "requests").get("storage"))
+                  * (Integer) spec.getOrDefault("replicas", 1);
+        }
+      }
+    }
+    Map<String, Object> postgres = map(find(docs, "Cluster", "postgres"), "spec");
+    ssdGib +=
+        (gib(map(postgres, "storage").get("size")) + gib(map(postgres, "walStorage").get("size")))
+            * (Integer) postgres.get("instances");
+    Map<String, Object> rabbit = map(find(docs, "RabbitmqCluster", "rabbitmq"), "spec");
+    ssdGib += gib(map(rabbit, "persistence").get("storage")) * (Integer) rabbit.get("replicas");
+
+    // 250 GB is the quota; disks count in GB (1 GiB = 1.074 GB), boot disks are pd-standard.
+    assertThat(ssdGib * 1.074).as("SSD claimed, in GB").isLessThanOrEqualTo(250);
+  }
+
+  @Test
+  @DisplayName("Skaffold's gke-small profile deploys the small overlay")
+  void skaffoldSmallProfileTargetsSmallOverlay() throws Exception {
+    Map<String, Object> skaffold;
+    try (InputStream in = Files.newInputStream(Path.of(RepositoryRoot.path("skaffold.yaml")))) {
+      skaffold = new Yaml().load(in);
+    }
+    Map<String, Object> small =
+        list(skaffold, "profiles").stream()
+            .filter(p -> "gke-small".equals(p.get("name")))
+            .findFirst()
+            .orElseThrow();
+    assertThat(list(small, "patches"))
+        .anySatisfy(p -> assertThat(p.get("path")).isEqualTo("/build/local/push"))
+        .anySatisfy(
+            p -> assertThat(p.get("value")).isEqualTo("infrastructure/k8s/overlays/gke-small"));
+  }
+
+  private static String volumeClass(Map<String, Object> statefulSet) {
+    return (String)
+        map(list(map(statefulSet, "spec"), "volumeClaimTemplates").get(0), "spec")
+            .get("storageClassName");
+  }
+
+  private static double gib(Object quantity) {
+    String value = String.valueOf(quantity);
+    if (value.endsWith("Gi")) {
+      return Double.parseDouble(value.substring(0, value.length() - 2));
+    }
+    if (value.endsWith("Mi")) {
+      return Double.parseDouble(value.substring(0, value.length() - 2)) / 1024;
+    }
+    throw new IllegalArgumentException("unexpected storage quantity " + value);
   }
 
   private static long ipv4(String address) throws Exception {
