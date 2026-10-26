@@ -289,6 +289,18 @@ jobs:
       (github.event_name == 'schedule' && github.event.schedule == '30 8 * * 1') ||
       (github.event_name == 'workflow_dispatch' && inputs.dependencyScan)
     steps:
+      - name: Require the NVD API key
+        # An undefined secret expands to an empty string, which NVD rejects with an
+        # opaque "Invalid API Key, length of 0" stack trace after the full reactor build.
+        # Fail first, with the remedy. Secrets do not travel with a repository port.
+        env:
+          NVD_APIKEY: ${{ secrets.NVD_APIKEY }}
+        run: |
+          if [ -z "$NVD_APIKEY" ]; then
+            echo "::error title=NVD_APIKEY secret is not set::Add it under Settings -> Secrets and variables -> Actions (key from https://nvd.nist.gov/developers/request-an-api-key)."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
