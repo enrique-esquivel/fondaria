@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.fondaria.demo.Args;
 import dev.fondaria.demo.DemoToolsException;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class SeedCommandTest {
@@ -38,5 +39,12 @@ class SeedCommandTest {
       firstEight += sizes[i];
     }
     assertThat(firstEight).isEqualTo(60_000);
+  }
+
+  @Test
+  void settleTimeoutGrowsWithTheBatchSoTheLargestSeedOrganizationIsNotCutOff() {
+    assertThat(SeedCommand.settleTimeout(191)).isLessThan(Duration.ofMinutes(4));
+    // 31,115 rows took over four minutes to stage on the small GKE profile.
+    assertThat(SeedCommand.settleTimeout(31_115)).isGreaterThan(Duration.ofMinutes(8));
   }
 }
