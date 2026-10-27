@@ -50,6 +50,13 @@ manifests:
   kustomize:
     paths:
       - infrastructure/k8s/overlays/local
+# A fresh kind node pulls every third-party image at once and the kubelet
+# answers some with "pull QPS exceeded"; it retries on its own and every pod
+# comes up, so tolerate those failures for 10 min instead of failing the run.
+deploy:
+  kubectl: {}
+  statusCheckDeadlineSeconds: 600
+  tolerateFailuresUntilDeadline: true
 portForward:
   # External APIs (matches local overlay NodePort mappings)
   - resourceType: Service
