@@ -109,7 +109,12 @@ metadata:
 spec:
   # The k8s counterpart of compose's `rabbitmq-topology` one-shot. Idempotent:
   # every declaration is a PUT that RabbitMQ answers 204 for on repeat.
+  # The wait-for-rabbitmq init container holds the pod until the broker's
+  # management API accepts the operator's credentials (a 3-node cluster forms
+  # far slower than kind's one node), so a pod failure here is a real
+  # declaration failure, and these retries are spare (ADR-0037).
   backoffLimit: 30
+  activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -128,6 +133,50 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      # Startup ordering (ADR-0037): each wait-for-* blocks until one dependency is
+      # genuinely usable, using infrastructure/k8s/base/startup-waits/. A dependency
+      # that never comes leaves the pod in Init:Error naming it, not Running and idle.
+      initContainers:
+        - name: wait-for-rabbitmq
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/rabbitmq.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_VHOST
+              value: "/"
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
       containers:
         - name: declare
           image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
@@ -177,3 +226,10 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 8Mi
+        - name: startup-waits
+          configMap:
+            name: startup-waits
+        - name: startup-wait-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

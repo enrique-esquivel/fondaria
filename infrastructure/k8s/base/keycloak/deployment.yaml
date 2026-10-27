@@ -25,6 +25,15 @@ spec:
         # this -- the injector gives its own proxy container a separate
         # projected token volume for identity, verified live.
         linkerd.io/inject: enabled
+        # Linkerd's proxy as a native sidecar (an init container with restartPolicy:
+        # Always) that starts before the wait-for-* init containers, so their checks
+        # carry this workload's mesh identity -- the datastores' AuthorizationPolicies
+        # admit nothing else. Injected the classic way, the proxy starts only after
+        # every init container, and linkerd-init's iptables rules would send their
+        # traffic to a proxy that is not listening yet. Both spellings: the alpha
+        # annotation (Linkerd 2.15-2.17) and the beta one that replaced it.
+        config.alpha.linkerd.io/proxy-enable-native-sidecar: "true"
+        config.beta.linkerd.io/proxy-enable-native-sidecar: "true"
     spec:
       priorityClassName: fondaria-stateless-default
       serviceAccountName: keycloak
@@ -44,6 +53,61 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+      # Startup ordering (ADR-0037): each wait-for-* blocks until one dependency is
+      # genuinely usable, using infrastructure/k8s/base/startup-waits/. A dependency
+      # that never comes leaves the pod in Init:Error naming it, not Running and idle.
+      initContainers:
+        - name: wait-for-postgres
+          image: ghcr.io/cloudnative-pg/postgresql:17.2@sha256:61d2b391e3e324d05edc6c65c555989a7c544ddb72ef271b3abd4a35b57942b1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/postgres.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: keycloak-config
+                  key: KC_DB_URL_HOST
+            - name: PGPORT
+              valueFrom:
+                configMapKeyRef:
+                  name: keycloak-config
+                  key: KC_DB_URL_PORT
+            - name: PGDATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: keycloak-config
+                  key: KC_DB_URL_DATABASE
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:26.1.0@sha256:c0675d484530e65446f38b28ea2e7854915c33afb0de5356899794410caf03be
@@ -142,3 +206,10 @@ spec:
             sources:
               - configMap:
                   name: keycloak-realm
+        - name: startup-waits
+          configMap:
+            name: startup-waits
+        - name: startup-wait-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

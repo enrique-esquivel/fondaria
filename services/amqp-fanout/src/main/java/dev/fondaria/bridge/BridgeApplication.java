@@ -1,8 +1,10 @@
 package dev.fondaria.bridge;
 
 import dev.fondaria.bridge.config.BridgeProperties;
+import dev.fondaria.bridge.health.ListenerContainersHealthIndicator;
 import dev.fondaria.common.StorableClock;
 import java.time.Clock;
+import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -42,5 +44,16 @@ public class BridgeApplication {
   @Bean
   public Clock clock() {
     return StorableClock.systemUTC();
+  }
+
+  /**
+   * Bean name matters: Actuator strips the {@code HealthIndicator} suffix to derive the component
+   * id, so this registers as {@code listenerContainers} -- the name the readiness group includes
+   * ({@code application.yaml}).
+   */
+  @Bean
+  public ListenerContainersHealthIndicator listenerContainersHealthIndicator(
+      RabbitListenerEndpointRegistry registry) {
+    return new ListenerContainersHealthIndicator(registry);
   }
 }
