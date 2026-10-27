@@ -4,16 +4,23 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
-/** One employer `seed` registered and enrolled, as `demo/out/manifest.json` records it. */
+/**
+ * One employer `seed` registered and enrolled, as `demo/out/manifest.json` records it.
+ *
+ * @param seedBatch the first contribution batch {@code seed} submitted for it; empty only in a
+ *     manifest written before {@code seed} began recording it
+ */
 public record OrganizationRecord(
     String organizationId,
     String legalName,
     String planId,
     String fundId,
     int employeeCount,
-    List<HeroParticipant> heroes) {
+    List<HeroParticipant> heroes,
+    Optional<SeedBatch> seedBatch) {
 
   Map<String, Object> toJson() {
     Map<String, Object> json = new LinkedHashMap<>();
@@ -23,6 +30,7 @@ public record OrganizationRecord(
     json.put("fundId", fundId);
     json.put("employeeCount", employeeCount);
     json.put("heroes", heroes.stream().map(HeroParticipant::toJson).collect(Collectors.toList()));
+    seedBatch.ifPresent(batch -> json.put("seedBatch", batch.toJson()));
     return json;
   }
 
@@ -38,6 +46,7 @@ public record OrganizationRecord(
         (String) json.get("planId"),
         (String) json.get("fundId"),
         ((Number) json.get("employeeCount")).intValue(),
-        heroes);
+        heroes,
+        Optional.ofNullable((Map<String, Object>) json.get("seedBatch")).map(SeedBatch::fromJson));
   }
 }

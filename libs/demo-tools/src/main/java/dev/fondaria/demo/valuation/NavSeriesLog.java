@@ -85,9 +85,13 @@ public final class NavSeriesLog {
   }
 
   public Optional<Long> lastReportedValueCents(String fundId) {
+    return lastEntry(fundId).map(Entry::reportedValueCents);
+  }
+
+  public Optional<Entry> lastEntry(String fundId) {
     for (int i = entries.size() - 1; i >= 0; i--) {
       if (entries.get(i).fundId().equals(fundId)) {
-        return Optional.of(entries.get(i).reportedValueCents());
+        return Optional.of(entries.get(i));
       }
     }
     return Optional.empty();
