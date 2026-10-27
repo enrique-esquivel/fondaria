@@ -106,6 +106,16 @@ class BusinessOverviewDashboardTest {
       }
     }
 
+    // Grafana has no built-in MXN unit: "currencyMXN" rendered as the raw number with the unit's
+    // name appended. Pesos panels use the custom-currency form instead.
+    for (JsonNode panel : panels) {
+      if (panel.path("targets").toString().contains("_pesos")) {
+        assertThat(panel.path("fieldConfig").path("defaults").path("unit").asText())
+            .as("unit of panel %s", panel.path("title").asText())
+            .isEqualTo("currency:MX$");
+      }
+    }
+
     // 4. Telemetry snapshot age
     assertThat(allExpressions)
         .anyMatch(expr -> expr.contains("fondaria_business_metrics_snapshot_timestamp_seconds"));

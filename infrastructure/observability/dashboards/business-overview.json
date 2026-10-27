@@ -36,7 +36,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyMXN"
+          "unit": "currency:MX$"
         }
       }
     },
@@ -125,7 +125,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyMXN"
+          "unit": "currency:MX$"
         }
       }
     },
@@ -167,7 +167,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyMXN"
+          "unit": "currency:MX$"
         }
       }
     },
@@ -188,7 +188,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyMXN"
+          "unit": "currency:MX$"
         }
       }
     }
