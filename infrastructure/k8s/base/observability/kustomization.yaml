@@ -7,4 +7,5 @@ resources:
   - tempo
   - loki
   - grafana
+  - kube-state-metrics
   - networkpolicies

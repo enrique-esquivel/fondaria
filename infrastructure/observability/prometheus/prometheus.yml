@@ -20,10 +20,19 @@ rule_files:
   # are not rule files and fail to parse as one.
   - /etc/prometheus/rules/*.rules.yml
 
-# Scrape jobs that exist in only one environment -- Kubernetes service
-# discovery for the CloudNativePG instances, for example -- live in files here
-# rather than in this shared config, which compose and the k8s ConfigMap carry
-# byte-for-byte (KustomizeBaseValidationTest). Empty under compose.
+# Scrape jobs that differ by environment -- Kubernetes service discovery for
+# the CloudNativePG instances, for example -- live in files here rather than in
+# this shared config, which compose and the k8s ConfigMap carry byte-for-byte
+# (KustomizeBaseValidationTest). Compose mounts
+# infrastructure/observability/prometheus/scrape.d/; Kubernetes mounts the
+# prometheus-scrape-k8s ConfigMap.
+#
+# RabbitMQ is one of them. Its per-queue metrics come only from the node that
+# holds the quorum queue's leader (checked against a 3-node rabbitmq:4.0.9
+# cluster: the other two nodes return no series for that queue). Compose has
+# one node, so a static target is complete; Kubernetes has three behind one
+# Service, and a static `rabbitmq:15692` target there reached a random node per
+# scrape, so most scrapes missed most queues. It scrapes every pod instead.
 scrape_config_files:
   - /etc/prometheus/scrape.d/*.yml
 
@@ -42,13 +51,3 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ["otel-collector:8889"]
-
-  # Task F.2: RabbitMQ Prometheus metrics endpoint (port 15692).
-  # Scrapes queue coarse metrics (total queue messages, ready, unacked)
-  # used by the `dlq_depth` recording rule.
-  - job_name: rabbitmq
-    metrics_path: /metrics/detailed
-    params:
-      family: ["queue_coarse_metrics"]
-    static_configs:
-      - targets: ["rabbitmq:15692"]

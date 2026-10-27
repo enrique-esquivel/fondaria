@@ -1,0 +1,17 @@
+# Compose only (mounted at /etc/prometheus/scrape.d by docker-compose.yml). The
+# Kubernetes equivalent is rabbitmq.yml in the prometheus-scrape-k8s ConfigMap,
+# which discovers every RabbitMQ pod instead of one static target -- see
+# prometheus.yml's scrape_config_files comment for why the two differ.
+#
+# RabbitMQ's Prometheus endpoint (port 15692), per-queue families only:
+#   queue_coarse_metrics  -> rabbitmq_detailed_queue_messages{,_ready,_unacked}
+#                            (the `dlq_depth` recording rule, Task F.2)
+#   queue_consumer_count  -> rabbitmq_detailed_queue_consumers
+#                            (QueueHasMessagesButNoConsumers, operational-health)
+scrape_configs:
+  - job_name: rabbitmq
+    metrics_path: /metrics/detailed
+    params:
+      family: ["queue_coarse_metrics", "queue_consumer_count"]
+    static_configs:
+      - targets: ["rabbitmq:15692"]

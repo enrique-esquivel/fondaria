@@ -79,10 +79,10 @@ class KustomizeOverlaysValidationTest {
     List<Map<String, Object>> renderedDocs = renderOverlay("local");
     assertThat(renderedDocs).isNotEmpty();
 
-    // 1. All Deployments have replica count 1 (9 microservices + 2 observability workloads +
-    // Keycloak, Task D.3)
+    // 1. All Deployments have replica count 1 (9 microservices + 3 observability workloads --
+    // otel-collector, grafana, kube-state-metrics -- + Keycloak, Task D.3)
     List<Map<String, Object>> deployments = filterByKind(renderedDocs, "Deployment");
-    assertThat(deployments).hasSize(12);
+    assertThat(deployments).hasSize(13);
     for (Map<String, Object> dep : deployments) {
       String name = getName(dep);
       Map<String, Object> spec = getMap(dep, "spec");
@@ -106,11 +106,10 @@ class KustomizeOverlaysValidationTest {
           .isEqualTo("128Mi");
     }
 
-    // 3. Relaxed PDBs: minAvailable: 0 (10 service/infra PDBs + object-store + 5 observability PDBs
-    // +
-    // Keycloak, Task D.3)
+    // 3. Relaxed PDBs: minAvailable: 0 (10 service/infra PDBs + object-store + 6 observability PDBs
+    // + Keycloak, Task D.3)
     List<Map<String, Object>> pdbs = filterByKind(renderedDocs, "PodDisruptionBudget");
-    assertThat(pdbs).hasSize(17);
+    assertThat(pdbs).hasSize(18);
     for (Map<String, Object> pdb : pdbs) {
       String name = getName(pdb);
       Map<String, Object> spec = getMap(pdb, "spec");

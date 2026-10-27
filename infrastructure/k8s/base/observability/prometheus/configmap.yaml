@@ -30,10 +30,19 @@ data:
       # are not rule files and fail to parse as one.
       - /etc/prometheus/rules/*.rules.yml
 
-    # Scrape jobs that exist in only one environment -- Kubernetes service
-    # discovery for the CloudNativePG instances, for example -- live in files here
-    # rather than in this shared config, which compose and the k8s ConfigMap carry
-    # byte-for-byte (KustomizeBaseValidationTest). Empty under compose.
+    # Scrape jobs that differ by environment -- Kubernetes service discovery for
+    # the CloudNativePG instances, for example -- live in files here rather than in
+    # this shared config, which compose and the k8s ConfigMap carry byte-for-byte
+    # (KustomizeBaseValidationTest). Compose mounts
+    # infrastructure/observability/prometheus/scrape.d/; Kubernetes mounts the
+    # prometheus-scrape-k8s ConfigMap.
+    #
+    # RabbitMQ is one of them. Its per-queue metrics come only from the node that
+    # holds the quorum queue's leader (checked against a 3-node rabbitmq:4.0.9
+    # cluster: the other two nodes return no series for that queue). Compose has
+    # one node, so a static target is complete; Kubernetes has three behind one
+    # Service, and a static `rabbitmq:15692` target there reached a random node per
+    # scrape, so most scrapes missed most queues. It scrapes every pod instead.
     scrape_config_files:
       - /etc/prometheus/scrape.d/*.yml
 
@@ -52,16 +61,6 @@ data:
         honor_labels: true
         static_configs:
           - targets: ["otel-collector:8889"]
-
-      # Task F.2: RabbitMQ Prometheus metrics endpoint (port 15692).
-      # Scrapes queue coarse metrics (total queue messages, ready, unacked)
-      # used by the `dlq_depth` recording rule.
-      - job_name: rabbitmq
-        metrics_path: /metrics/detailed
-        params:
-          family: ["queue_coarse_metrics"]
-        static_configs:
-          - targets: ["rabbitmq:15692"]
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -489,6 +488,150 @@ data:
               summary: "The edge gateway cannot fetch Keycloak's signing keys -- every protected route is failing closed."
               description: "envoy_http_jwt_authn_jwks_fetch_failed has increased more than 3 times in 5m. Envoy's jwt_authn filter (securitypolicy-jwt.yaml) has no valid, current key set and is rejecting every request to the participant and employer APIs with 401, correctly (Task 10.2's fail-closed posture) but indiscriminately -- this is not limited to forged tokens. Check Keycloak's own health and the in-cluster path to keycloak.fondaria.svc.cluster.local:8080."
               runbook_url: "docs/RUNBOOKS.md#jwks-outage"
+  operational-health.rules.yml: |
+    # Operational health: is every Fondaria pod, Job and queue consumer doing its
+    # job? The alerting half of dashboards/operational-health.json.
+    #
+    # Written after the 2026-10-26 GKE end-to-end run, where a dead RabbitMQ
+    # consumer behind a pod that still reported Ready, Postgres instances still
+    # joining, and failing setup Jobs were found only by hand with kubectl. Every
+    # rule here would have named one of them.
+    #
+    # Sources, none of them Micrometer/OTel:
+    #   kube_*                         kube-state-metrics (k8s/base/observability/kube-state-metrics)
+    #   rabbitmq_detailed_queue_*      RabbitMQ's own Prometheus endpoint (prometheus/scrape.d)
+    #   up                             Prometheus's own per-target scrape health
+    # OperationalHealthMetricNamesAreRealIntegrationTest checks every name against
+    # a real kube-state-metrics and RabbitMQ; operational-health.tests.yml is the
+    # promtool unit test of each rule.
+    #
+    # Under compose none of the kube_* series exist, so these rules stay silent
+    # there by construction: no rule uses absent() on a Kubernetes-only series.
+    groups:
+      - name: operational-health
+        rules:
+          # Deployments and StatefulSets: fewer ready replicas than the spec asks
+          # for. StatefulSets cover TigerBeetle, Valkey, the object store, the
+          # observability backends and the RabbitMQ operator's rabbitmq-server.
+          # 5m clears an ordinary rolling update; a pod that never becomes Ready
+          # (CrashLoop, Pending on resources, a readiness probe that never passes)
+          # does not.
+          - alert: WorkloadBelowDesiredReplicas
+            expr: |
+              (kube_deployment_spec_replicas > kube_deployment_status_replicas_ready)
+              or
+              (kube_statefulset_replicas > kube_statefulset_status_replicas_ready)
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "{{ $labels.namespace }}/{{ $labels.deployment }}{{ $labels.statefulset }} has fewer ready replicas than desired"
+              description: "For 5 minutes the workload has run with fewer Ready replicas than its spec. For a datastore (tigerbeetle, rabbitmq-server, valkey) that is lost redundancy, one failure from losing quorum; for a service it is lost capacity. The operational-health dashboard's pod panels show which pod is missing and why."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # CloudNativePG instances are bare pods (no StatefulSet), so
+          # WorkloadBelowDesiredReplicas cannot see them. An instance that is not
+          # Ready is a replica not serving -- the cluster is one failure from losing
+          # its synchronous standby -- or one still joining after 5 minutes.
+          - alert: PostgresInstanceNotReady
+            expr: kube_pod_status_ready{namespace="fondaria", pod=~"postgres-[0-9]+", condition="true"} == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Postgres instance {{ $labels.pod }} is not Ready"
+              description: "The CloudNativePG instance pod has not been Ready for 5 minutes: still initialising or joining (pg_basebackup from the primary), or failing its own probes. Check the matching postgres-N-join Job and the instance's replication lag on the operational-health dashboard."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # A container in CrashLoopBackOff alternates waiting and running between
+          # restarts, so the waiting_reason series flaps; max_over_time holds it
+          # across a back-off cycle. `for: 10m` on a 5m window: one CrashLoopBackOff
+          # sample (a pod that crashed twice while a dependency was still forming,
+          # then recovered) stays pending and resolves; a container still cycling
+          # ten minutes later pages.
+          - alert: PodCrashLooping
+            expr: max_over_time(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}[5m]) >= 1
+            for: 10m
+            labels:
+              severity: page
+            annotations:
+              summary: "{{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} is crash-looping"
+              description: "The container has been in CrashLoopBackOff within every 5-minute window for 10 minutes. Its last termination reason (OOMKilled, Error) is on the operational-health dashboard; its own logs are in Loki."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # Setup Jobs: the RabbitMQ topology, the object-store buckets and every
+          # CloudNativePG instance's initdb/join Job. A failed one leaves the
+          # platform half-formed -- no bridge.ledger queue, no statement bucket, a
+          # Postgres replica that never joined.
+          - alert: SetupJobFailed
+            expr: kube_job_failed{namespace="fondaria", condition="true", job_name=~"rabbitmq-topology.*|object-store-buckets.*|postgres-.*"} == 1
+            for: 0m
+            labels:
+              severity: page
+            annotations:
+              summary: "Setup Job {{ $labels.job_name }} has failed"
+              description: "The Job exhausted its backoffLimit or activeDeadlineSeconds and will not be retried. Whatever it creates (RabbitMQ topology, object-store buckets, a Postgres instance) does not exist. The Job is kept for its ttlSecondsAfterFinished; read its pods' logs before then."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # rabbitmq-topology has backoffLimit 30 and object-store-buckets 20:
+          # with back-off capped at 6 minutes either can retry for over an hour
+          # before SetupJobFailed fires. Three failed attempts on a Job that has not
+          # completed is already not a transient start-up race.
+          - alert: SetupJobRetrying
+            expr: |
+              (kube_job_status_failed{namespace="fondaria", job_name=~"rabbitmq-topology.*|object-store-buckets.*|postgres-.*"} >= 3)
+              unless on (namespace, job_name)
+              (kube_job_complete{condition="true"} == 1)
+            for: 0m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Setup Job {{ $labels.job_name }} has failed 3 or more attempts"
+              description: "The Job is still retrying but has at least three failed pods. Usually a dependency it waits for (RabbitMQ, the object store, the Postgres primary) is not reachable or not formed. It will turn into SetupJobFailed when its retries run out."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # The failure mode of the GKE run: a consumer process dead while its pod
+          # stays Ready, so the backlog grows and nothing reads it. Dead-letter
+          # queues have no consumer by design and are DLQMessagesPresent's
+          # (financial-control.rules.yml), not this rule's.
+          - alert: QueueHasMessagesButNoConsumers
+            expr: |
+              (sum by (vhost, queue) (rabbitmq_detailed_queue_messages{queue!~".*\\.dlq"}) > 0)
+              and on (vhost, queue)
+              (sum by (vhost, queue) (rabbitmq_detailed_queue_consumers{queue!~".*\\.dlq"}) == 0)
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Queue {{ $labels.queue }} has messages and no consumer"
+              description: "For 5 minutes the queue has held messages with zero consumers attached. Ledger events are not being bridged or projected, so participant history and statements fall behind the ledger. The consuming pod may still report Ready: Spring's readiness does not include the AMQP listener. Restart the consumer (amqp-fanout for bridge.ledger, projection-worker for projection.entries.v1.*) and confirm the consumer count returns."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # The same failure while the platform is idle: no backlog yet, so the
+          # rule above cannot fire, but the next ledger event will sit unread.
+          # These queues always have a consumer in a healthy platform.
+          - alert: CriticalQueueHasNoConsumer
+            expr: sum by (vhost, queue) (rabbitmq_detailed_queue_consumers{queue=~"bridge\\.ledger|projection\\.entries\\.v1\\..*"}) == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Queue {{ $labels.queue }} has had no consumer for 5 minutes"
+              description: "bridge.ledger is read by amqp-fanout and projection.entries.v1.* by projection-worker; neither should ever be without a consumer. No backlog yet, so nothing is late, but the next ledger event will not be delivered."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+          # Every rule above that reads kube_* is blind without it. `up == 0`, not
+          # absent(): the static target exists only in Kubernetes (scrape.d), so
+          # compose -- which has no kube-state-metrics -- stays silent.
+          - alert: KubeStateMetricsDown
+            expr: up{job="kube-state-metrics"} == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "kube-state-metrics is not being scraped"
+              description: "Prometheus cannot scrape kube-state-metrics. Every pod, replica and Job panel on the operational-health dashboard is empty and the workload alerts in operational-health.rules.yml cannot fire."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -558,3 +701,39 @@ data:
             regex: (.+)
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: instance
+  # RabbitMQ per pod, not through the `rabbitmq` Service: a quorum queue's
+  # per-queue metrics come only from the node holding its leader, so a Service
+  # target (one random node per scrape) misses most queues on most scrapes.
+  # Same job name, path and families as the compose file
+  # (infrastructure/observability/prometheus/scrape.d/rabbitmq.yml), so the
+  # `dlq_depth` recording rule and operational-health.rules.yml read the same
+  # series in both environments; summed across pods, each queue counts once,
+  # from its leader. `up{job="rabbitmq"}` is one series per RabbitMQ node.
+  rabbitmq.yml: |
+    scrape_configs:
+      - job_name: rabbitmq
+        metrics_path: /metrics/detailed
+        params:
+          family: ["queue_coarse_metrics", "queue_consumer_count"]
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: rabbitmq
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            regex: "15692"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
+  # kube-state-metrics (observability/kube-state-metrics). honor_labels keeps
+  # its own `namespace`, `pod` and `container` labels -- the subject of each
+  # series -- instead of renaming them exported_* under the target's.
+  kube-state-metrics.yml: |
+    scrape_configs:
+      - job_name: kube-state-metrics
+        honor_labels: true
+        static_configs:
+          - targets: ["kube-state-metrics:8080"]

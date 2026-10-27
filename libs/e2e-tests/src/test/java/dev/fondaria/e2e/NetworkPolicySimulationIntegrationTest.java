@@ -152,6 +152,8 @@ class NetworkPolicySimulationIntegrationTest {
           new ConnectionAttempt("prometheus", "otel-collector", 8888),
           new ConnectionAttempt("prometheus", "otel-collector", 8889),
           new ConnectionAttempt("prometheus", "rabbitmq", 15692),
+          // Prometheus scrapes kube-state-metrics (operational-health dashboard)
+          new ConnectionAttempt("prometheus", "kube-state-metrics", 8080),
           // Grafana queries backends
           new ConnectionAttempt("grafana", "prometheus", 9090),
           new ConnectionAttempt("grafana", "tempo", 3200),
@@ -173,10 +175,15 @@ class NetworkPolicySimulationIntegrationTest {
         .isEqualTo(PolicyAction.ALLOWED);
     assertThat(evaluateObservabilityTraffic("grafana", "prometheus", 9090))
         .isEqualTo(PolicyAction.ALLOWED);
+    assertThat(evaluateObservabilityTraffic("prometheus", "kube-state-metrics", 8080))
+        .isEqualTo(PolicyAction.ALLOWED);
 
     // 2. Prohibited traffic: unauthorized service cross-talk to telemetry storage
     assertThat(evaluateObservabilityTraffic("contribution-api", "prometheus", 9090))
         .as("Microservices cannot query Prometheus directly")
+        .isEqualTo(PolicyAction.BLOCKED);
+    assertThat(evaluateObservabilityTraffic("contribution-api", "kube-state-metrics", 8080))
+        .as("Only Prometheus reads the cluster-state exporter")
         .isEqualTo(PolicyAction.BLOCKED);
     assertThat(evaluateObservabilityTraffic("edge-gateway", "tempo", 3200))
         .as("Edge gateway cannot query Tempo directly")

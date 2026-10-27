@@ -89,6 +89,8 @@ class MetricNamesAreRealIntegrationTest {
           "increase",
           "delta",
           "min_over_time",
+          "max_over_time",
+          "round",
           "abs",
           "max",
           "min",
@@ -392,8 +394,11 @@ class MetricNamesAreRealIntegrationTest {
     // 3. Remove range duration selectors: [...]
     sanitized = sanitized.replaceAll("\\[[^]]*\\]", " ");
 
-    // 4. Remove 'by (...)' and 'without (...)' aggregation clauses
-    sanitized = sanitized.replaceAll("\\b(by|without)\\s*\\([^)]*\\)", " ");
+    // 4. Remove label-list clauses: 'by (...)' and 'without (...)' on aggregations, 'on (...)',
+    // 'ignoring (...)', 'group_left (...)' and 'group_right (...)' on vector matching
+    sanitized =
+        sanitized.replaceAll(
+            "\\b(by|without|on|ignoring|group_left|group_right)\\s*\\([^)]*\\)", " ");
 
     // 5. Tokenize identifiers
     Pattern identPattern = Pattern.compile("\\b[a-zA-Z_:][a-zA-Z0-9_:]*\\b");

@@ -21,6 +21,12 @@ public final class ContainerImages {
   public static final String TEMPO = "grafana/tempo:2.9.5";
   public static final String KUBECONFORM = "ghcr.io/yannh/kubeconform:v0.6.7";
   public static final String OTEL_COLLECTOR = "otel/opentelemetry-collector-contrib:0.160.0";
+  // The release infrastructure/k8s/base/observability/kube-state-metrics/deployment.yaml runs
+  // (that manifest adds the digest), and a real API server for it to list: k3s at the Kubernetes
+  // version the kind overlay's KIND_NODE_IMAGE pins (v1.31.9).
+  public static final String KUBE_STATE_METRICS =
+      "registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0";
+  public static final String K3S = "rancher/k3s:v1.31.9-k3s1";
 
   static {
     initDockerEnv();

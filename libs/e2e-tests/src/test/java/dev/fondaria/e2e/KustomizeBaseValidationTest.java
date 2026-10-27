@@ -527,7 +527,15 @@ class KustomizeBaseValidationTest {
   }
 
   private static final List<String> OBSERVABILITY_WORKLOADS =
-      List.of("otel-collector", "prometheus", "tempo", "loki", "grafana");
+      List.of("otel-collector", "prometheus", "tempo", "loki", "grafana", "kube-state-metrics");
+
+  // Deployments; the rest of OBSERVABILITY_WORKLOADS are StatefulSets.
+  private static final List<String> OBSERVABILITY_DEPLOYMENTS =
+      List.of("otel-collector", "grafana", "kube-state-metrics");
+
+  // kube-state-metrics is configured entirely by its args: there is no file for a ConfigMap to
+  // hold.
+  private static final List<String> OBSERVABILITY_WITHOUT_CONFIGMAP = List.of("kube-state-metrics");
 
   @Test
   @DisplayName("All required observability manifests exist and have strict structure")
@@ -543,11 +551,13 @@ class KustomizeBaseValidationTest {
       assertThat(dir).isDirectory();
       assertThat(dir.resolve("service.yaml")).isRegularFile();
       assertThat(dir.resolve("serviceaccount.yaml")).isRegularFile();
-      assertThat(dir.resolve("configmap.yaml")).isRegularFile();
+      if (!OBSERVABILITY_WITHOUT_CONFIGMAP.contains(workload)) {
+        assertThat(dir.resolve("configmap.yaml")).isRegularFile();
+      }
       assertThat(dir.resolve("pdb.yaml")).isRegularFile();
       assertThat(dir.resolve("kustomization.yaml")).isRegularFile();
 
-      if ("otel-collector".equals(workload) || "grafana".equals(workload)) {
+      if (OBSERVABILITY_DEPLOYMENTS.contains(workload)) {
         assertThat(dir.resolve("deployment.yaml")).isRegularFile();
       } else {
         assertThat(dir.resolve("statefulset.yaml")).isRegularFile();
@@ -568,9 +578,7 @@ class KustomizeBaseValidationTest {
 
     for (String workload : OBSERVABILITY_WORKLOADS) {
       String manifest =
-          ("otel-collector".equals(workload) || "grafana".equals(workload))
-              ? "deployment.yaml"
-              : "statefulset.yaml";
+          OBSERVABILITY_DEPLOYMENTS.contains(workload) ? "deployment.yaml" : "statefulset.yaml";
       File file = obsBase.resolve(workload).resolve(manifest).toFile();
       try (InputStream in = new FileInputStream(file)) {
         @SuppressWarnings("unchecked")
@@ -588,9 +596,7 @@ class KustomizeBaseValidationTest {
 
     for (String workload : OBSERVABILITY_WORKLOADS) {
       String manifest =
-          ("otel-collector".equals(workload) || "grafana".equals(workload))
-              ? "deployment.yaml"
-              : "statefulset.yaml";
+          OBSERVABILITY_DEPLOYMENTS.contains(workload) ? "deployment.yaml" : "statefulset.yaml";
       File file = obsBase.resolve(workload).resolve(manifest).toFile();
       try (InputStream in = new FileInputStream(file)) {
         @SuppressWarnings("unchecked")
@@ -639,9 +645,7 @@ class KustomizeBaseValidationTest {
 
     for (String workload : OBSERVABILITY_WORKLOADS) {
       String manifest =
-          ("otel-collector".equals(workload) || "grafana".equals(workload))
-              ? "deployment.yaml"
-              : "statefulset.yaml";
+          OBSERVABILITY_DEPLOYMENTS.contains(workload) ? "deployment.yaml" : "statefulset.yaml";
       Path path = obsBase.resolve(workload).resolve(manifest);
       String content = Files.readString(path);
 
@@ -718,6 +722,9 @@ class KustomizeBaseValidationTest {
               Files.readString(obsSource.resolve("alerts/financial-control.rules.yml")).trim());
       assertThat(rulesData.get("edge-security.rules.yml").trim())
           .isEqualTo(Files.readString(obsSource.resolve("alerts/edge-security.rules.yml")).trim());
+      assertThat(rulesData.get("operational-health.rules.yml").trim())
+          .isEqualTo(
+              Files.readString(obsSource.resolve("alerts/operational-health.rules.yml")).trim());
     }
 
     // 3. tempo
@@ -771,6 +778,9 @@ class KustomizeBaseValidationTest {
       assertThat(dashData.get("financial-control.json").trim())
           .isEqualTo(
               Files.readString(obsSource.resolve("dashboards/financial-control.json")).trim());
+      assertThat(dashData.get("operational-health.json").trim())
+          .isEqualTo(
+              Files.readString(obsSource.resolve("dashboards/operational-health.json")).trim());
     }
   }
 

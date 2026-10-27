@@ -1,0 +1,17 @@
+# minAvailable: 0, not 1: one replica, and a node drain must not wait on it.
+# While it reschedules the kube_* series stop for under a minute; every alert
+# in operational-health.rules.yml that reads them has a `for:` longer than that,
+# and KubeStateMetricsDown covers a pod that does not come back.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kube-state-metrics
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: fondaria
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
