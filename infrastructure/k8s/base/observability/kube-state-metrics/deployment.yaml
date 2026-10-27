@@ -1,0 +1,121 @@
+# kube-state-metrics: the API server's view of every workload as Prometheus
+# series -- desired vs ready replicas, pod phase and readiness, container
+# waiting/terminated reasons (CrashLoopBackOff, OOMKilled), restarts, Job
+# success/failure, node readiness and zone. The operational-health dashboard
+# and operational-health.rules.yml read it; nothing in the platform's own
+# metrics can say "this pod is Pending" or "this Job failed".
+#
+# Upstream release image, not a fork: kubernetes/kube-state-metrics v2.20.0
+# (2026-08-17), the same version libs/testing ContainerImages.KUBE_STATE_METRICS
+# pins for OperationalHealthMetricNamesAreRealIntegrationTest, which runs this
+# file's own args against a real API server.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: fondaria
+spec:
+  # One replica: kube-state-metrics holds a full watch of its resources in
+  # memory, and two replicas would export every series twice. A restart is a
+  # short gap in kube_* series, not data loss -- the API server is the state.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-state-metrics
+        app.kubernetes.io/component: observability
+        app.kubernetes.io/part-of: fondaria
+    spec:
+      priorityClassName: fondaria-stateless-default
+      serviceAccountName: kube-state-metrics
+      # list/watch through the API server (serviceaccount.yaml's ClusterRole).
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: kube-state-metrics
+      containers:
+        - name: kube-state-metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0@sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
+          imagePullPolicy: IfNotPresent
+          args:
+            - --port=8080
+            - --telemetry-port=8081
+            # Only what the dashboard and rules read. Every other resource is
+            # memory and series nobody looks at -- and on API servers older
+            # than the one v2.20.0 was built against, a resource the server
+            # lacks (MutatingAdmissionPolicy on 1.31) is a reflector error
+            # logged every few seconds.
+            - --resources=deployments,jobs,nodes,pods,statefulsets
+            # The platform's namespace plus the operators and controllers its
+            # pods depend on: CloudNativePG and the RabbitMQ operator create
+            # the datastore pods, Envoy Gateway runs the edge proxy, Linkerd's
+            # control plane admits every meshed pod. Nodes are cluster-scoped
+            # and unaffected by this flag.
+            - --namespaces=fondaria,cnpg-system,rabbitmq-system,envoy-gateway-system,linkerd
+            # Zone on kube_node_labels, for the per-zone node readiness panel.
+            - --metric-labels-allowlist=nodes=[topology.kubernetes.io/zone]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http-metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: telemetry
+              containerPort: 8081
+              protocol: TCP
+          # Sized for the small GKE profile (3 nodes, ~30 pods in the watched
+          # namespaces): upstream's own guidance is 0.1 core and 250MiB for a
+          # 100-node cluster, and this one watches five resource kinds in five
+          # namespaces. The limit leaves room for the initial list on a restart.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          # Startup probe: the initial list of every watched resource has completed and the telemetry server is serving.
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: telemetry
+            periodSeconds: 2
+            failureThreshold: 30
+            timeoutSeconds: 3
+          # Liveness probe: /livez answers only while kube-state-metrics can still reach the API server (upstream's own probe).
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http-metrics
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          # Readiness probe: the metrics endpoint is serving a complete view, so Prometheus never scrapes a half-listed cluster.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: telemetry
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 3

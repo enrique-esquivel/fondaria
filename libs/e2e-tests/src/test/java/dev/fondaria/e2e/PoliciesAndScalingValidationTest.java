@@ -75,9 +75,10 @@ class PoliciesAndScalingValidationTest {
   void allBaseWorkloadsHavePriorityClassAssigned() throws Exception {
     List<Map<String, Object>> renderedDocs = renderKustomize("infrastructure/k8s/base");
 
-    // Check Deployments (9 microservices + 2 observability workloads + Keycloak, Task D.3)
+    // Check Deployments (9 microservices + 3 observability workloads -- otel-collector, grafana,
+    // kube-state-metrics -- + Keycloak, Task D.3)
     List<Map<String, Object>> deployments = filterByKind(renderedDocs, "Deployment");
-    assertThat(deployments).hasSize(12);
+    assertThat(deployments).hasSize(13);
     for (Map<String, Object> dep : deployments) {
       String name = getName(dep);
       Map<String, Object> spec = getMap(dep, "spec");

@@ -784,4 +784,1588 @@ data:
         }
       ]
     }
+  operational-health.json: |
+    {
+      "title": "Operational Health",
+      "uid": "operational-health",
+      "description": "Health of every Fondaria pod, Job, datastore and queue consumer at a glance -- what the 2026-10-26 GKE run needed kubectl for. Kubernetes only: the kube_* and per-pod RabbitMQ series do not exist under compose. See docs/RUNBOOKS.md#operational-health-dashboard.",
+      "editable": false,
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "tags": [
+        "operations",
+        "kubernetes"
+      ],
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Workloads below desired replicas",
+          "description": "Deployments and StatefulSets whose Ready replicas are fewer than their spec (kube-state-metrics). Bad: anything above 0 for more than a rolling update -- WorkloadBelowDesiredReplicas pages after 5 minutes. The two tables below name the workload.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 0,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(count(kube_deployment_spec_replicas > kube_deployment_status_replicas_ready) or vector(0)) + (count(kube_statefulset_replicas > kube_statefulset_status_replicas_ready) or vector(0))",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Pods running but not Ready",
+          "description": "Pods in phase Running whose Ready condition is false: the readiness probe is failing, so the Service sends them no traffic. Completed Job pods are excluded. Bad: above 0 for more than a minute or two.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 4,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count((kube_pod_status_ready{condition=\"false\"} == 1) and on (namespace, pod) (kube_pod_status_phase{phase=\"Running\"} == 1)) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Pods Pending",
+          "description": "Pods not yet scheduled or still pulling and starting. Bad: above 0 for minutes -- no node has the CPU or memory the pod requests, a PersistentVolumeClaim cannot bind, or an image cannot be pulled (see Containers waiting, by reason).",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 8,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_pod_status_phase{phase=\"Pending\"}) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Containers in CrashLoopBackOff",
+          "description": "Containers the kubelet is holding back after repeated crashes. Bad: any. PodCrashLooping pages once a container has kept cycling for 10 minutes; Last termination reason shows why it exits.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 12,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Container restarts in window",
+          "description": "Container restarts across every watched namespace within the dashboard's time range. Bad: any restart you cannot account for (a deploy, a node drain); Container restarts by pod shows which pod.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 16,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "round(sum(increase(kube_pod_container_status_restarts_total[$__range]))) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "OOMKilled containers in window",
+          "description": "Containers that restarted within the time range and whose last termination was OOMKilled: they hit their memory limit. Bad: any -- the limit is too low for the workload, or the workload leaks.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 20,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count((increase(kube_pod_container_status_restarts_total[$__range]) > 0) and on (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"} == 1)) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Nodes Ready / total",
+          "description": "Kubernetes nodes whose Ready condition is true, against all nodes. The small GKE profile has 3, one per zone. Bad: Ready below total -- every pod on that node is being evicted or is unreachable.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 0,
+            "y": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_node_status_condition{condition=\"Ready\", status=\"true\"})",
+              "refId": "A",
+              "legendFormat": "Ready",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(kube_node_info)",
+              "refId": "B",
+              "legendFormat": "Total",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Failed setup Jobs",
+          "description": "Setup Jobs (rabbitmq-topology, object-store-buckets, CloudNativePG's postgres-N-initdb and postgres-N-join) that have failed for good. Bad: any -- what the Job creates does not exist. SetupJobFailed pages.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 4,
+            "y": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(kube_job_failed{namespace=\"fondaria\", condition=\"true\", job_name=~\"rabbitmq-topology.*|object-store-buckets.*|postgres-.*\"} == 1) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 9,
+          "type": "stat",
+          "title": "Postgres instances Ready / collector up",
+          "description": "CloudNativePG instance pods (postgres-N) that are Ready, and instances whose metrics exporter reports PostgreSQL up. The cluster has 3. Bad: either below 3 -- an instance is down, or still joining (slow formation on the GKE run).",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 8,
+            "y": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_pod_status_ready{namespace=\"fondaria\", pod=~\"postgres-[0-9]+\", condition=\"true\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Ready",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(cnpg_collector_up) or vector(0)",
+              "refId": "B",
+              "legendFormat": "Collector up",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 2
+                  },
+                  {
+                    "color": "green",
+                    "value": 3
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 10,
+          "type": "stat",
+          "title": "RabbitMQ nodes scraped / Ready",
+          "description": "RabbitMQ nodes whose Prometheus endpoint answers (one target per pod), and Ready pods of the operator's rabbitmq-server StatefulSet. The cluster has 3. Bad: below 3 -- quorum queues lose a replica; below 2 they stop accepting writes.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 12,
+            "y": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(up{job=\"rabbitmq\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Scraped",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_statefulset_status_replicas_ready{namespace=\"fondaria\", statefulset=\"rabbitmq-server\"}) or vector(0)",
+              "refId": "B",
+              "legendFormat": "Ready",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 2
+                  },
+                  {
+                    "color": "green",
+                    "value": 3
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 11,
+          "type": "stat",
+          "title": "TigerBeetle replicas Ready / desired",
+          "description": "Ready pods of the tigerbeetle StatefulSet against its replica count (3 on the small GKE profile, 6 in production). TigerBeetle has no Prometheus exporter; Ready is its readiness probe. Bad: Ready below desired -- the cluster tolerates fewer further failures; below a majority it stops committing transfers.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 16,
+            "y": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_statefulset_status_replicas_ready{namespace=\"fondaria\", statefulset=\"tigerbeetle\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Ready",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_statefulset_replicas{namespace=\"fondaria\", statefulset=\"tigerbeetle\"}) or vector(0)",
+              "refId": "B",
+              "legendFormat": "Desired",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 12,
+          "type": "stat",
+          "title": "Scrape targets down",
+          "description": "Prometheus targets whose last scrape failed (up == 0): kube-state-metrics, a RabbitMQ or Postgres pod, the Collector. Bad: any -- the panels fed by that target are stale or empty, and its alerts cannot fire.",
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 20,
+            "y": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(up == 0) or vector(0)",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "table",
+          "title": "Deployments: desired vs Ready replicas",
+          "description": "Every Deployment's spec replicas against its Ready and unavailable replicas. Bad: Ready below Desired, or Unavailable above 0, for longer than a rollout.",
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 10
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, deployment) (kube_deployment_spec_replicas)",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, deployment) (kube_deployment_status_replicas_ready)",
+              "refId": "B",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, deployment) (kube_deployment_status_replicas_unavailable)",
+              "refId": "C",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "sortBy": [
+              {
+                "displayName": "deployment",
+                "desc": false
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value #A": "Desired",
+                  "Value #B": "Ready",
+                  "Value #C": "Unavailable"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "type": "table",
+          "title": "StatefulSets: desired vs Ready replicas",
+          "description": "Every StatefulSet's replica count against its Ready replicas: tigerbeetle, rabbitmq-server, valkey, object-store and the observability backends. Bad: Ready below Desired -- for a datastore that is lost redundancy.",
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 10
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, statefulset) (kube_statefulset_replicas)",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, statefulset) (kube_statefulset_status_replicas_ready)",
+              "refId": "B",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "sortBy": [
+              {
+                "displayName": "statefulset",
+                "desc": false
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value #A": "Desired",
+                  "Value #B": "Ready"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Pods not Ready, Pending, CrashLoopBackOff",
+          "description": "The three counts from the top row over time, to see when a problem began and whether it is clearing. Bad: a line that stays above 0.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 19
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count((kube_pod_status_ready{condition=\"false\"} == 1) and on (namespace, pod) (kube_pod_status_phase{phase=\"Running\"} == 1)) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Running, not Ready"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_pod_status_phase{phase=\"Pending\"}) or vector(0)",
+              "refId": "B",
+              "legendFormat": "Pending"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}) or vector(0)",
+              "refId": "C",
+              "legendFormat": "CrashLoopBackOff"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 16,
+          "type": "table",
+          "title": "Containers waiting, by reason (now)",
+          "description": "Every container that is not running, with the kubelet's reason: CrashLoopBackOff, ImagePullBackOff, CreateContainerConfigError (a missing Secret or ConfigMap key), ContainerCreating. Bad: any row that persists.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 19
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, pod, container, reason) (kube_pod_container_status_waiting_reason) > 0",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 17,
+          "type": "timeseries",
+          "title": "Container restarts by pod (5m)",
+          "description": "Restarts per pod in each 5-minute window; only pods that restarted are drawn. Bad: any pod that keeps restarting -- a liveness probe failing, an OOMKill, or a process exiting.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 27
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total[5m])) > 0",
+              "refId": "A",
+              "legendFormat": "{{namespace}}/{{pod}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 60
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 18,
+          "type": "table",
+          "title": "Last termination reason",
+          "description": "Why each container last exited, for containers that have exited at least once: OOMKilled (memory limit reached), Error (non-zero exit), Completed. Bad: OOMKilled or Error on a long-running service.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 27
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason) > 0",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 19,
+          "type": "table",
+          "title": "Setup Jobs",
+          "description": "Succeeded, failed and active pods of each setup Job: rabbitmq-topology, object-store-buckets, and CloudNativePG's postgres-N-initdb / postgres-N-join. Jobs disappear an hour after finishing (ttlSecondsAfterFinished). Bad: Failed above 0 with Succeeded at 0 -- the Job is retrying (SetupJobRetrying at 3) or has given up (SetupJobFailed).",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 35
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, job_name) (kube_job_status_succeeded{namespace=\"fondaria\", job_name=~\"rabbitmq-topology.*|object-store-buckets.*|postgres-.*\"})",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, job_name) (kube_job_status_failed{namespace=\"fondaria\", job_name=~\"rabbitmq-topology.*|object-store-buckets.*|postgres-.*\"})",
+              "refId": "B",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (namespace, job_name) (kube_job_status_active{namespace=\"fondaria\", job_name=~\"rabbitmq-topology.*|object-store-buckets.*|postgres-.*\"})",
+              "refId": "C",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "sortBy": [
+              {
+                "displayName": "job_name",
+                "desc": false
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value #A": "Succeeded",
+                  "Value #B": "Failed",
+                  "Value #C": "Active"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 20,
+          "type": "bargauge",
+          "title": "Nodes Ready per zone",
+          "description": "Ready nodes in each zone (topology.kubernetes.io/zone) against the nodes in it. Every replicated datastore spreads one replica per zone. Bad: a zone with fewer Ready nodes than total -- that zone's replicas are gone.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 35
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (label_topology_kubernetes_io_zone) (kube_node_status_condition{condition=\"Ready\", status=\"true\"} * on (node) group_left (label_topology_kubernetes_io_zone) kube_node_labels)",
+              "refId": "A",
+              "legendFormat": "{{label_topology_kubernetes_io_zone}} Ready",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (label_topology_kubernetes_io_zone) (kube_node_labels)",
+              "refId": "B",
+              "legendFormat": "{{label_topology_kubernetes_io_zone}} total",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 21,
+          "type": "timeseries",
+          "title": "Postgres replication lag per instance",
+          "description": "Seconds each CloudNativePG standby is behind the primary in replaying WAL (cnpg_pg_replication_lag; 0 on the primary and on a standby that is caught up). Bad: a standby whose lag keeps growing -- it cannot keep up or has stopped receiving WAL, and synchronous commits wait on it.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 43
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max by (instance) (cnpg_pg_replication_lag)",
+              "refId": "A",
+              "legendFormat": "{{instance}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 0
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 5
+                  },
+                  {
+                    "color": "red",
+                    "value": 30
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 22,
+          "type": "table",
+          "title": "Postgres instances",
+          "description": "Per CloudNativePG instance: whether the exporter reports PostgreSQL up, whether it is in recovery (1 = standby, 0 = primary), and how many standbys stream from it. Bad: Up 0; no instance with In recovery 0 (no primary); the primary streaming to fewer than 2 standbys.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 43
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max by (instance) (cnpg_collector_up)",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max by (instance) (cnpg_pg_replication_in_recovery)",
+              "refId": "B",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max by (instance) (cnpg_pg_replication_streaming_replicas)",
+              "refId": "C",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "sortBy": [
+              {
+                "displayName": "instance",
+                "desc": false
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value #A": "Up",
+                  "Value #B": "In recovery",
+                  "Value #C": "Streaming standbys"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 23,
+          "type": "timeseries",
+          "title": "RabbitMQ queue depth",
+          "description": "Messages in bridge.ledger, every projection.entries.v1.* partition and every dead-letter queue. Each queue is reported once, by the node holding its leader. Bad: a live queue that keeps growing (its consumer is behind or gone), or any DLQ above 0 (DLQMessagesPresent).",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 51
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (queue) (rabbitmq_detailed_queue_messages{queue=~\"bridge\\\\.ledger.*|projection\\\\.entries\\\\.v1\\\\..*|.*\\\\.dlq\"})",
+              "refId": "A",
+              "legendFormat": "{{queue}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 0
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 24,
+          "type": "timeseries",
+          "title": "RabbitMQ consumers per queue",
+          "description": "Consumers attached to bridge.ledger (amqp-fanout) and each projection.entries.v1.* partition (projection-worker). This is the panel that shows the GKE-run failure: a consumer process dead while its pod still reports Ready. Bad: any line at 0 -- CriticalQueueHasNoConsumer after 5 minutes.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 51
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (queue) (rabbitmq_detailed_queue_consumers{queue=~\"bridge\\\\.ledger|projection\\\\.entries\\\\.v1\\\\..*\", queue!~\".*\\\\.dlq\"})",
+              "refId": "A",
+              "legendFormat": "{{queue}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 0
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 25,
+          "type": "table",
+          "title": "Queues with messages and no consumer (now)",
+          "description": "Non-DLQ queues holding messages with zero consumers -- QueueHasMessagesButNoConsumers' own expression. Bad: any row. Healthy is an empty table.",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 59
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(sum by (vhost, queue) (rabbitmq_detailed_queue_messages{queue!~\".*\\\\.dlq\"}) > 0) and on (vhost, queue) (sum by (vhost, queue) (rabbitmq_detailed_queue_consumers{queue!~\".*\\\\.dlq\"}) == 0)",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value": "Messages"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 26,
+          "type": "bargauge",
+          "title": "Service readiness (Spring /actuator/health/readiness)",
+          "description": "Share of each platform service's containers that are Ready. Every service's readiness probe is Spring Boot's /actuator/health/readiness, so Ready means Spring reports itself able to take traffic. It does NOT mean an AMQP consumer is attached -- read RabbitMQ consumers per queue for that. Bad: below 100%.",
+          "gridPos": {
+            "h": 8,
+            "w": 16,
+            "x": 8,
+            "y": 59
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (container) (kube_pod_container_status_ready{namespace=\"fondaria\", container=~\"allotment-job|amqp-fanout|balance-api|contribution-api|eod-job|projection-worker|statement-worker|valuation-api\"}) / count by (container) (kube_pod_container_status_ready{namespace=\"fondaria\", container=~\"allotment-job|amqp-fanout|balance-api|contribution-api|eod-job|projection-worker|statement-worker|valuation-api\"})",
+              "refId": "A",
+              "legendFormat": "{{container}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 0.5
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        }
+      ]
+    }
 

@@ -17,6 +17,10 @@ Operational procedures for Fondaria. Alerts link to a section here by its anchor
 - [Runbook — payment initiation latency SLO breach](#slo-payment-latency)
 - [Runbook — CDC lag SLO breach](#slo-cdc-lag)
 
+**Platform health**
+
+- [Runbook — operational health dashboard](#operational-health-dashboard)
+
 **Ledger, CDC and projection**
 
 - [Runbook — replaying the CDC stream and rebuilding the projection](#cdc-replay)
@@ -681,6 +685,55 @@ Also the runbook for `ProjectionQueueNotDraining` (warning): a `projection.*` qu
 ### Escalation
 
 - If CDC lag continues rising past 30 seconds, `CDCLagWarning` will trigger. Follow ``#cdc-replay`` if the pipeline stalls completely.
+
+---
+
+# Platform health
+
+<a id="operational-health-dashboard"></a>
+
+## Runbook — operational health dashboard
+
+**Alerts:** `WorkloadBelowDesiredReplicas`, `PostgresInstanceNotReady`, `PodCrashLooping`, `SetupJobFailed`, `SetupJobRetrying`, `QueueHasMessagesButNoConsumers`, `CriticalQueueHasNoConsumer`, `KubeStateMetricsDown` (`infrastructure/observability/alerts/operational-health.rules.yml`).
+**When to use this.** After every deploy to a cluster, and whenever one of those alerts fires. The Grafana dashboard **Operational Health** (uid `operational-health`, `infrastructure/observability/dashboards/operational-health.json`) answers "is every pod, Job, datastore and consumer doing its job?" without `kubectl`. It is Kubernetes-only: under compose its panels are empty, because the `kube_*` series come from kube-state-metrics (`infrastructure/k8s/base/observability/kube-state-metrics/`), which compose does not run.
+
+### Opening it
+
+- kind: Grafana is on `http://localhost:30001` (NodePort).
+- GKE: `kubectl -n fondaria port-forward svc/grafana 3000:3000`, then `http://localhost:3000`, dashboard **Operational Health**.
+
+Every panel's description (the ⓘ next to its title) says what "bad" looks like for that panel.
+
+### Reading it, top to bottom
+
+1. **Top row: one number per failure class.** Workloads below desired replicas, pods running but not Ready, Pending pods, CrashLoopBackOff containers, restarts and OOMKills in the time range. Healthy is 0 across the row.
+2. **Second row: one tile per datastore and dependency.** Nodes Ready, failed setup Jobs, Postgres instances Ready, RabbitMQ nodes, TigerBeetle replicas, scrape targets down. Datastore tiles go green at 3 (the small GKE profile; TigerBeetle has 6 in production).
+3. **Replicas, then pods.** The Deployments and StatefulSets tables name the workload that is short. *Containers waiting, by reason* and *Last termination reason* say why: `ImagePullBackOff`, `CreateContainerConfigError` (a missing Secret or ConfigMap key), `OOMKilled`, `Error`.
+4. **Setup Jobs.** `rabbitmq-topology`, `object-store-buckets` and CloudNativePG's `postgres-N-initdb` / `postgres-N-join`. Failed attempts while Succeeded stays 0 mean the Job is waiting on a dependency that has not formed. Jobs are deleted an hour after they finish, so read their logs before then.
+5. **Postgres.** Replication lag per standby, and per instance: up, in recovery (exactly one instance at 0 is the primary), streaming standbys.
+6. **RabbitMQ.** Depth and consumers for `bridge.ledger`, every `projection.entries.v1.*` partition and every DLQ, and a table of queues holding messages with no consumer. **Read the consumer count, not pod readiness:** Spring's `/actuator/health/readiness` does not include the AMQP listener, so a pod can be Ready with its consumer dead. That is the failure the 2026-10-26 GKE run found only by hand.
+7. **Service readiness.** The share of each Spring service's containers that are Ready.
+
+### First three diagnostic commands
+
+Only when the dashboard has already named the pod or Job:
+
+```bash
+kubectl -n fondaria describe pod <pod>                    # events: scheduling, probes, OOMKilled
+kubectl -n fondaria logs <pod> -c <container> --previous  # the crashed run, not the restarted one
+kubectl -n fondaria logs job/<job-name>                   # a setup Job's last attempt
+```
+
+### Decision criteria
+
+- **Queue with messages and no consumer** (`QueueHasMessagesButNoConsumers`, page): restart the consumer, `amqp-fanout` for `bridge.ledger` and `projection-worker` for `projection.entries.v1.*` (`kubectl -n fondaria rollout restart deployment/<name>`), then confirm on the dashboard that the consumer count comes back and the depth drains. Every consumer is idempotent on `transfer_id`, so redelivered messages are safe.
+- **A setup Job failed** (`SetupJobFailed`): fix what it waited on (usually the RabbitMQ cluster or object store not formed), then delete the Job and re-apply the overlay so it runs again. Both setup Jobs are idempotent.
+- **Postgres instance not Ready** for more than 5 minutes while its `postgres-N-join` Job is active: it is still copying from the primary (`pg_basebackup`). Watch its replication lag fall before acting. If the join Job is failing, follow [PostgreSQL Primary Failover and PITR](#postgres-failover-and-pitr).
+- **`KubeStateMetricsDown`**: every pod, replica and Job panel is blind, and so are the alerts above. Restore kube-state-metrics before trusting an empty dashboard.
+
+### Escalation
+
+- A StatefulSet datastore (TigerBeetle, RabbitMQ, Valkey) down to fewer than a majority of replicas Ready: treat as an outage of that datastore and follow its own runbook ([TigerBeetle](#tigerbeetle-upgrades), [RabbitMQ](#rabbitmq-node-failure)).
 
 ---
 

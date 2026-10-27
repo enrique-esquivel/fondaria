@@ -1,0 +1,253 @@
+# promtool unit test for operational-health.rules.yml. Each alert gets a quiet
+# case shaped like an ordinary day (a rolling update, a start-up crash that
+# recovers, a DLQ holding its messages) and a fault case checked on both sides
+# of its `for:` boundary, as eod-close.tests.yml and edge-security.tests.yml do.
+#
+# Series carry the labels Prometheus attaches in Kubernetes: kube_* come from
+# the kube-state-metrics job with honor_labels (namespace, pod, ... are the
+# exporter's own), rabbitmq_detailed_* from the per-pod rabbitmq job.
+rule_files:
+  - operational-health.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- WorkloadBelowDesiredReplicas ---------------------------------------------------
+  # Quiet: a rolling update dips one replica for 3 minutes, then recovers.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_spec_replicas{job="kube-state-metrics", namespace="fondaria", deployment="amqp-fanout"}'
+        values: '2x10'
+      - series: 'kube_deployment_status_replicas_ready{job="kube-state-metrics", namespace="fondaria", deployment="amqp-fanout"}'
+        values: '2 2 1 1 1 2 2 2 2 2 2'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: WorkloadBelowDesiredReplicas
+        exp_alerts: []
+
+  # Fires: a TigerBeetle replica never becomes Ready again.
+  - interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{job="kube-state-metrics", namespace="fondaria", statefulset="tigerbeetle"}'
+        values: '3x10'
+      - series: 'kube_statefulset_status_replicas_ready{job="kube-state-metrics", namespace="fondaria", statefulset="tigerbeetle"}'
+        values: '3 2x9'
+    alert_rule_test:
+      # Short since t=1m: 4 minutes pending at t=5m, not yet firing.
+      - eval_time: 5m
+        alertname: WorkloadBelowDesiredReplicas
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: WorkloadBelowDesiredReplicas
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: kube-state-metrics
+              namespace: fondaria
+              statefulset: tigerbeetle
+            exp_annotations:
+              summary: "fondaria/tigerbeetle has fewer ready replicas than desired"
+              description: "For 5 minutes the workload has run with fewer Ready replicas than its spec. For a datastore (tigerbeetle, rabbitmq-server, valkey) that is lost redundancy, one failure from losing quorum; for a service it is lost capacity. The operational-health dashboard's pod panels show which pod is missing and why."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- PostgresInstanceNotReady -------------------------------------------------------
+  # postgres-3 never finishes joining; postgres-1 is Ready, and the PITR restore
+  # cluster's own instance (not this cluster's) is ignored even while not Ready.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{job="kube-state-metrics", namespace="fondaria", pod="postgres-1", condition="true"}'
+        values: '1x10'
+      - series: 'kube_pod_status_ready{job="kube-state-metrics", namespace="fondaria", pod="postgres-3", condition="true"}'
+        values: '0x10'
+      - series: 'kube_pod_status_ready{job="kube-state-metrics", namespace="fondaria", pod="postgres-pitr-restore-1", condition="true"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: PostgresInstanceNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: PostgresInstanceNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: kube-state-metrics
+              namespace: fondaria
+              pod: postgres-3
+              condition: "true"
+            exp_annotations:
+              summary: "Postgres instance postgres-3 is not Ready"
+              description: "The CloudNativePG instance pod has not been Ready for 5 minutes: still initialising or joining (pg_basebackup from the primary), or failing its own probes. Check the matching postgres-N-join Job and the instance's replication lag on the operational-health dashboard."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- PodCrashLooping ----------------------------------------------------------------
+  # Quiet: one CrashLoopBackOff sample while a dependency formed, then running.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{job="kube-state-metrics", namespace="fondaria", pod="projection-worker-7d9f-abcde", container="projection-worker", reason="CrashLoopBackOff"}'
+        values: '0 1 0x18'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: PodCrashLooping
+        exp_alerts: []
+
+  # Fires: the container keeps cycling between back-off and a short run.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{job="kube-state-metrics", namespace="fondaria", pod="amqp-fanout-5c8b-fghij", container="amqp-fanout", reason="CrashLoopBackOff"}'
+        values: '1 0 1 0 1 0 1 0 1 0 1 0 1 0 1'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PodCrashLooping
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: PodCrashLooping
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: kube-state-metrics
+              namespace: fondaria
+              pod: amqp-fanout-5c8b-fghij
+              container: amqp-fanout
+              reason: CrashLoopBackOff
+            exp_annotations:
+              summary: "fondaria/amqp-fanout-5c8b-fghij container amqp-fanout is crash-looping"
+              description: "The container has been in CrashLoopBackOff within every 5-minute window for 10 minutes. Its last termination reason (OOMKilled, Error) is on the operational-health dashboard; its own logs are in Loki."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- SetupJobFailed -----------------------------------------------------------------
+  # rabbitmq-topology fails at t=2m. A Job outside the setup set failing, and the
+  # topology Job's own condition="false" series, stay quiet.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_failed{job="kube-state-metrics", namespace="fondaria", job_name="rabbitmq-topology", condition="true"}'
+        values: '0 0 1 1 1'
+      - series: 'kube_job_failed{job="kube-state-metrics", namespace="fondaria", job_name="rabbitmq-topology", condition="false"}'
+        values: '1 1 0 0 0'
+      - series: 'kube_job_failed{job="kube-state-metrics", namespace="fondaria", job_name="demo-seed", condition="true"}'
+        values: '1x4'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SetupJobFailed
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: SetupJobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: kube-state-metrics
+              namespace: fondaria
+              job_name: rabbitmq-topology
+              condition: "true"
+            exp_annotations:
+              summary: "Setup Job rabbitmq-topology has failed"
+              description: "The Job exhausted its backoffLimit or activeDeadlineSeconds and will not be retried. Whatever it creates (RabbitMQ topology, object-store buckets, a Postgres instance) does not exist. The Job is kept for its ttlSecondsAfterFinished; read its pods' logs before then."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- SetupJobRetrying ---------------------------------------------------------------
+  # object-store-buckets fails three attempts and keeps retrying; postgres-2-join
+  # also failed three attempts but then completed, so it is not reported.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{job="kube-state-metrics", namespace="fondaria", job_name="object-store-buckets"}'
+        values: '0 1 2 3 3'
+      - series: 'kube_job_status_failed{job="kube-state-metrics", namespace="fondaria", job_name="postgres-2-join"}'
+        values: '3x4'
+      - series: 'kube_job_complete{job="kube-state-metrics", namespace="fondaria", job_name="postgres-2-join", condition="true"}'
+        values: '1x4'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: SetupJobRetrying
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: SetupJobRetrying
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: kube-state-metrics
+              namespace: fondaria
+              job_name: object-store-buckets
+            exp_annotations:
+              summary: "Setup Job object-store-buckets has failed 3 or more attempts"
+              description: "The Job is still retrying but has at least three failed pods. Usually a dependency it waits for (RabbitMQ, the object store, the Postgres primary) is not reachable or not formed. It will turn into SetupJobFailed when its retries run out."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- QueueHasMessagesButNoConsumers -------------------------------------------------
+  # bridge.ledger's consumer dies at t=1m while messages pile up (the GKE run).
+  # The DLQ holds messages with no consumer by design; projection.entries.v1.0
+  # has a backlog but a consumer, so both stay quiet. Series come from two
+  # RabbitMQ pods: each queue is reported only by its leader's node.
+  - interval: 1m
+    input_series:
+      - series: 'rabbitmq_detailed_queue_messages{job="rabbitmq", instance="rabbitmq-server-0", vhost="/", queue="bridge.ledger"}'
+        values: '0 5 20 40 60 80 100 120 140'
+      - series: 'rabbitmq_detailed_queue_consumers{job="rabbitmq", instance="rabbitmq-server-0", vhost="/", queue="bridge.ledger"}'
+        values: '2 0x8'
+      - series: 'rabbitmq_detailed_queue_messages{job="rabbitmq", instance="rabbitmq-server-1", vhost="/", queue="bridge.ledger.dlq"}'
+        values: '3x8'
+      - series: 'rabbitmq_detailed_queue_consumers{job="rabbitmq", instance="rabbitmq-server-1", vhost="/", queue="bridge.ledger.dlq"}'
+        values: '0x8'
+      - series: 'rabbitmq_detailed_queue_messages{job="rabbitmq", instance="rabbitmq-server-2", vhost="/", queue="projection.entries.v1.0"}'
+        values: '50x8'
+      - series: 'rabbitmq_detailed_queue_consumers{job="rabbitmq", instance="rabbitmq-server-2", vhost="/", queue="projection.entries.v1.0"}'
+        values: '1x8'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: QueueHasMessagesButNoConsumers
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: QueueHasMessagesButNoConsumers
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              vhost: /
+              queue: bridge.ledger
+            exp_annotations:
+              summary: "Queue bridge.ledger has messages and no consumer"
+              description: "For 5 minutes the queue has held messages with zero consumers attached. Ledger events are not being bridged or projected, so participant history and statements fall behind the ledger. The consuming pod may still report Ready: Spring's readiness does not include the AMQP listener. Restart the consumer (amqp-fanout for bridge.ledger, projection-worker for projection.entries.v1.*) and confirm the consumer count returns."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- CriticalQueueHasNoConsumer -----------------------------------------------------
+  # Idle platform: projection.entries.v1.1 loses its consumer with nothing queued.
+  # A queue outside the critical set without a consumer stays quiet.
+  - interval: 1m
+    input_series:
+      - series: 'rabbitmq_detailed_queue_consumers{job="rabbitmq", instance="rabbitmq-server-1", vhost="/", queue="projection.entries.v1.1"}'
+        values: '1 0x8'
+      - series: 'rabbitmq_detailed_queue_consumers{job="rabbitmq", instance="rabbitmq-server-1", vhost="/", queue="bridge.ledger.dlq"}'
+        values: '0x8'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CriticalQueueHasNoConsumer
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: CriticalQueueHasNoConsumer
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              vhost: /
+              queue: projection.entries.v1.1
+            exp_annotations:
+              summary: "Queue projection.entries.v1.1 has had no consumer for 5 minutes"
+              description: "bridge.ledger is read by amqp-fanout and projection.entries.v1.* by projection-worker; neither should ever be without a consumer. No backlog yet, so nothing is late, but the next ledger event will not be delivered."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"
+
+  # --- KubeStateMetricsDown -----------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="kube-state-metrics", instance="kube-state-metrics:8080"}'
+        values: '1 0x8'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: KubeStateMetricsDown
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: KubeStateMetricsDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: kube-state-metrics
+              instance: kube-state-metrics:8080
+            exp_annotations:
+              summary: "kube-state-metrics is not being scraped"
+              description: "Prometheus cannot scrape kube-state-metrics. Every pod, replica and Job panel on the operational-health dashboard is empty and the workload alerts in operational-health.rules.yml cannot fire."
+              runbook_url: "docs/RUNBOOKS.md#operational-health-dashboard"

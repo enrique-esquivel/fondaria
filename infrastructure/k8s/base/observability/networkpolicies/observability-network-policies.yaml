@@ -99,6 +99,14 @@ spec:
       ports:
         - protocol: TCP
           port: 15692
+    # Workload state from kube-state-metrics (scrape.d/kube-state-metrics.yml)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kube-state-metrics
+      ports:
+        - protocol: TCP
+          port: 8080
     # CloudNativePG instance metrics (scrape.d/cnpg.yml)
     - to:
         - podSelector:
@@ -228,3 +236,40 @@ spec:
       ports:
         - protocol: TCP
           port: 3100
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kube-state-metrics-policy
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: fondaria
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Metrics scrape strictly from Prometheus
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Readiness/startup probe on the telemetry port
+    - ports:
+        - protocol: TCP
+          port: 8081
+  egress:
+    # list/watch through the API server (DNAT-ed before egress policy is
+    # evaluated, so by port, not by pod -- as prometheus-policy above)
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443

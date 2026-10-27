@@ -387,6 +387,7 @@ services:
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
     volumes:
       - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/prometheus/scrape.d:/etc/prometheus/scrape.d:ro
       - ../observability/alerts:/etc/prometheus/rules:ro
       - ./data/prometheus:/prometheus
     healthcheck:
