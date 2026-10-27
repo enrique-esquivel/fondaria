@@ -115,6 +115,18 @@ spec:
       ports:
         - protocol: TCP
           port: 9187
+    # The Gateway's Envoy proxy, in Envoy Gateway's own namespace
+    # (prometheus configmap, envoy-gateway.yml)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: proxy
+      ports:
+        - protocol: TCP
+          port: 19001
     # Pod service discovery through the API server (DNAT-ed before egress
     # policy is evaluated, so by port, not by pod).
     - ports:

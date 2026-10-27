@@ -690,9 +690,12 @@ data:
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
             regex: "true"
             action: keep
+          # The port is optional: the pod role also yields a port-less target
+          # for a container that declares none (Envoy's shutdown-manager),
+          # which would otherwise be scraped on :80 and always be down.
           - source_labels:
               [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-            regex: "([^:]+):\\d+;(\\d+)"
+            regex: "([^:]+)(?::\\d+)?;(\\d+)"
             replacement: "$1:$2"
             target_label: __address__
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
