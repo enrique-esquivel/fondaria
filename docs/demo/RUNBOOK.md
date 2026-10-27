@@ -55,7 +55,7 @@ What `make demo-reset` executes automatically:
 2. `make k8s-down`: Destroys the Kind cluster and local volumes.
 3. `make k8s-up`: Recreates the Kind cluster with Linkerd service mesh and local storage.
 4. `make skaffold-run`: Builds and deploys all 12 services and infrastructure containers.
-5. `make demo-seed` (or `make demo-seed ORGS=8` to start with the 8 smallest employers, ~60,000 participants, and re-run without `ORGS` later to add the rest): Seeds 3 funds, 12 employers, ~300,000 participants, generates initial payroll files and cash receipts, strikes opening NAVs, and writes `demo/out/manifest.json`.
+5. `make demo-seed` (or `make demo-seed ORGS=8` to start with the 8 smallest employers, ~60,000 participants, and re-run without `ORGS` later to add the rest): Seeds 3 funds, strikes each fund's opening NAV (MXN 10.00) straight away, then adds 12 employers, ~300,000 participants, their initial payroll files and cash receipts, and writes `demo/out/manifest.json`. Each employer's batch allots as soon as it stages, so AUM and units grow employer by employer; if the run fails part-way, re-running `make demo-seed` resumes after the last employer in the manifest. A manifest written by a seed from before this ordering is refused — start from `make demo-reset`.
 
 **Measured Duration**: ~4 minutes 15 seconds.
 
