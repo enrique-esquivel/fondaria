@@ -55,6 +55,101 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: tigerbeetle-cdc
+      # Startup ordering (ADR-0037): each wait-for-* blocks until one dependency is
+      # genuinely usable, using infrastructure/k8s/base/startup-waits/. A dependency
+      # that never comes leaves the pod in Init:Error naming it, not Running and idle.
+      initContainers:
+        - name: wait-for-rabbitmq
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/rabbitmq.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: tigerbeetle-cdc-config
+                  key: CDC_AMQP_HOST
+            - name: RABBITMQ_VHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: tigerbeetle-cdc-config
+                  key: CDC_AMQP_VHOST
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: password
+            - name: CDC_PUBLISH_EXCHANGE
+              valueFrom:
+                configMapKeyRef:
+                  name: tigerbeetle-cdc-config
+                  key: CDC_PUBLISH_EXCHANGE
+            # The CDC job publishes into this exchange from its first event; until
+            # bridge.ledger is bound to it, a fanout exchange drops every message.
+            - name: WAIT_RABBITMQ_BINDINGS
+              value: "$(CDC_PUBLISH_EXCHANGE)>bridge.ledger"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
+        - name: wait-for-tigerbeetle
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/tigerbeetle.sh
+          securityContext:
+            # Linkerd's proxy UID: linkerd-init's iptables rules let this UID's traffic
+            # bypass the proxy. Through the proxy, a TCP connect succeeds whether or not
+            # the replica behind it is up, and TigerBeetle is unmeshed (ADR-0029), so the
+            # check must reach the replicas directly. Only this container runs as 2102.
+            runAsUser: 2102
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: TIGERBEETLE_ADDRESSES
+              valueFrom:
+                configMapKeyRef:
+                  name: tigerbeetle-cdc-config
+                  key: CDC_TIGERBEETLE_ADDRESSES
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
       containers:
         - name: tigerbeetle-cdc
           image: ghcr.io/tigerbeetle/tigerbeetle@sha256:3ea0602e798cf58985fe1b5a4bc4b254b3d8899462f7d05cc314ab0a06b88a7d
@@ -141,3 +236,10 @@ spec:
           configMap:
             name: tigerbeetle-cdc-script
             defaultMode: 0755
+        - name: startup-waits
+          configMap:
+            name: startup-waits
+        - name: startup-wait-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

@@ -16,6 +16,7 @@ resources:
   - rabbitmq
   - valkey
   - object-store
+  - startup-waits
   - keycloak
   - gateway
   - priority

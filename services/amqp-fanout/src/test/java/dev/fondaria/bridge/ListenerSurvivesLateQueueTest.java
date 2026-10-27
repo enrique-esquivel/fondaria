@@ -32,4 +32,22 @@ class ListenerSurvivesLateQueueTest {
                 .get("simple");
     assertThat(simple.get("missing-queues-fatal")).isEqualTo(false);
   }
+
+  /** And if the listener stops anyway, the pod must stop being Ready (ADR-0037). */
+  @Test
+  @SuppressWarnings("unchecked")
+  void readinessIncludesTheListenerContainers() throws Exception {
+    Map<String, Object> config;
+    try (InputStream in = getClass().getResourceAsStream("/application.yaml")) {
+      config = new Yaml().load(in);
+    }
+    Map<String, Object> health =
+        (Map<String, Object>)
+            ((Map<String, Object>) ((Map<String, Object>) config.get("management")).get("endpoint"))
+                .get("health");
+    Map<String, Object> readiness =
+        (Map<String, Object>) ((Map<String, Object>) health.get("group")).get("readiness");
+    assertThat(((String) readiness.get("include")).split(","))
+        .contains("readinessState", "listenerContainers");
+  }
 }

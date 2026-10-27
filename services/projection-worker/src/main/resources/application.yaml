@@ -55,9 +55,10 @@ management:
         liveness:
           include: livenessState
         readiness:
-          # readinessState + the database + the halt latch. A halted worker, or one that
-          # cannot reach Postgres, reports DOWN and is taken out of rotation.
-          include: readinessState,db,projectionHalt
+          # readinessState + the database + the halt latch + the listener containers. A halted
+          # worker, one that cannot reach Postgres, or one whose consumers spring-rabbit has
+          # stopped for good (ADR-0037) reports DOWN and is taken out of rotation.
+          include: readinessState,db,projectionHalt,listenerContainers
 
   opentelemetry:
     resource-attributes:

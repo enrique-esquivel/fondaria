@@ -34,6 +34,15 @@ spec:
         # default. automountServiceAccountToken: false below does not block
         # injection -- verified live.
         linkerd.io/inject: enabled
+        # Linkerd's proxy as a native sidecar (an init container with restartPolicy:
+        # Always) that starts before the wait-for-* init containers, so their checks
+        # carry this workload's mesh identity -- the datastores' AuthorizationPolicies
+        # admit nothing else. Injected the classic way, the proxy starts only after
+        # every init container, and linkerd-init's iptables rules would send their
+        # traffic to a proxy that is not listening yet. Both spellings: the alpha
+        # annotation (Linkerd 2.15-2.17) and the beta one that replaced it.
+        config.alpha.linkerd.io/proxy-enable-native-sidecar: "true"
+        config.beta.linkerd.io/proxy-enable-native-sidecar: "true"
     spec:
       priorityClassName: fondaria-stateless-default
       serviceAccountName: eod-job
@@ -58,6 +67,181 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: eod-job
+      # Startup ordering (ADR-0037): each wait-for-* blocks until one dependency is
+      # genuinely usable, using infrastructure/k8s/base/startup-waits/. A dependency
+      # that never comes leaves the pod in Init:Error naming it, not Running and idle.
+      initContainers:
+        - name: wait-for-postgres
+          image: ghcr.io/cloudnative-pg/postgresql:17.2@sha256:61d2b391e3e324d05edc6c65c555989a7c544ddb72ef271b3abd4a35b57942b1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/postgres.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: POSTGRES_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: eod-job-config
+                  key: POSTGRES_URL
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
+        - name: wait-for-rabbitmq
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/rabbitmq.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: eod-job-config
+                  key: SIGNOFF_AMQP_HOST
+            - name: RABBITMQ_VHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: eod-job-config
+                  key: SIGNOFF_AMQP_VHOST
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-default-user
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
+        - name: wait-for-object-store
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/object-store.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: OBJECT_STORE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: eod-job-config
+                  key: OBJECT_STORE_ENDPOINT
+            - name: BUCKET_0
+              valueFrom:
+                configMapKeyRef:
+                  name: eod-job-config
+                  key: SNAPSHOT_BUCKET
+            - name: WAIT_BUCKETS
+              value: "$(BUCKET_0)"
+            - name: OBJECT_STORE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: object-store-credentials
+                  key: OBJECT_STORE_ROOT_ACCESS_KEY
+            - name: OBJECT_STORE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: object-store-credentials
+                  key: OBJECT_STORE_ROOT_SECRET_KEY
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
+        - name: wait-for-tigerbeetle
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/tigerbeetle.sh
+          securityContext:
+            # Linkerd's proxy UID: linkerd-init's iptables rules let this UID's traffic
+            # bypass the proxy. Through the proxy, a TCP connect succeeds whether or not
+            # the replica behind it is up, and TigerBeetle is unmeshed (ADR-0029), so the
+            # check must reach the replicas directly. Only this container runs as 2102.
+            runAsUser: 2102
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: TIGERBEETLE_ADDRESSES
+              valueFrom:
+                configMapKeyRef:
+                  name: eod-job-config
+                  key: TIGERBEETLE_ADDRESSES
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
       containers:
         - name: eod-job
           image: fondaria/eod-job:0.1.0-SNAPSHOT
@@ -151,3 +335,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 64Mi
+        - name: startup-waits
+          configMap:
+            name: startup-waits
+        - name: startup-wait-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

@@ -12,10 +12,17 @@ spec:
   # provisions them. Runs the object store's own image -- its curl signs S3
   # requests (SigV4), so there is no second image to keep pullable (ADR-0031).
   # Idempotent: an existing bucket answers 409 BucketAlreadyExists/OwnedByYou.
+  #
+  # Retries happen inside the pod, not by failing it: every bucket is retried on
+  # any transport error (a DNS answer that is not there yet, a reset) until the
+  # wait deadline. On the first GKE run (ADR-0036) the Job used up its retries
+  # while cluster DNS was still broken, and a Job that has failed is never run
+  # again (ADR-0037).
   backoffLimit: 20
   # Every call below also carries its own curl timeout (docs/ENGINEERING-RULES.md section 4);
-  # this bounds the Job as a whole, retries included.
-  activeDeadlineSeconds: 600
+  # this bounds the Job as a whole, retries included: longer than the init wait
+  # (WAIT_TIMEOUT_SECONDS, 900 s) plus the bucket loop's own, with room for a retry.
+  activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -35,6 +42,38 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      # Startup ordering (ADR-0037): each wait-for-* blocks until one dependency is
+      # genuinely usable, using infrastructure/k8s/base/startup-waits/. A dependency
+      # that never comes leaves the pod in Init:Error naming it, not Running and idle.
+      initContainers:
+        - name: wait-for-object-store
+          image: docker.io/chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /startup-waits/object-store.sh
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: OBJECT_STORE_ENDPOINT
+              value: "http://object-store:8333"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
+            - name: startup-wait-tmp
+              mountPath: /tmp
       containers:
         - name: buckets
           image: docker.io/chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
@@ -44,19 +83,19 @@ spec:
             - -c
             - |
               set -eu
-              until curl -sf --connect-timeout 5 --max-time 10 -o /dev/null http://object-store:8333/healthz; do
-                echo "object-store-buckets: object store not reachable yet; retrying in 3s"
-                sleep 3
-              done
-              for bucket in contribution-files valuation-files eod-snapshots statement-objects postgres-backups; do
+              . /startup-waits/lib.sh
+              create_bucket() {
                 code=$(curl -sS --connect-timeout 5 --max-time 30 -o /tmp/response -w '%{http_code}' --aws-sigv4 "aws:amz:us-east-1:s3" \
                   --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${OBJECT_STORE_ROOT_SECRET_KEY}" \
-                  -X PUT "http://object-store:8333/${bucket}")
+                  -X PUT "http://object-store:8333/$1") || return 1
                 if [ "${code}" = 200 ] || { [ "${code}" = 409 ] && grep -q BucketAlready /tmp/response; }; then
-                  echo "object-store-buckets: ${bucket} ready (${code})"
-                else
-                  echo "object-store-buckets: creating ${bucket} failed (${code})"; cat /tmp/response; exit 1
+                  return 0
                 fi
+                echo "object-store-buckets: creating $1 answered ${code}"
+                return 1
+              }
+              for bucket in contribution-files valuation-files eod-snapshots statement-objects postgres-backups; do
+                wait_for "bucket ${bucket}" create_bucket "${bucket}"
               done
               echo "object-store-buckets: done"
           securityContext:
@@ -78,7 +117,17 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: startup-waits
+              mountPath: /startup-waits
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
+        - name: startup-waits
+          configMap:
+            name: startup-waits
+        - name: startup-wait-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

@@ -51,6 +51,13 @@ management:
       # Never render component details: they would expose broker hostnames (docs/ENGINEERING-RULES.md §7).
       show-details: never
       show-components: never
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          # readinessState + the bridge.ledger listener container. A container that has stopped
+          # for good (ADR-0036's GKE run) takes the pod out of Ready instead of hiding behind it.
+          include: readinessState,listenerContainers
 
   opentelemetry:
     resource-attributes:

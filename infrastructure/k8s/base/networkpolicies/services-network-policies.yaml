@@ -443,6 +443,11 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+        # The management API: the wait-for-rabbitmq init container checks the vhost
+        # and the bindings it needs there (ADR-0037). RabbitMQ admits these callers
+        # on 15672 already (rabbitmq-policy above).
+        - protocol: TCP
+          port: 15672
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -471,6 +476,11 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+        # The management API: the wait-for-rabbitmq init container checks the vhost
+        # and the bindings it needs there (ADR-0037). RabbitMQ admits these callers
+        # on 15672 already (rabbitmq-policy above).
+        - protocol: TCP
+          port: 15672
     - to:
         - podSelector:
             matchExpressions:
@@ -508,6 +518,11 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+        # The management API: the wait-for-rabbitmq init container checks the vhost
+        # and the bindings it needs there (ADR-0037). RabbitMQ admits these callers
+        # on 15672 already (rabbitmq-policy above).
+        - protocol: TCP
+          port: 15672
     - to:
         - podSelector:
             matchExpressions:
@@ -612,6 +627,11 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+        # The management API: the wait-for-rabbitmq init container checks the vhost
+        # and the bindings it needs there (ADR-0037). RabbitMQ admits these callers
+        # on 15672 already (rabbitmq-policy above).
+        - protocol: TCP
+          port: 15672
     - to:
         - podSelector:
             matchLabels:
@@ -654,6 +674,11 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+        # The management API: the wait-for-rabbitmq init container checks the vhost
+        # and the bindings it needs there (ADR-0037). RabbitMQ admits these callers
+        # on 15672 already (rabbitmq-policy above).
+        - protocol: TCP
+          port: 15672
 ---
 # --- Object store ---
 apiVersion: networking.k8s.io/v1

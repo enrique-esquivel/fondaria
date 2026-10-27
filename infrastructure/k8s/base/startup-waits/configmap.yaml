@@ -1,0 +1,216 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: startup-waits
+  labels:
+    app.kubernetes.io/name: startup-waits
+    app.kubernetes.io/component: startup
+    app.kubernetes.io/part-of: fondaria
+data:
+  # The wait-for-* init containers (ADR-0037). Each one blocks its pod until one
+  # dependency is genuinely usable -- a query answered, a PONG, a bucket that
+  # exists, a queue that is bound -- not merely until a port opens. Every call
+  # carries its own timeout (docs/ENGINEERING-RULES.md §4), and every wait gives
+  # up after WAIT_TIMEOUT_SECONDS and exits non-zero, so a dependency that never
+  # comes shows as Init:Error / Init:CrashLoopBackOff naming the container, never
+  # as a pod that is Running and doing nothing. The kubelet then retries it.
+  #
+  # Each script reads its target from the same ConfigMap keys the application
+  # reads (POSTGRES_URL, REDIS_URL, OBJECT_STORE_ENDPOINT, ...), mapped in by the
+  # init container's env, so a wait cannot drift from what the service connects to.
+  # They log names and counts only: never a credential.
+  lib.sh: |
+    # Sourced by every wait script.
+    : "${WAIT_TIMEOUT_SECONDS:=900}"
+    : "${WAIT_INTERVAL_SECONDS:=3}"
+    wait_deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
+
+    # wait_for DESCRIPTION COMMAND [ARGS...]: run COMMAND until it succeeds, or
+    # exit 1 once the deadline has passed.
+    wait_for() {
+      description=$1
+      shift
+      until "$@"; do
+        if [ "$(date +%s)" -ge "$wait_deadline" ]; then
+          echo "startup-wait: gave up on ${description} after ${WAIT_TIMEOUT_SECONDS}s" >&2
+          exit 1
+        fi
+        echo "startup-wait: waiting for ${description}"
+        sleep "$WAIT_INTERVAL_SECONDS"
+      done
+      echo "startup-wait: ${description} is ready"
+    }
+
+  postgres.sh: |
+    #!/bin/sh
+    # Waits until the database answers a query as the application's own role.
+    # An open port is not enough: CloudNativePG's Services route to an instance
+    # that can still be bootstrapping, before the role and the database exist.
+    #
+    # Target: POSTGRES_URL (the service's JDBC URL, jdbc:postgresql://host:port/db?...)
+    # or PGHOST / PGPORT / PGDATABASE. Credentials: PGUSER / PGPASSWORD.
+    set -eu
+    . /startup-waits/lib.sh
+
+    if [ -n "${POSTGRES_URL:-}" ]; then
+      authority_and_path=${POSTGRES_URL#jdbc:postgresql://}
+      authority=${authority_and_path%%/*}
+      path=${authority_and_path#*/}
+      PGHOST=${authority%:*}
+      if [ "$authority" != "$PGHOST" ]; then
+        PGPORT=${authority##*:}
+      fi
+      PGDATABASE=${path%%\?*}
+    fi
+    : "${PGHOST:?PGHOST or POSTGRES_URL is required}"
+    : "${PGPORT:=5432}"
+    : "${PGDATABASE:?PGDATABASE or POSTGRES_URL is required}"
+    : "${PGUSER:?PGUSER is required}"
+    : "${PGPASSWORD:?PGPASSWORD is required}"
+    # A connection that is accepted but never answered must not hang the wait:
+    # libpq's connect timeout, a server-side statement timeout, and an outer bound.
+    PGCONNECT_TIMEOUT=5
+    PGOPTIONS="-c statement_timeout=5000"
+    HOME=/tmp
+    export PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD PGCONNECT_TIMEOUT PGOPTIONS HOME
+
+    answers() {
+      timeout 15 psql -X -A -t -q -c 'SELECT 1' >/dev/null 2>&1
+    }
+    wait_for "postgres ${PGHOST}:${PGPORT}/${PGDATABASE}" answers
+
+  rabbitmq.sh: |
+    #!/bin/sh
+    # Waits until RabbitMQ's management API accepts the application's credentials
+    # for its vhost, and then until every named binding exists. A binding is the
+    # last thing a topology declares, so it also proves the exchange and the queue:
+    # publishing into an exchange before its queue is bound drops the message.
+    #
+    # RABBITMQ_HOST (the service's own AMQP host), RABBITMQ_VHOST,
+    # RABBITMQ_USERNAME / RABBITMQ_PASSWORD; optionally
+    #   WAIT_RABBITMQ_BINDINGS         space-separated exchange>queue pairs
+    #   WAIT_RABBITMQ_SHARDED_BINDING  exchange>queue-prefix>count, for queues
+    #                                  <prefix>.0 .. <prefix>.<count-1>
+    set -eu
+    . /startup-waits/lib.sh
+
+    : "${RABBITMQ_HOST:?RABBITMQ_HOST is required}"
+    : "${RABBITMQ_MANAGEMENT_PORT:=15672}"
+    : "${RABBITMQ_VHOST:=/}"
+    : "${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}"
+    : "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}"
+    : "${WAIT_RABBITMQ_BINDINGS:=}"
+    : "${WAIT_RABBITMQ_SHARDED_BINDING:=}"
+
+    # The AMQP host may carry the AMQP port (tigerbeetle-cdc's CDC_AMQP_HOST is host or host:port).
+    management_url="http://${RABBITMQ_HOST%%:*}:${RABBITMQ_MANAGEMENT_PORT}"
+    vhost_encoded=$(printf '%s' "$RABBITMQ_VHOST" | sed 's#/#%2F#g')
+    response=/tmp/startup-wait-rabbitmq.json
+
+    management_ok() {
+      code=$(curl -sS --connect-timeout 5 --max-time 10 -o "$response" -w '%{http_code}' \
+        -u "${RABBITMQ_USERNAME}:${RABBITMQ_PASSWORD}" "${management_url}$1") || return 1
+      [ "$code" = 200 ]
+    }
+    vhost_open() {
+      management_ok "/api/vhosts/${vhost_encoded}"
+    }
+    # 404 while the exchange or the queue is missing, [] while both exist unbound.
+    bound() {
+      management_ok "/api/bindings/${vhost_encoded}/e/$1/q/$2" && grep -q '"destination"' "$response"
+    }
+
+    wait_for "rabbitmq vhost ${RABBITMQ_VHOST}" vhost_open
+    for pair in $WAIT_RABBITMQ_BINDINGS; do
+      wait_for "binding ${pair%%>*} -> ${pair#*>}" bound "${pair%%>*}" "${pair#*>}"
+    done
+    if [ -n "$WAIT_RABBITMQ_SHARDED_BINDING" ]; then
+      exchange=${WAIT_RABBITMQ_SHARDED_BINDING%%>*}
+      rest=${WAIT_RABBITMQ_SHARDED_BINDING#*>}
+      prefix=${rest%%>*}
+      count=${rest#*>}
+      shard=0
+      while [ "$shard" -lt "$count" ]; do
+        wait_for "binding ${exchange} -> ${prefix}.${shard}" bound "$exchange" "${prefix}.${shard}"
+        shard=$((shard + 1))
+      done
+    fi
+
+  valkey.sh: |
+    #!/bin/sh
+    # Waits until Valkey answers an authenticated PING with PONG.
+    # VALKEY_URL (the service's own redis://host:port), VALKEY_PASSWORD.
+    set -eu
+    . /startup-waits/lib.sh
+
+    : "${VALKEY_URL:?VALKEY_URL is required}"
+    : "${VALKEY_PASSWORD:?VALKEY_PASSWORD is required}"
+    authority=${VALKEY_URL#*://}
+    authority=${authority%%/*}
+    host=${authority%:*}
+    port=6379
+    if [ "$authority" != "$host" ]; then
+      port=${authority##*:}
+    fi
+
+    pong() {
+      # REDISCLI_AUTH, not -a: the password stays out of the process list.
+      [ "$(REDISCLI_AUTH="$VALKEY_PASSWORD" timeout 10 valkey-cli -h "$host" -p "$port" ping 2>/dev/null)" = PONG ]
+    }
+    wait_for "valkey ${host}:${port}" pong
+
+  object-store.sh: |
+    #!/bin/sh
+    # Waits until the object store is healthy and, when WAIT_BUCKETS names any,
+    # until each of those buckets exists. Buckets come only from the
+    # object-store-buckets Job (ADR-0009); a service that starts before it has
+    # run fails its first upload, not its startup.
+    # OBJECT_STORE_ENDPOINT; OBJECT_STORE_ACCESS_KEY / OBJECT_STORE_SECRET_KEY when
+    # WAIT_BUCKETS is set.
+    set -eu
+    . /startup-waits/lib.sh
+
+    : "${OBJECT_STORE_ENDPOINT:?OBJECT_STORE_ENDPOINT is required}"
+    : "${WAIT_BUCKETS:=}"
+
+    healthy() {
+      curl -sf --connect-timeout 5 --max-time 10 -o /dev/null "${OBJECT_STORE_ENDPOINT}/healthz"
+    }
+    bucket_exists() {
+      code=$(curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code}' -I \
+        --aws-sigv4 "aws:amz:us-east-1:s3" \
+        --user "${OBJECT_STORE_ACCESS_KEY}:${OBJECT_STORE_SECRET_KEY}" \
+        "${OBJECT_STORE_ENDPOINT}/$1") || return 1
+      [ "$code" = 200 ]
+    }
+
+    wait_for "object store" healthy
+    for bucket in $WAIT_BUCKETS; do
+      wait_for "bucket ${bucket}" bucket_exists "$bucket"
+    done
+
+  tigerbeetle.sh: |
+    #!/bin/sh
+    # Waits until a majority of the TigerBeetle replicas in TIGERBEETLE_ADDRESSES
+    # (comma-separated ip:port, the client's own list) accept a TCP connection:
+    # enough of them to form a cluster. TigerBeetle has no health endpoint, and the
+    # client library itself waits for the cluster once connected, so this is a
+    # reachability check, not a query.
+    set -eu
+    . /startup-waits/lib.sh
+
+    : "${TIGERBEETLE_ADDRESSES:?TIGERBEETLE_ADDRESSES is required}"
+
+    majority_reachable() {
+      total=0
+      reachable=0
+      for address in $(printf '%s' "$TIGERBEETLE_ADDRESSES" | tr ',' ' '); do
+        total=$((total + 1))
+        if nc -w 3 "${address%:*}" "${address##*:}" </dev/null >/dev/null 2>&1; then
+          reachable=$((reachable + 1))
+        fi
+      done
+      echo "startup-wait: ${reachable}/${total} TigerBeetle replicas accept connections"
+      [ "$reachable" -gt $((total / 2)) ]
+    }
+    wait_for "a majority of TigerBeetle replicas" majority_reachable
