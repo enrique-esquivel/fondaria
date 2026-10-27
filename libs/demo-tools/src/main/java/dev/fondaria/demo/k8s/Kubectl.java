@@ -167,8 +167,35 @@ public final class Kubectl {
             + " --user \"$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY\""
             + " \"http://127.0.0.1:8333/$1\"",
         "sh",
-        path,
+        sigV4Path(path),
         region);
+  }
+
+  /**
+   * {@code path} with every byte outside SigV4's unreserved set ({@code A-Z a-z 0-9 - . _ ~})
+   * percent-encoded, segment by segment. curl signs the path exactly as given while the object
+   * store canonicalizes it encoded, so a raw {@code =} -- every statement key has two, {@code
+   * period=.../participant=...} -- made the signatures differ and the read fail with 403
+   * SignatureDoesNotMatch.
+   */
+  static String sigV4Path(String path) {
+    StringBuilder encoded = new StringBuilder();
+    for (byte b : path.getBytes(StandardCharsets.UTF_8)) {
+      char c = (char) (b & 0xFF);
+      if (c == '/'
+          || (c >= 'A' && c <= 'Z')
+          || (c >= 'a' && c <= 'z')
+          || (c >= '0' && c <= '9')
+          || c == '-'
+          || c == '.'
+          || c == '_'
+          || c == '~') {
+        encoded.append(c);
+      } else {
+        encoded.append('%').append(String.format("%02X", b & 0xFF));
+      }
+    }
+    return encoded.toString();
   }
 
   /**
