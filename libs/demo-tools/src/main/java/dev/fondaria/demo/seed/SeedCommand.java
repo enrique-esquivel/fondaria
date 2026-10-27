@@ -77,6 +77,16 @@ public final class SeedCommand {
     return count;
   }
 
+  /**
+   * How long to wait for one organization's seed batch to stage. Validation, enrolment and staging
+   * grow with the row count: the 31,115-row batch took over four minutes on the small GKE profile's
+   * three 4-vCPU nodes, past a flat three-minute wait, and a timed-out seed cannot simply be re-run
+   * because the organization is already in the manifest. Three minutes plus 10 ms a row.
+   */
+  static Duration settleTimeout(int rows) {
+    return Duration.ofMinutes(3).plusMillis(10L * rows);
+  }
+
   public static void run(Args args, DemoPaths paths) {
     long seed = args.getLong("seed", 42L);
     DemoEndpoints endpoints = DemoEndpoints.fromEnvironment();
@@ -300,7 +310,7 @@ public final class SeedCommand {
 
     Map<String, Object> settled =
         ContributionBatchSubmitter.pollUntilSettled(
-            client, organizationId, batchId, Duration.ofMinutes(3), Duration.ofSeconds(2));
+            client, organizationId, batchId, settleTimeout(employeeCount), Duration.ofSeconds(2));
     String status = (String) settled.get("status");
     LocalDate dealingDate =
         settled.get("dealingDate") == null
