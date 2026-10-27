@@ -102,6 +102,11 @@ class FinancialControlDashboardTest {
     // 9. Ledger head vs projection head
     assertThat(allExpressions).anyMatch(expr -> expr.contains("ledger_head_timestamp"));
     assertThat(allExpressions).anyMatch(expr -> expr.contains("last_timestamp"));
+    // Ledger timestamps are nanoseconds and dateTimeAsIso takes milliseconds: "/ 1e9" drew every
+    // head in January 1970. A pod that has seen nothing reports 0, so heads are filtered "> 0".
+    assertThat(allExpressions)
+        .contains("(ledger_head_timestamp > 0) / 1e6", "(last_timestamp > 0) / 1e6")
+        .anyMatch(expr -> expr.contains("min(last_timestamp > 0)"));
 
     // Verify grid layout validity: within 24-col grid and no overlapping panel bounds
     record Rect(int id, int x1, int y1, int x2, int y2) {

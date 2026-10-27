@@ -310,25 +310,25 @@ data:
           "id": 6,
           "type": "timeseries",
           "title": "Ledger Head vs Projection Head",
-          "description": "ledger_head_timestamp vs last_timestamp. Discrepancy shows unprocessed events buffered in the transport layer.",
+          "description": "ledger_head_timestamp vs last_timestamp (nanoseconds, shown as dates: dateTimeAsIso takes milliseconds). Pods that have seen nothing yet report 0 and are left out. Discrepancy shows unprocessed events buffered in the transport layer.",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "ledger_head_timestamp / 1e9",
+              "expr": "(ledger_head_timestamp > 0) / 1e6",
               "legendFormat": "Ledger Head",
               "refId": "A"
             },
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "last_timestamp / 1e9",
+              "expr": "(last_timestamp > 0) / 1e6",
               "legendFormat": "Projection Head ({{instance}})",
               "refId": "B"
             },
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "(max(ledger_head_timestamp) - min(last_timestamp)) / 1e9",
+              "expr": "(max(ledger_head_timestamp) - min(last_timestamp > 0)) / 1e9",
               "legendFormat": "Head Gap (s)",
               "refId": "C"
             }
