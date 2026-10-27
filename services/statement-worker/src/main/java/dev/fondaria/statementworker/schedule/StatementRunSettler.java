@@ -1,6 +1,7 @@
 package dev.fondaria.statementworker.schedule;
 
 import dev.fondaria.statementworker.render.RedisCompletionCounter;
+import dev.fondaria.statementworker.render.StatementMetrics;
 import java.time.Clock;
 import java.util.OptionalLong;
 import org.slf4j.Logger;
@@ -29,12 +30,17 @@ public class StatementRunSettler {
   private final StatementRunRepository runs;
   private final RedisCompletionCounter counter;
   private final Clock clock;
+  private final StatementMetrics metrics;
 
   public StatementRunSettler(
-      StatementRunRepository runs, RedisCompletionCounter counter, Clock clock) {
+      StatementRunRepository runs,
+      RedisCompletionCounter counter,
+      Clock clock,
+      StatementMetrics metrics) {
     this.runs = runs;
     this.counter = counter;
     this.clock = clock;
+    this.metrics = metrics;
   }
 
   @Scheduled(fixedDelayString = "${fondaria.statement.settlement-sweep-interval:5s}")
@@ -48,6 +54,7 @@ public class StatementRunSettler {
         long durationMillis = clock.instant().toEpochMilli() - run.startedAt().toEpochMilli();
         runs.complete(
             run.period(), clock.instant(), Math.max(durationMillis, 0), current.getAsLong());
+        metrics.recordRunCompleted();
         LOGGER.info(
             "statement run settled for period {}: {} / {} statements",
             run.period(),

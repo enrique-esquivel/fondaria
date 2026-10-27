@@ -169,6 +169,20 @@ class KustomizeOverlaysValidationTest {
         .as("CDC_TIGERBEETLE_ADDRESSES in tigerbeetle-cdc-config")
         .isEqualTo("10.96.100.100:3000");
 
+    // 5a. The demo's close window: the close waits for 17:00 on the simulated clock and then runs
+    // on a short tick, so `demo-tools close` sees the day signed off within a minute or two.
+    Map<String, Object> eodData =
+        getMap(findByNameAndKind(renderedDocs, "eod-job-config", "ConfigMap"), "data");
+    assertThat(eodData.get("CLOSE_WINDOW_START")).isEqualTo("17:00");
+    for (String interval :
+        List.of(
+            "RECONCILIATION_POLL_INTERVAL",
+            "CUSTODIAN_RECONCILIATION_POLL_INTERVAL",
+            "SNAPSHOT_POLL_INTERVAL",
+            "SIGNOFF_POLL_INTERVAL")) {
+      assertThat(eodData.get(interval)).as("%s in eod-job-config", interval).isEqualTo("20s");
+    }
+
     // 6. Local storage: the base's tigerbeetle-nvme class is kind's local-path provisioner
     Map<String, Object> storageClass =
         findByNameAndKind(renderedDocs, "tigerbeetle-nvme", "StorageClass");
@@ -246,6 +260,12 @@ class KustomizeOverlaysValidationTest {
   void prodOverlayAppliesExpectedDifferences() throws Exception {
     List<Map<String, Object>> renderedDocs = renderOverlay("prod");
     assertThat(renderedDocs).isNotEmpty();
+
+    // 0. No close window in production: every close sweep runs on every tick, as before.
+    assertThat(
+            getMap(findByNameAndKind(renderedDocs, "eod-job-config", "ConfigMap"), "data")
+                .get("CLOSE_WINDOW_START"))
+        .isEqualTo("");
 
     // 1. Replica counts per DESIGN.md §13 (services differing from base)
     Map<String, Integer> expectedReplicas =

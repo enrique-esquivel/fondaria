@@ -117,6 +117,13 @@ fondaria:
     cutoff-time: ${CALENDAR_CUTOFF_TIME:18:00}
     holidays: ${CALENDAR_HOLIDAYS:}
 
+  close-window:
+    # Local HH:MM in CALENDAR_ZONE from which the scheduled close may run each business date
+    # (CloseWindow). Unset: every sweep runs on every tick, which is production's behaviour. The
+    # demo overlays set it so the close runs after the day's payroll and NAV strike, not at the
+    # 09:00 a `demo-tools advance` lands on.
+    start: ${CLOSE_WINDOW_START:}
+
   reconciliation:
     # Operational tuning, not secrets: every value has a working default, and a
     # deployment that sets none of them reconciles correctly on this cadence.

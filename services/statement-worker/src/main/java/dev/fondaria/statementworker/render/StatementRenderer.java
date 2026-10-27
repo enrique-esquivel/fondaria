@@ -18,14 +18,17 @@ public class StatementRenderer {
   private final ParticipantDirectory participants;
   private final StatementObjectStore objectStore;
   private final CompletionCounter counter;
+  private final StatementMetrics metrics;
 
   public StatementRenderer(
       ParticipantDirectory participants,
       StatementObjectStore objectStore,
-      CompletionCounter counter) {
+      CompletionCounter counter,
+      StatementMetrics metrics) {
     this.participants = participants;
     this.objectStore = objectStore;
     this.counter = counter;
+    this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
   }
 
   /**
@@ -59,6 +62,7 @@ public class StatementRenderer {
     RenderedObject rendered = statement.render();
     objectStore.put(objectKey(job.period(), participantId), rendered.bytes());
     counter.recordCompleted(job.period(), job.participantKey().asKey());
+    metrics.recordRendered();
   }
 
   /**

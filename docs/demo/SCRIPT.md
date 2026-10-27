@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | **0. Reset** | Clean estate setup | `make demo-reset` | 4m 15s | Clean cluster, seeded database, pristine manifest |
 | **1. The Estate** | Scale & zero break | Grafana + `summary` | 1m 00s | 300,000 enrolled participants, 0 DLQ, tied reconciliation |
-| **2. A Day Passes** | Daily dealing & close | `make demo-day` | 1m 20s | 12 payroll files submitted, NAV struck, hero balance updated |
+| **2. A Day Passes** | Daily dealing & close | `make demo-day` | 1m 20s (measured before the close step; `close` adds about a minute, not yet re-timed) | 12 payroll files submitted, NAV struck, hero balance updated, the day signed off with reconciliation, snapshot and hash chain printed (`make demo-statements` for a month-end statement) |
 | **3. NAV Falls** | **The Core Thesis** | `advance` + `valuations --move -1.5%` | 1m 15s | Units held unchanged (512.10843268); value drops $594.03 -> $585.12 MXN |
 | **4. Product Velocity** | Live rule evolution | `POST /v1/.../plans` | 45s | New match ratio published live with 0 downtime and 0 redeploy |
 | **5. Query Anything** | Auditability & history | `balance-api` endpoints | 1m 00s | Immutable transfer chain with deterministic TigerBeetle IDs |

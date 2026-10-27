@@ -2,6 +2,7 @@ package dev.fondaria.eodjob.snapshot;
 
 import dev.fondaria.eodjob.custodian.CustodianCloseBlockedException;
 import dev.fondaria.eodjob.reconciliation.CloseBlockedException;
+import dev.fondaria.eodjob.schedule.CloseWindow;
 import java.time.LocalDate;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -41,6 +42,10 @@ import org.springframework.stereotype.Component;
  * <i>upstream</i> control is holding the close, which is that control's finding to page on and not
  * a second alert for the same event.
  *
+ * <p><b>Outside the {@link CloseWindow} a sweep does nothing</b> — not even the {@code isTaken}
+ * read. With a window configured, that is what stops the sweep from taking a date's snapshot of
+ * record before the day's business has reached the book.
+ *
  * <p><b>Known limitation, recorded rather than built</b> (`ADR-0020`): the sweep only ever
  * considers <i>today's</i> business date. A date that never got a snapshot — an object-store outage
  * outlasting the cut-off — is never retried, and once a later date succeeds {@code
@@ -54,14 +59,19 @@ public class SnapshotRunner {
 
   private final SnapshotService snapshots;
   private final SnapshotMetrics metrics;
+  private final CloseWindow window;
 
-  public SnapshotRunner(SnapshotService snapshots, SnapshotMetrics metrics) {
+  public SnapshotRunner(SnapshotService snapshots, SnapshotMetrics metrics, CloseWindow window) {
     this.snapshots = Objects.requireNonNull(snapshots, "snapshots must not be null");
     this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    this.window = Objects.requireNonNull(window, "window must not be null");
   }
 
   @Scheduled(fixedDelayString = "${fondaria.snapshot.poll-interval}")
   public void sweep() {
+    if (!window.admitsControls()) {
+      return;
+    }
     try {
       LocalDate businessDate = snapshots.businessDateNow();
       if (snapshots.isTaken(businessDate)) {

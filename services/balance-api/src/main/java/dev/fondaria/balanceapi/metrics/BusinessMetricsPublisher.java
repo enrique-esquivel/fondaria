@@ -61,6 +61,12 @@ public class BusinessMetricsPublisher {
   private final LedgerPort ledger;
   private final AccountIdDeriver accountIds;
   private final JdbcClient jdbc;
+
+  /**
+   * Stamps {@code fondaria_business_metrics_snapshot_timestamp_seconds} and nothing else. Must be
+   * the <b>wall</b> clock: Grafana compares the stamp with {@code time()}, so a demo clock running
+   * ahead reads as a negative age (see {@code BusinessMetricsConfiguration}).
+   */
   private final Clock clock;
 
   private final ConcurrentMap<FundId, FundGaugeHolder> fundGauges = new ConcurrentHashMap<>();

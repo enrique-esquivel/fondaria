@@ -572,6 +572,26 @@ patches:
       - op: replace
         path: /data/DEMO_CLOCK_ENABLED
         value: "true"
+      # The demo's close (CloseWindow): `demo-tools advance` lands on 09:00 and
+      # the day's payroll and NAV strike follow within minutes, so the close
+      # waits for 17:00 on the simulated clock -- where `demo-tools close` moves
+      # it -- and then runs on a short tick instead of production's hourly one,
+      # so the four steps chain in about a minute rather than four hours.
+      - op: replace
+        path: /data/CLOSE_WINDOW_START
+        value: "17:00"
+      - op: add
+        path: /data/RECONCILIATION_POLL_INTERVAL
+        value: "20s"
+      - op: add
+        path: /data/CUSTODIAN_RECONCILIATION_POLL_INTERVAL
+        value: "20s"
+      - op: add
+        path: /data/SNAPSHOT_POLL_INTERVAL
+        value: "20s"
+      - op: add
+        path: /data/SIGNOFF_POLL_INTERVAL
+        value: "20s"
 
   - target:
       kind: ConfigMap

@@ -102,6 +102,76 @@ public final class Kubectl {
   }
 
   /**
+   * Runs one read-only query the same way {@link #execSql} runs a statement, and returns its rows
+   * as {@link PsqlRows#parse} splits them. Unaligned, tuples-only and quiet, so the output is the
+   * rows and nothing else; the field separator is the ASCII unit separator, which no column this
+   * module reads can contain.
+   */
+  public List<List<String>> query(Credential credential, String sql) {
+    String output =
+        runCapturing(
+            Duration.ofSeconds(30),
+            "exec",
+            "svc/postgres-rw",
+            // Named, so kubectl prints no "Defaulted container" notice into the rows on a meshed
+            // pod (CloudNativePG's container is always "postgres").
+            "-c",
+            "postgres",
+            "--",
+            "env",
+            "PGPASSWORD=" + credential.password(),
+            "psql",
+            "-h",
+            "postgres-rw",
+            "-U",
+            credential.username(),
+            "-d",
+            "funds",
+            "-X",
+            "-q",
+            "-A",
+            "-t",
+            "-F",
+            PsqlRows.FIELD_SEPARATOR,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            sql);
+    return PsqlRows.parse(output);
+  }
+
+  /**
+   * Reads one object from the object store, from inside the object-store pod itself.
+   *
+   * <p>The S3 API is reachable only inside the cluster and every request must be SigV4-signed. The
+   * pod already holds its admin identity as {@code AWS_ACCESS_KEY_ID}/{@code
+   * AWS_SECRET_ACCESS_KEY}, and its image's {@code curl} signs requests (the {@code
+   * object-store-buckets} Job relies on the same) -- so the credential is expanded by the pod's own
+   * shell and never reaches this machine, an argument list or a log line. The path travels as a
+   * positional parameter ({@code $1}), never spliced into the script, so no key can inject shell.
+   *
+   * @param path {@code <bucket>/<key>}
+   * @throws DemoToolsException if the object does not exist or the pod cannot be reached
+   */
+  public String readObject(String path, String region) {
+    return runCapturing(
+        Duration.ofSeconds(30),
+        "exec",
+        "statefulset/object-store",
+        "-c",
+        "object-store",
+        "--",
+        "sh",
+        "-c",
+        "curl -sS -f --max-time 20 --aws-sigv4 \"aws:amz:$2:s3\""
+            + " --user \"$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY\""
+            + " \"http://127.0.0.1:8333/$1\"",
+        "sh",
+        path,
+        region);
+  }
+
+  /**
    * Forwards {@code localPort} to {@code service}'s {@code remotePort} until {@link
    * PortForward#close()}. Waits for kubectl's own "Forwarding from" line before returning, so a
    * caller never races the tunnel.
