@@ -1,15 +1,18 @@
 package dev.fondaria.demo;
 
 import dev.fondaria.demo.advance.AdvanceCommand;
+import dev.fondaria.demo.close.CloseCommand;
 import dev.fondaria.demo.contribution.ContributionsCommand;
 import dev.fondaria.demo.http.DemoHttpException;
 import dev.fondaria.demo.onboard.OnboardCommand;
 import dev.fondaria.demo.seed.SeedCommand;
+import dev.fondaria.demo.statement.StatementsCommand;
 import dev.fondaria.demo.valuation.ValuationsCommand;
 
 /**
  * Entry point for every {@code demo-tools} command (`phase-D-demo.md` Task D.2): {@code seed},
- * {@code contributions}, {@code valuations}, {@code onboard}, {@code advance}. Run with:
+ * {@code contributions}, {@code valuations}, {@code onboard}, {@code advance}, and the two that
+ * make the daily close visible: {@code close} and {@code statements}. Run with:
  *
  * <pre>
  * java -cp libs/demo-tools/target/classes:libs/platform-common/target/classes dev.fondaria.demo.DemoTools &lt;command&gt; [--flag value ...]
@@ -29,7 +32,8 @@ public final class DemoTools {
 
     if (args.length == 0) {
       System.err.println(
-          "usage: demo-tools <seed|contributions|valuations|onboard|advance> [--flag value ...]");
+          "usage: demo-tools <seed|contributions|valuations|onboard|advance|close|statements>"
+              + " [--flag value ...]");
       System.exit(1);
       return;
     }
@@ -45,6 +49,8 @@ public final class DemoTools {
         case "valuations" -> ValuationsCommand.run(parsed, paths);
         case "onboard" -> OnboardCommand.run(parsed, paths);
         case "advance" -> AdvanceCommand.run(parsed, paths);
+        case "close" -> CloseCommand.run(parsed, paths);
+        case "statements" -> StatementsCommand.run(parsed, paths);
         case "token" -> System.out.println(new dev.fondaria.demo.auth.DemoAuth().bearerToken());
         default -> throw new DemoToolsException("unknown command: " + command);
       }

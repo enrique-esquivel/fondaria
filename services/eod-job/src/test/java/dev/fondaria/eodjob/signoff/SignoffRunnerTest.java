@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import dev.fondaria.common.BusinessCalendar;
 import dev.fondaria.eodjob.custodian.CustodianReconciliationGate;
 import dev.fondaria.eodjob.reconciliation.ReconciliationGate;
+import dev.fondaria.eodjob.schedule.CloseWindow;
 import dev.fondaria.eodjob.snapshot.EodHashChainVerifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -14,7 +15,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,9 +29,11 @@ import org.junit.jupiter.api.Test;
  */
 class SignoffRunnerTest {
 
-  private static final Instant AT = Instant.parse("2026-08-31T23:30:00Z"); // a Mexico-City Monday
+  private static final Instant AT = Instant.parse("2026-08-31T23:30:00Z"); // Monday 17:30 CDMX
+  private static final ZoneId ZONE = ZoneId.of("America/Mexico_City");
+  private static final Clock CLOCK = Clock.fixed(AT, ZoneOffset.UTC);
   private final BusinessCalendar calendar =
-      new BusinessCalendar(ZoneId.of("America/Mexico_City"), LocalTime.of(18, 0), Set.of());
+      new BusinessCalendar(ZONE, LocalTime.of(18, 0), Set.of());
   private final LocalDate businessDate = calendar.businessDateOf(AT);
 
   private final SignoffTestDoubles.Signoffs signoffs = new SignoffTestDoubles.Signoffs();
@@ -48,13 +53,23 @@ class SignoffRunnerTest {
           new SnapshotGate(snapshots),
           publisher,
           calendar,
-          Clock.fixed(AT, ZoneOffset.UTC));
+          CLOCK);
 
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final SignoffMetrics metrics = new SignoffMetrics(registry);
   private final EodHashChainVerifier hashChainVerifier =
       new EodHashChainVerifier(snapshots, registry);
-  private final SignoffRunner runner = new SignoffRunner(service, metrics, hashChainVerifier);
+  private final SignoffRunner runner =
+      new SignoffRunner(
+          service, metrics, hashChainVerifier, CloseWindow.always(ZONE, calendar, CLOCK));
+
+  private SignoffRunner runnerWithWindowAt(LocalTime start) {
+    return new SignoffRunner(
+        service,
+        metrics,
+        hashChainVerifier,
+        CloseWindow.openingAt(start, ZONE, calendar, CLOCK, date -> false));
+  }
 
   private void allThreeGatesOpen() {
     internalRuns.with(SignoffTestDoubles.passedInternalRun(businessDate, AT));
@@ -103,5 +118,54 @@ class SignoffRunnerTest {
     runner.sweep();
     assertThat(gauge("eod_signoff_announce_pending")).isEqualTo(0.0);
     assertThat(signoffs.find(businessDate).orElseThrow().isAnnounced()).isTrue();
+  }
+
+  @Test
+  @DisplayName("before the close window opens, today is not signed off and nothing is recorded")
+  void beforeTheWindowTodayIsLeftAlone() {
+    allThreeGatesOpen();
+
+    runnerWithWindowAt(LocalTime.of(17, 45)).sweep();
+
+    assertThat(signoffs.find(businessDate)).isEmpty();
+    assertThat(publisher.published()).isEmpty();
+    assertThat(registry.get("eod_signoff_total").counter().count()).isZero();
+    // Neither a pass nor a block: the gauge keeps its starting value.
+    assertThat(gauge("eod_signoff_blocked")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("before the close window opens, a stranded sign-off is still re-announced")
+  void beforeTheWindowAStrandedSignoffIsStillReannounced() {
+    LocalDate yesterday = businessDate.minusDays(3);
+    signoffs.insertIfAbsent(
+        new CloseSignoff(
+            yesterday,
+            AT.minusSeconds(86_400),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            1L,
+            "snapshots/dt=" + yesterday + "/positions.ndjson.gz",
+            "snapshots/dt=" + yesterday + "/manifest.json",
+            Optional.empty()));
+
+    runnerWithWindowAt(LocalTime.of(17, 45)).sweep();
+
+    assertThat(publisher.published()).hasSize(1);
+    assertThat(signoffs.find(yesterday).orElseThrow().isAnnounced()).isTrue();
+    assertThat(gauge("eod_signoff_announce_pending")).isEqualTo(0.0);
+  }
+
+  @Test
+  @DisplayName("once the close window is open, the sweep signs off as it does with no window")
+  void insideTheWindowTheSweepSignsOff() {
+    allThreeGatesOpen();
+
+    runnerWithWindowAt(LocalTime.of(17, 0)).sweep();
+
+    assertThat(signoffs.find(businessDate)).isPresent();
+    assertThat(gauge("eod_signoff_blocked")).isEqualTo(0.0);
+    assertThat(publisher.published()).hasSize(1);
   }
 }

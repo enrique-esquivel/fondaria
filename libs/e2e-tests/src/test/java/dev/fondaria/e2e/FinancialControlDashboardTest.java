@@ -90,7 +90,16 @@ class FinancialControlDashboardTest {
     assertThat(allExpressions).anyMatch(expr -> expr.contains("eod_reconciliation_duration"));
     assertThat(allExpressions).anyMatch(expr -> expr.contains("eod_reconciliation_blocked"));
 
-    // 8. Ledger head vs projection head
+    // 8. The close and what it produced: sign-offs and statements, so a demo or an operator can see
+    // that the daily close ran without reading workflow.close_signoff.
+    assertThat(allExpressions).anyMatch(expr -> expr.contains("increase(eod_signoff_total["));
+    assertThat(allExpressions).anyMatch(expr -> expr.contains("eod_signoff_blocked"));
+    assertThat(allExpressions)
+        .anyMatch(expr -> expr.contains("increase(statement_rendered_total["));
+    assertThat(allExpressions)
+        .anyMatch(expr -> expr.contains("increase(statement_runs_completed_total["));
+
+    // 9. Ledger head vs projection head
     assertThat(allExpressions).anyMatch(expr -> expr.contains("ledger_head_timestamp"));
     assertThat(allExpressions).anyMatch(expr -> expr.contains("last_timestamp"));
 

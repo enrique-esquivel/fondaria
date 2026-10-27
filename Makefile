@@ -17,7 +17,7 @@ TEST_SEED_BANNER = echo ""; \
 	echo ""
 MVN_TEST_SEED = -Dsurefire.runOrder.random.seed=$(TEST_SEED)
 
-.PHONY: help jdk-check hooks up up-all down clean logs psql migrate local-secrets verify verify-all verify-cold verify-module rebuild-projection test-fixtures-clean fmt lint k8s-up k8s-down k8s-status gke-up gke-deploy gke-tunnel gke-status gke-down skaffold-dev skaffold-run skaffold-delete demo-tools-build demo-port-forward demo-seed demo-day demo-onboard demo-reset
+.PHONY: help jdk-check hooks up up-all down clean logs psql migrate local-secrets verify verify-all verify-cold verify-module rebuild-projection test-fixtures-clean fmt lint k8s-up k8s-down k8s-status gke-up gke-deploy gke-tunnel gke-status gke-down skaffold-dev skaffold-run skaffold-delete demo-tools-build demo-port-forward demo-seed demo-day demo-eod demo-statements demo-onboard demo-reset
 
 .DEFAULT_GOAL := help
 
@@ -231,10 +231,20 @@ demo-port-forward: ## Ensure background port-forwards for the three demo APIs (3
 demo-seed: demo-tools-build demo-port-forward ## Seed the demo: 3 funds, 12 employers, ~300,000 participants (Task D.2). ORGS=8 seeds only the 8 smallest (~60,000); re-run without ORGS to add the rest. Run against a fresh `make k8s-up && make skaffold-run`.
 	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools seed $(if $(ORGS),--organizations $(ORGS))
 
-demo-day: demo-tools-build demo-port-forward ## One simulated day: advance one business day, then contributions, then a scripted NAV move (Task D.2)
+demo-day: demo-tools-build demo-port-forward ## One simulated day: advance one business day, contributions, a scripted NAV move, then the day's close (sign-off, reconciliation, hash chain; statements too on a month end)
 	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools advance --business-days 1
 	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools contributions
 	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools valuations
+	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools close
+
+demo-eod: demo-tools-build ## Close the current simulated day, or show the close it already has: moves the clock into eod-job's close window and prints the sign-off
+	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools close
+
+demo-statements: demo-tools-build demo-port-forward ## Advance to the month's last business day, run and close it, then print a hero participant's monthly statement from the object store
+	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools advance --to month-end
+	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools contributions
+	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools valuations
+	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools close
 
 demo-onboard: demo-tools-build demo-port-forward ## Onboard a 200,000-employee employer live and watch it allot (Task D.2)
 	java -cp $(DEMO_TOOLS_CP) dev.fondaria.demo.DemoTools onboard --employees 200000

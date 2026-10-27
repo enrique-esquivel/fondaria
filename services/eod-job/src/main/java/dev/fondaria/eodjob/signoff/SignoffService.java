@@ -99,7 +99,7 @@ public class SignoffService {
   }
 
   /** Re-publishes {@code close.signed-off.v1} for every row whose event is not yet confirmed. */
-  private void reannouncePending() {
+  public void reannouncePending() {
     for (CloseSignoff pending : signoffs.findUnannounced()) {
       announce(pending);
     }

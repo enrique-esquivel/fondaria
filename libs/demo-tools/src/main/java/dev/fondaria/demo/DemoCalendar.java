@@ -1,7 +1,9 @@
 package dev.fondaria.demo;
 
 import dev.fondaria.common.BusinessCalendar;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.Set;
 
@@ -13,9 +15,30 @@ import java.util.Set;
  */
 public final class DemoCalendar {
 
+  public static final ZoneId ZONE = ZoneId.of("America/Mexico_City");
+  public static final LocalTime CUTOFF = LocalTime.of(18, 0);
+
   private DemoCalendar() {}
 
   public static BusinessCalendar create() {
-    return new BusinessCalendar(ZoneId.of("America/Mexico_City"), LocalTime.of(18, 0), Set.of());
+    return new BusinessCalendar(ZONE, CUTOFF, Set.of());
+  }
+
+  /**
+   * The month's last business date -- the close whose sign-off fans the month's statements out. The
+   * same definition eod-job's {@code SignoffService} uses: the next business date falls in a later
+   * month.
+   */
+  public static LocalDate lastBusinessDayOf(BusinessCalendar calendar, YearMonth month) {
+    LocalDate candidate = month.atEndOfMonth();
+    while (!calendar.isBusinessDate(candidate)) {
+      candidate = candidate.minusDays(1);
+    }
+    return candidate;
+  }
+
+  /** Whether {@code date} is its month's last business date. */
+  public static boolean isLastBusinessDayOfMonth(BusinessCalendar calendar, LocalDate date) {
+    return !YearMonth.from(calendar.nextBusinessDate(date)).equals(YearMonth.from(date));
   }
 }

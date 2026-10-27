@@ -377,6 +377,76 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "EOD Closes Signed Off (selected range)",
+      "description": "increase(eod_signoff_total): business dates whose daily close eod-job signed off in the range -- internal and custodian reconciliation passed and the dense snapshot was taken. Each one publishes close.signed-off.v1; the rows are workflow.close_signoff. In the demo, `make demo-eod` prints the latest one.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(eod_signoff_total[$__range]))",
+          "legendFormat": "signed off",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Sign-off Blocked & Announce Pending",
+      "description": "eod_signoff_blocked: 1 while today's close is held by an upstream gate (its own panel says which). eod_signoff_announce_pending: sign-offs written but whose close.signed-off.v1 is not yet confirmed. With CLOSE_WINDOW_START set (the demo), neither moves before the window opens.",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(eod_signoff_blocked)",
+          "legendFormat": "blocked",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(eod_signoff_announce_pending)",
+          "legendFormat": "announce pending",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Statements Rendered (selected range)",
+      "description": "increase(statement_rendered_total): participant statements statement-worker rendered and stored in the statement-objects bucket. Statements are monthly: only the last business day's sign-off fans them out, one per open position.",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(statement_rendered_total[$__range]))",
+          "legendFormat": "rendered",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Statement Runs Completed (selected range)",
+      "description": "increase(statement_runs_completed_total): monthly runs settled COMPLETED -- the completion counter reached the closing snapshot's position count, so every expected statement is stored (workflow.statement_run).",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(statement_runs_completed_total[$__range]))",
+          "legendFormat": "completed",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }

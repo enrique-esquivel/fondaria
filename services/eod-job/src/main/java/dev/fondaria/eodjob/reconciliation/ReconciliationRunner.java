@@ -1,5 +1,6 @@
 package dev.fondaria.eodjob.reconciliation;
 
+import dev.fondaria.eodjob.schedule.CloseWindow;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,9 @@ import org.springframework.stereotype.Component;
  * blocking and the gauge is already raised; letting it escape would only stop the scheduler from
  * ever trying again. The close must be able to recover by re-running once the cause is fixed,
  * without a redeploy.
+ *
+ * <p>A sweep outside the {@link CloseWindow} does nothing at all — no run row, no metric. Unset,
+ * the window is always open.
  */
 @Component
 public class ReconciliationRunner {
@@ -30,14 +34,20 @@ public class ReconciliationRunner {
 
   private final ReconciliationService reconciliation;
   private final ReconciliationMetrics metrics;
+  private final CloseWindow window;
 
-  public ReconciliationRunner(ReconciliationService reconciliation, ReconciliationMetrics metrics) {
+  public ReconciliationRunner(
+      ReconciliationService reconciliation, ReconciliationMetrics metrics, CloseWindow window) {
     this.reconciliation = Objects.requireNonNull(reconciliation, "reconciliation must not be null");
     this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    this.window = Objects.requireNonNull(window, "window must not be null");
   }
 
   @Scheduled(fixedDelayString = "${fondaria.reconciliation.poll-interval}")
   public void sweep() {
+    if (!window.admitsControls()) {
+      return;
+    }
     try {
       ReconciliationResult result = reconciliation.reconcile();
       metrics.record(result);

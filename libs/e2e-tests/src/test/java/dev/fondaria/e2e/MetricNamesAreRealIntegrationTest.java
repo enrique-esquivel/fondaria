@@ -208,6 +208,9 @@ class MetricNamesAreRealIntegrationTest {
       registry.counter("eod.custodian.statements.late.total").increment();
       registry.counter("eod.snapshot.untied.total").increment();
       registry.counter("eod.reconciliation.breaks.total").increment();
+      registry.counter("eod.signoff.total").increment();
+      registry.counter("statement.rendered.total").increment();
+      registry.counter("statement.runs.completed.total").increment();
 
       // Register Gauges
       registry.gauge("ledger.cdc.lag.seconds", Tags.of("group", "projection-worker"), 1.5);
@@ -216,6 +219,7 @@ class MetricNamesAreRealIntegrationTest {
       registry.gauge("eod.reconciliation.blocked", 0);
       registry.gauge("eod.custodian.reconciliation.blocked", 0);
       registry.gauge("eod.signoff.blocked", 0);
+      registry.gauge("eod.signoff.announce.pending", 0);
       registry.gauge("projection.halted", 0);
       registry.gauge("ledger.head.timestamp", 1000000000L);
       registry.gauge("last.timestamp", Tags.of("group", "projection-worker"), 1000000000L);

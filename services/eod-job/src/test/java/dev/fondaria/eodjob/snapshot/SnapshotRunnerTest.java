@@ -10,6 +10,7 @@ import dev.fondaria.eodjob.custodian.CustodianReconciliationGate;
 import dev.fondaria.eodjob.reconciliation.HoldingKey;
 import dev.fondaria.eodjob.reconciliation.ReconciliationGate;
 import dev.fondaria.eodjob.reconciliation.RunStatus;
+import dev.fondaria.eodjob.schedule.CloseWindow;
 import dev.fondaria.ledger.AccountIdDeriver;
 import dev.fondaria.ledger.LedgerCodes;
 import dev.fondaria.ledger.TenantRefDeriver;
@@ -68,6 +69,7 @@ class SnapshotRunnerTest {
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final SnapshotMetrics metrics = new SnapshotMetrics(registry);
 
+  private CloseWindow window = CloseWindow.always(ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE));
   private RunStatus internalStatus = RunStatus.PASSED;
   private RunStatus custodianStatus = RunStatus.PASSED;
 
@@ -106,6 +108,35 @@ class SnapshotRunnerTest {
         .as("no second run row, and above all no FAILED one")
         .hasSize(runsAfterFirst);
     assertThat(missing()).as("the snapshot exists, so nothing is missing").isZero();
+  }
+
+  @Test
+  @DisplayName("before the close window opens, the sweep takes nothing and opens no run")
+  void beforeTheWindowNothingIsTaken() {
+    // The demo's defect: a sweep at 09:00 took the date's one snapshot of record before the
+    // day's payroll and NAV strike reached the book, and the month-end statement read that file.
+    oneParticipantHolding(100_00000000L);
+    window =
+        CloseWindow.openingAt(
+            LocalTime.of(17, 0), ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), date -> false);
+
+    runner().sweep();
+
+    assertThat(runs.all()).isEmpty();
+    assertThat(objects.keys()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("inside the close window, the sweep takes the snapshot")
+  void insideTheWindowTheSnapshotIsTaken() {
+    oneParticipantHolding(100_00000000L);
+    window =
+        CloseWindow.openingAt(
+            LocalTime.of(11, 0), ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), date -> false);
+
+    runner().sweep();
+
+    assertThat(objects.keys()).contains("snapshots/dt=2026-03-02/positions.ndjson.gz");
   }
 
   @Test
@@ -184,7 +215,7 @@ class SnapshotRunnerTest {
             PROPERTIES,
             CALENDAR,
             Clock.fixed(MIDDAY, ZONE));
-    return new SnapshotRunner(service, metrics);
+    return new SnapshotRunner(service, metrics, window);
   }
 
   private void oneParticipantHolding(long unitsScaled) {

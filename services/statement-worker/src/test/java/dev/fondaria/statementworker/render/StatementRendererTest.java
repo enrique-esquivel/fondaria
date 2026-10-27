@@ -8,6 +8,7 @@ import dev.fondaria.common.OrganizationId;
 import dev.fondaria.common.ParticipantId;
 import dev.fondaria.statementworker.ParticipantKey;
 import dev.fondaria.statementworker.schedule.StatementJob;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +24,7 @@ class StatementRendererTest {
   private final Map<ParticipantKey, ParticipantId> directory = new HashMap<>();
   private final Map<String, byte[]> written = new HashMap<>();
   private final Map<String, String> completions = new HashMap<>();
+  private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
   private final StatementRenderer renderer =
       new StatementRenderer(
@@ -31,7 +33,12 @@ class StatementRendererTest {
           (period, participantKey) -> {
             completions.put(period, participantKey);
             return OptionalLong.of(1);
-          });
+          },
+          new StatementMetrics(registry));
+
+  private double rendered() {
+    return registry.get("statement_rendered_total").counter().count();
+  }
 
   @Test
   @DisplayName("an unenrolled participant is treated as poison, not silently skipped")
@@ -41,6 +48,7 @@ class StatementRendererTest {
     assertThatThrownBy(() -> renderer.render(job))
         .isInstanceOf(ParticipantNotEnrolledException.class);
     assertThat(written).isEmpty();
+    assertThat(rendered()).isZero();
   }
 
   @Test
@@ -56,6 +64,7 @@ class StatementRendererTest {
     assertThat(written).containsKey(expectedKey);
     assertThat(written.get(expectedKey)).asString().contains(participantId.value().toString());
     assertThat(completions).containsEntry(job.period(), job.participantKey().asKey());
+    assertThat(rendered()).isEqualTo(1.0);
   }
 
   @Test

@@ -2,6 +2,7 @@ package dev.fondaria.eodjob.signoff;
 
 import dev.fondaria.eodjob.custodian.CustodianCloseBlockedException;
 import dev.fondaria.eodjob.reconciliation.CloseBlockedException;
+import dev.fondaria.eodjob.schedule.CloseWindow;
 import dev.fondaria.eodjob.snapshot.EodHashChainVerifier;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -28,6 +29,10 @@ import org.springframework.stereotype.Component;
  * scheduler from trying again; the close must recover by re-running once the cause is fixed, with
  * no redeploy.
  *
+ * <p><b>Before the {@link CloseWindow} opens</b> a sweep still verifies the hash chain and still
+ * re-announces any stranded sign-off — neither depends on today's book — but does not attempt
+ * today's sign-off, and records neither a pass nor a block.
+ *
  * <p>No transaction around the pass and no lock: two instances signing off the same date both write
  * through {@code ON CONFLICT (business_date) DO NOTHING}, and the second is a no-op.
  */
@@ -39,18 +44,28 @@ public class SignoffRunner {
   private final SignoffService signoff;
   private final SignoffMetrics metrics;
   private final EodHashChainVerifier hashChainVerifier;
+  private final CloseWindow window;
 
   public SignoffRunner(
-      SignoffService signoff, SignoffMetrics metrics, EodHashChainVerifier hashChainVerifier) {
+      SignoffService signoff,
+      SignoffMetrics metrics,
+      EodHashChainVerifier hashChainVerifier,
+      CloseWindow window) {
     this.signoff = Objects.requireNonNull(signoff, "signoff must not be null");
     this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
     this.hashChainVerifier =
         Objects.requireNonNull(hashChainVerifier, "hashChainVerifier must not be null");
+    this.window = Objects.requireNonNull(window, "window must not be null");
   }
 
   @Scheduled(fixedDelayString = "${fondaria.signoff.poll-interval}")
   public void sweep() {
     hashChainVerifier.verify();
+    if (!window.admitsSignoff()) {
+      reannounceOnly();
+      refreshAnnouncePendingGauge();
+      return;
+    }
     try {
       SignoffResult result = signoff.signOff();
       metrics.record(result);
@@ -67,6 +82,14 @@ public class SignoffRunner {
       LOGGER.error("the sign-off pass did not complete", e);
     }
     refreshAnnouncePendingGauge();
+  }
+
+  private void reannounceOnly() {
+    try {
+      signoff.reannouncePending();
+    } catch (RuntimeException e) {
+      LOGGER.warn("could not re-announce pending sign-offs: {}", e.getMessage());
+    }
   }
 
   /**
