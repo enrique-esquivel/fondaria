@@ -40,4 +40,10 @@ public interface SignoffRepository {
 
   /** The sign-off for a date, if it has one. */
   Optional<CloseSignoff> find(LocalDate businessDate);
+
+  /**
+   * The latest business date with a sign-off, if any — where {@code CloseWindow} starts counting
+   * the dates the close still has to work on.
+   */
+  Optional<LocalDate> latestSignedOffDate();
 }

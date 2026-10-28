@@ -397,8 +397,8 @@
     {
       "id": 15,
       "type": "stat",
-      "title": "Sign-off Blocked & Announce Pending",
-      "description": "eod_signoff_blocked: 1 while today's close is held by an upstream gate (its own panel says which). eod_signoff_announce_pending: sign-offs written but whose close.signed-off.v1 is not yet confirmed. With CLOSE_WINDOW_START set (the demo), neither moves before the window opens.",
+      "title": "Sign-off Blocked, Announce Pending & Dates Behind",
+      "description": "eod_signoff_blocked: 1 while the closing date is held by an upstream gate (its own panel says which). eod_close_dates_behind: business dates the close is behind today; above 0 means an earlier date missed its cut-off and is still being closed, with every later date waiting behind it. eod_signoff_announce_pending: sign-offs written but whose close.signed-off.v1 is not yet confirmed. With CLOSE_WINDOW_START set (the demo), neither moves before the window opens.",
       "gridPos": { "h": 6, "w": 6, "x": 6, "y": 38 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
@@ -413,6 +413,12 @@
           "expr": "max(eod_signoff_announce_pending)",
           "legendFormat": "announce pending",
           "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(eod_close_dates_behind)",
+          "legendFormat": "dates behind",
+          "refId": "C"
         }
       ]
     },

@@ -134,6 +134,11 @@ final class SignoffTestDoubles {
       return Optional.ofNullable(byDate.get(businessDate));
     }
 
+    @Override
+    public Optional<LocalDate> latestSignedOffDate() {
+      return byDate.keySet().stream().max(java.util.Comparator.naturalOrder());
+    }
+
     void put(CloseSignoff row) {
       byDate.put(row.businessDate(), row);
     }

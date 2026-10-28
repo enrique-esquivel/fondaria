@@ -61,14 +61,17 @@ class SignoffRunnerTest {
       new EodHashChainVerifier(snapshots, registry);
   private final SignoffRunner runner =
       new SignoffRunner(
-          service, metrics, hashChainVerifier, CloseWindow.always(ZONE, calendar, CLOCK));
+          service,
+          metrics,
+          hashChainVerifier,
+          CloseWindow.always(ZONE, calendar, CLOCK, signoffs::latestSignedOffDate));
 
   private SignoffRunner runnerWithWindowAt(LocalTime start) {
     return new SignoffRunner(
         service,
         metrics,
         hashChainVerifier,
-        CloseWindow.openingAt(start, ZONE, calendar, CLOCK, date -> false));
+        CloseWindow.openingAt(start, ZONE, calendar, CLOCK, signoffs::latestSignedOffDate));
   }
 
   private void allThreeGatesOpen() {
@@ -167,5 +170,97 @@ class SignoffRunnerTest {
     assertThat(signoffs.find(businessDate)).isPresent();
     assertThat(gauge("eod_signoff_blocked")).isEqualTo(0.0);
     assertThat(publisher.published()).hasSize(1);
+  }
+
+  // ---- a date still unsigned after its cut-off -----------------------------------------------
+
+  /** A sweep at {@code at}, with a 17:00 window, against the same doubles. */
+  private void sweepAt(Instant at) {
+    Clock clock = Clock.fixed(at, ZoneOffset.UTC);
+    SignoffService late =
+        new SignoffService(
+            signoffs,
+            new ReconciliationGate(internalRuns),
+            new CustodianReconciliationGate(custodianRuns),
+            new SnapshotGate(snapshots),
+            publisher,
+            calendar,
+            clock);
+    new SignoffRunner(
+            late,
+            metrics,
+            hashChainVerifier,
+            CloseWindow.openingAt(
+                LocalTime.of(17, 0), ZONE, calendar, clock, signoffs::latestSignedOffDate))
+        .sweep();
+  }
+
+  private void signedOff(LocalDate date) {
+    signoffs.put(
+        new CloseSignoff(
+            date,
+            AT.minusSeconds(3 * 86_400),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            1L,
+            "snapshots/dt=" + date + "/positions.ndjson.gz",
+            "snapshots/dt=" + date + "/manifest.json",
+            Optional.of(AT.minusSeconds(3 * 86_400))));
+  }
+
+  @Test
+  @DisplayName("a date whose gates open only after cut-off is signed off — not the next date")
+  void aDateThatTiesAfterCutoffIsSignedOff() {
+    // The 2026-10-27 load run: breaks at 17:58 only because the projection was still draining,
+    // tied at 18:03, and nothing ever signed it off.
+    LocalDate friday = LocalDate.of(2026, 8, 28);
+    signedOff(friday);
+    Instant justBeforeCutoff = Instant.parse("2026-08-31T23:58:00Z"); // Monday 17:58 CDMX
+    Instant justAfterCutoff = Instant.parse("2026-09-01T00:03:00Z"); // Monday 18:03 CDMX
+    internalRuns.with(SignoffTestDoubles.failedInternalRun(businessDate, justBeforeCutoff));
+    sweepAt(justBeforeCutoff);
+    assertThat(signoffs.find(businessDate)).isEmpty();
+
+    // The projection catches up after cut-off: reconciliation ties and the snapshot is taken.
+    allThreeGatesOpen();
+    assertThat(calendar.businessDateOf(justAfterCutoff))
+        .as("the clock now falls in the next business date")
+        .isEqualTo(LocalDate.of(2026, 9, 1));
+
+    sweepAt(justAfterCutoff);
+
+    assertThat(signoffs.find(businessDate))
+        .as("Monday is signed off after its cut-off")
+        .isPresent();
+    assertThat(signoffs.find(LocalDate.of(2026, 9, 1))).isEmpty();
+    CloseSignedOffEvent event = publisher.onlyPublished();
+    assertThat(event.businessDate()).isEqualTo(businessDate);
+    assertThat(event.lastBusinessDayOfMonth())
+        .as("a late month-end sign-off still opens the monthly statements")
+        .isTrue();
+    assertThat(gauge("eod_signoff_blocked")).isEqualTo(0.0);
+    assertThat(gauge("eod_close_dates_behind")).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "while a past date is blocked, the next date is not signed off even with its gates open")
+  void theNextDateWaitsBehindAnUnsignedOne() {
+    LocalDate friday = LocalDate.of(2026, 8, 28);
+    LocalDate tuesday = LocalDate.of(2026, 9, 1);
+    signedOff(friday);
+    Instant tuesdayClose = Instant.parse("2026-09-01T23:30:00Z"); // Tuesday 17:30 CDMX
+    internalRuns.with(SignoffTestDoubles.passedInternalRun(tuesday, tuesdayClose));
+    custodianRuns.with(SignoffTestDoubles.passedCustodianRun(tuesday, tuesdayClose));
+    snapshots.with(SignoffTestDoubles.completedSnapshot(tuesday, tuesdayClose));
+
+    sweepAt(tuesdayClose);
+
+    assertThat(signoffs.find(tuesday)).isEmpty();
+    assertThat(signoffs.find(businessDate)).isEmpty();
+    assertThat(publisher.published()).isEmpty();
+    assertThat(gauge("eod_signoff_blocked")).isEqualTo(1.0);
+    assertThat(gauge("eod_close_dates_behind")).isEqualTo(1.0);
   }
 }

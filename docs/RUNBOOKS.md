@@ -2020,6 +2020,11 @@ date's numbers be trusted enough to report from" — so they are worked the same
   (`for: 2h` in the rule) — "not signed off yet" is normal for the first two hours after
   the business-date cutoff (`CALENDAR_CUTOFF_TIME`, default `18:00` America/Mexico_City),
   while the close is still running, and is not what this page means.
+- `eod_close_dates_behind` says which date is blocked: `0` means today's close; `1` or
+  more means an earlier date was not signed off by its cut-off. The close is still working
+  on that date (`CloseWindow`, ADR-0018 amended), and every later date is waiting behind it.
+  `<business_date>` below is that date: the business date after
+  `SELECT max(business_date) FROM workflow.close_signoff`.
 - The service log carries:
   ```
   the daily close is not yet ready to sign off: <upstream gate's message>
@@ -2091,6 +2096,18 @@ on 250,000 participants' statements for the month this date belongs to.
   interval.
 - A row exists with `announced_at IS NULL` → not this incident; wait for the next sweep
   (`eod_signoff_announce_pending` is the metric to watch, not this alert).
+- `eod_close_dates_behind` ≥ 1 and the blocking gate is the **snapshot**, reporting that
+  the file does not tie to units in issue (`#snapshot-tie-out-failure`) → check whether
+  the next date's business has already posted units. The snapshot of a past date is built
+  as of that date but tied against the ledger's *current* units in issue (there is no
+  as-of read), so once the next date's first contribution or withdrawal lands, the past
+  date can never tie, and every later date stays unsigned behind it. That is by design: the
+  close halts rather than skipping a date. There is no supported way to sign the date off
+  after the fact. Escalate to platform engineering and the platform owner with the date,
+  the projection lag at cut-off and the time of the next date's first posting. A halt that
+  only clears once the projection catches up (reconciliation `PROJECTION_*` breaks, the
+  snapshot not yet attempted) needs nothing: the next sweep after it ties signs the date
+  off, even after cut-off.
 
 #### Escalation
 
@@ -2129,9 +2146,11 @@ comment on `V29__close_signoff.sql`) — so re-opening a date is a manual, delib
   ```sql
   DELETE FROM workflow.close_signoff WHERE business_date = '<business_date>';
   ```
-  **If `<business_date>` is today's business date, the `DELETE` alone does not hold** —
-  `SignoffService#signOff` targets `calendar.businessDateOf(clock.instant())` on *every*
-  sweep (default hourly), and if the three upstream runs still read `PASSED`/`COMPLETED`
+  **If `<business_date>` is the latest signed-off date (today's, or a past date with no
+  later sign-off yet), the `DELETE` alone does not hold** —
+  `SignoffRunner` works on the closing date — the business date after the latest
+  sign-off, capped at today — on *every* sweep (default hourly), so deleting the latest
+  row makes that date the closing date again (and holds every later date behind it), and if the three upstream runs still read `PASSED`/`COMPLETED`
   for that date, the very next sweep re-inserts the row with a fresh `signed_off_at` and
   re-publishes `close.signed-off.v1`, re-triggering the 7.5b statement fan-out — undoing
   the `DELETE` within one poll interval. **Close at least one upstream gate before
@@ -2142,9 +2161,9 @@ comment on `V29__close_signoff.sql`) — so re-opening a date is a manual, delib
   the same way on a re-run that finds the stored file no longer matches
   (``#snapshot-tie-out-failure``) — the general rule is: whichever gate's
   evidence turned out wrong, make sure a `FAILED` run exists for it *before* deleting
-  `close_signoff`, not only after. Only delete first, without doing this, for a **past**
-  business date — `SignoffRunner` never re-attempts a date other than today's, so there is
-  no sweep that would silently re-sign it off.
+  `close_signoff`, not only after. Only delete first, without doing this, for a date
+  with a **later sign-off** already recorded: the close never goes back behind the latest
+  sign-off (ADR-0018, amended), so no sweep will silently sign it off again.
 - **Statements already generated from the bad sign-off are not deleted or edited** —
   docs/DOMAIN.md's statements are immutable, content-hashed
   objects. A correction is a new, clearly marked corrected statement, following whatever

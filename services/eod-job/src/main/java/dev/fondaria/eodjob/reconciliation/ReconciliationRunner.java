@@ -1,7 +1,9 @@
 package dev.fondaria.eodjob.reconciliation;
 
 import dev.fondaria.eodjob.schedule.CloseWindow;
+import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,8 +26,9 @@ import org.springframework.stereotype.Component;
  * ever trying again. The close must be able to recover by re-running once the cause is fixed,
  * without a redeploy.
  *
- * <p>A sweep outside the {@link CloseWindow} does nothing at all — no run row, no metric. Unset,
- * the window is always open.
+ * <p>A sweep reconciles {@link CloseWindow}'s closing date — today, or the earliest date still
+ * unsigned after its cut-off. Outside the window it does nothing at all — no run row, no metric.
+ * Unset, the window is always open.
  */
 @Component
 public class ReconciliationRunner {
@@ -45,11 +48,12 @@ public class ReconciliationRunner {
 
   @Scheduled(fixedDelayString = "${fondaria.reconciliation.poll-interval}")
   public void sweep() {
-    if (!window.admitsControls()) {
+    Optional<LocalDate> businessDate = window.dateForControls();
+    if (businessDate.isEmpty()) {
       return;
     }
     try {
-      ReconciliationResult result = reconciliation.reconcile();
+      ReconciliationResult result = reconciliation.reconcile(businessDate.get());
       metrics.record(result);
       if (!result.passed()) {
         LOGGER.error(

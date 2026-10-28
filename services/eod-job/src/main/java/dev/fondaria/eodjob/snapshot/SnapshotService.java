@@ -1,6 +1,5 @@
 package dev.fondaria.eodjob.snapshot;
 
-import dev.fondaria.common.BusinessCalendar;
 import dev.fondaria.common.CurrencyCode;
 import dev.fondaria.common.FundId;
 import dev.fondaria.common.Money;
@@ -97,7 +96,6 @@ public class SnapshotService {
   private final ReconciliationGate internalGate;
   private final CustodianReconciliationGate custodianGate;
   private final SnapshotProperties properties;
-  private final BusinessCalendar calendar;
   private final Clock clock;
 
   public SnapshotService(
@@ -110,7 +108,6 @@ public class SnapshotService {
       ReconciliationGate internalGate,
       CustodianReconciliationGate custodianGate,
       SnapshotProperties properties,
-      BusinessCalendar calendar,
       Clock clock) {
     this.ledger = Objects.requireNonNull(ledger, "ledger must not be null");
     this.accountIds = Objects.requireNonNull(accountIds, "accountIds must not be null");
@@ -121,19 +118,15 @@ public class SnapshotService {
     this.internalGate = Objects.requireNonNull(internalGate, "internalGate must not be null");
     this.custodianGate = Objects.requireNonNull(custodianGate, "custodianGate must not be null");
     this.properties = Objects.requireNonNull(properties, "properties must not be null");
-    this.calendar = Objects.requireNonNull(calendar, "calendar must not be null");
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
   }
 
-  /** Takes the snapshot for the business date the clock currently falls in. */
-  public SnapshotResult snapshot() {
-    Instant startedAt = clock.instant();
-    return snapshotFor(calendar.businessDateOf(startedAt), startedAt);
-  }
-
-  /** The business date the clock currently falls in. */
-  public LocalDate businessDateNow() {
-    return calendar.businessDateOf(clock.instant());
+  /**
+   * Takes the snapshot for one business date now — {@code CloseWindow}'s closing date, a past date
+   * while that date is still unsigned after its cut-off.
+   */
+  public SnapshotResult snapshot(LocalDate businessDate) {
+    return snapshotFor(businessDate, clock.instant());
   }
 
   /** Whether a date already has its snapshot of record. */

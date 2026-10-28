@@ -34,10 +34,10 @@ public class CloseWindowConfiguration {
     Optional<LocalTime> start = properties.requireStart(calendarProperties.requireCutoffTime());
     if (start.isEmpty()) {
       LOGGER.info("Close window: none (CLOSE_WINDOW_START is unset) -- every sweep runs");
-      return CloseWindow.always(zone, calendar, clock);
+      return CloseWindow.always(zone, calendar, clock, signoffGate::latestSignedOff);
     }
     LOGGER.info(
         "Close window: opens at {} {} on each business date, until cut-off", start.get(), zone);
-    return CloseWindow.openingAt(start.get(), zone, calendar, clock, signoffGate::isSignedOff);
+    return CloseWindow.openingAt(start.get(), zone, calendar, clock, signoffGate::latestSignedOff);
   }
 }

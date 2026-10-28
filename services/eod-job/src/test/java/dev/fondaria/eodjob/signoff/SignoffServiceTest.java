@@ -212,7 +212,8 @@ class SignoffServiceTest {
             "snapshots/dt=2026-07-31/manifest.json",
             Optional.empty()));
 
-    assertThatThrownBy(service::signOff).isInstanceOf(CloseBlockedException.class);
+    assertThatThrownBy(() -> service.signOff(LocalDate.of(2026, 9, 1)))
+        .isInstanceOf(CloseBlockedException.class);
 
     assertThat(publisher.published()).hasSize(1);
     assertThat(publisher.published().get(0).businessDate()).isEqualTo(LocalDate.of(2026, 7, 31));

@@ -669,7 +669,6 @@ class SnapshotServiceTest {
           new CustodianReconciliationGate(
               InMemorySnapshotSources.Gates.custodian(gatedDate, custodianStatus)),
           PROPERTIES,
-          CALENDAR,
           clock);
     }
 

@@ -1,7 +1,9 @@
 package dev.fondaria.eodjob.custodian;
 
 import dev.fondaria.eodjob.schedule.CloseWindow;
+import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,7 +14,8 @@ import org.springframework.stereotype.Component;
  * around the pass (nothing another instance could conflict over — two concurrent passes write two
  * runs, and {@link CustodianReconciliationRepository#latestFor} reads whichever settled last), and
  * the exception is swallowed and logged rather than allowed to stop the scheduler from trying again
- * on the next tick. Outside the {@link CloseWindow} a sweep does nothing.
+ * on the next tick. It reconciles {@link CloseWindow}'s closing date — today, or the earliest date
+ * still unsigned after its cut-off — and outside the window a sweep does nothing.
  */
 @Component
 public class CustodianReconciliationRunner {
@@ -34,11 +37,12 @@ public class CustodianReconciliationRunner {
 
   @Scheduled(fixedDelayString = "${fondaria.custodian-reconciliation.poll-interval}")
   public void sweep() {
-    if (!window.admitsControls()) {
+    Optional<LocalDate> businessDate = window.dateForControls();
+    if (businessDate.isEmpty()) {
       return;
     }
     try {
-      CustodianReconciliationResult result = reconciliation.reconcile();
+      CustodianReconciliationResult result = reconciliation.reconcile(businessDate.get());
       metrics.record(result);
       if (!result.passed()) {
         LOGGER.error(

@@ -2,6 +2,7 @@ package dev.fondaria.eodjob.signoff;
 
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,6 +36,11 @@ public class SignoffGate {
   /** Whether this date's close has been signed off. */
   public boolean isSignedOff(LocalDate businessDate) {
     return signoffs.find(businessDate).isPresent();
+  }
+
+  /** The latest business date that has been signed off, if any. */
+  public Optional<LocalDate> latestSignedOff() {
+    return signoffs.latestSignedOffDate();
   }
 
   /**

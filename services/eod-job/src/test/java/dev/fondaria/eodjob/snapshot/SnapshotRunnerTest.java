@@ -15,15 +15,21 @@ import dev.fondaria.ledger.AccountIdDeriver;
 import dev.fondaria.ledger.LedgerCodes;
 import dev.fondaria.ledger.TenantRefDeriver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.GZIPInputStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -69,7 +75,8 @@ class SnapshotRunnerTest {
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final SnapshotMetrics metrics = new SnapshotMetrics(registry);
 
-  private CloseWindow window = CloseWindow.always(ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE));
+  private CloseWindow window =
+      CloseWindow.always(ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), Optional::empty);
   private RunStatus internalStatus = RunStatus.PASSED;
   private RunStatus custodianStatus = RunStatus.PASSED;
 
@@ -118,7 +125,7 @@ class SnapshotRunnerTest {
     oneParticipantHolding(100_00000000L);
     window =
         CloseWindow.openingAt(
-            LocalTime.of(17, 0), ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), date -> false);
+            LocalTime.of(17, 0), ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), Optional::empty);
 
     runner().sweep();
 
@@ -132,7 +139,7 @@ class SnapshotRunnerTest {
     oneParticipantHolding(100_00000000L);
     window =
         CloseWindow.openingAt(
-            LocalTime.of(11, 0), ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), date -> false);
+            LocalTime.of(11, 0), ZONE, CALENDAR, Clock.fixed(MIDDAY, ZONE), Optional::empty);
 
     runner().sweep();
 
@@ -191,13 +198,94 @@ class SnapshotRunnerTest {
     assertThat(runs.all().get(0).status()).isEqualTo(SnapshotStatus.FAILED);
   }
 
+  // ---- a date still unsigned after its cut-off -----------------------------------------------
+
+  @Test
+  @DisplayName(
+      "a date unsigned at cut-off is snapshotted after 18:00, chained to the previous date's"
+          + " manifest, on a falling NAV")
+  void aDateUnsignedAtCutoffIsSnapshottedLate() {
+    LocalDate friday = LocalDate.of(2026, 2, 27);
+    HoldingKey key = new HoldingKey(organizationId, "P-001", fundId);
+    holdings.with(key);
+    unitsFor("P-001", 100_00000000L, friday);
+    lots.with(
+        key, 100_00000000L, 1_00000000L, friday.atTime(LocalTime.NOON).atZone(ZONE).toInstant());
+    navs.with(fundId, 1L, 1_00000000L, friday);
+    unitsInIssue(100_00000000L);
+    Clock fridayClose = Clock.fixed(friday.atTime(17, 30).atZone(ZONE).toInstant(), ZONE);
+    window =
+        CloseWindow.openingAt(LocalTime.of(17, 0), ZONE, CALENDAR, fridayClose, Optional::empty);
+    runner(friday, fridayClose).sweep();
+    SnapshotRun fridayRun = runs.all().get(0);
+
+    // Friday signed off. Monday's NAV falls to 0.92, and Monday's reconciliation only ties at
+    // 18:03.
+    navs.with(fundId, 2L, 92_000000L, TODAY);
+    Clock afterCutoff = Clock.fixed(TODAY.atTime(18, 3).atZone(ZONE).toInstant(), ZONE);
+    window =
+        CloseWindow.openingAt(
+            LocalTime.of(17, 0), ZONE, CALENDAR, afterCutoff, () -> Optional.of(friday));
+
+    runner(TODAY, afterCutoff).sweep();
+
+    assertThat(objects.keys())
+        .contains("snapshots/dt=2026-03-02/positions.ndjson.gz")
+        .noneMatch(objectKey -> objectKey.contains("dt=2026-03-03"));
+    SnapshotRun mondayRun = runs.all().get(runs.all().size() - 1);
+    assertThat(mondayRun.businessDate()).isEqualTo(TODAY);
+    assertThat(mondayRun.status()).isEqualTo(SnapshotStatus.COMPLETED);
+    assertThat(mondayRun.previousManifestSha256())
+        .as("Monday links to Friday's manifest, so the chain stays linear")
+        .isEqualTo(fridayRun.manifestSha256());
+    String line = linesOf("snapshots/dt=2026-03-02/positions.ndjson.gz").get(0);
+    assertThat(line).contains("\"valueMinorUnits\":9200");
+    assertThat(line)
+        .as("the loss is signed and unclamped")
+        .contains("\"unrealisedGainMinorUnits\":-800");
+    assertThat(missing()).isZero();
+  }
+
+  @Test
+  @DisplayName("the next date's snapshot is not taken while an earlier date is unsigned")
+  void theNextDateWaitsBehindAnUnsignedOne() {
+    LocalDate friday = LocalDate.of(2026, 2, 27);
+    LocalDate tuesday = TODAY.plusDays(1);
+    oneParticipantHolding(100_00000000L);
+    Clock tuesdayClose = Clock.fixed(tuesday.atTime(17, 30).atZone(ZONE).toInstant(), ZONE);
+    window =
+        CloseWindow.openingAt(
+            LocalTime.of(17, 0), ZONE, CALENDAR, tuesdayClose, () -> Optional.of(friday));
+
+    // Tuesday's gates are open; Monday's never were.
+    runner(tuesday, tuesdayClose).sweep();
+
+    assertThat(runs.all()).isEmpty();
+    assertThat(objects.keys()).isEmpty();
+    assertThat(missing()).isEqualTo(1.0);
+  }
+
   // ---- fixture -------------------------------------------------------------------------------
+
+  private List<String> linesOf(String objectKey) {
+    try (GZIPInputStream in =
+        new GZIPInputStream(new ByteArrayInputStream(objects.stored().get(objectKey)))) {
+      return List.of(new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n"));
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
 
   private double missing() {
     return registry.get("eod_snapshot_missing").gauge().value();
   }
 
   private SnapshotRunner runner() {
+    return runner(TODAY, Clock.fixed(MIDDAY, ZONE));
+  }
+
+  /** A runner whose reconciliation gates have passed for {@code gatedDate} only. */
+  private SnapshotRunner runner(LocalDate gatedDate, Clock clock) {
     PositionFileBuilder builder =
         new PositionFileBuilder(
             accountIds, tenantRefs, holdings, unitRows, lots, navs, PROPERTIES, CALENDAR);
@@ -209,12 +297,12 @@ class SnapshotRunnerTest {
             builder,
             objects,
             runs,
-            new ReconciliationGate(InMemorySnapshotSources.Gates.internal(TODAY, internalStatus)),
+            new ReconciliationGate(
+                InMemorySnapshotSources.Gates.internal(gatedDate, internalStatus)),
             new CustodianReconciliationGate(
-                InMemorySnapshotSources.Gates.custodian(TODAY, custodianStatus)),
+                InMemorySnapshotSources.Gates.custodian(gatedDate, custodianStatus)),
             PROPERTIES,
-            CALENDAR,
-            Clock.fixed(MIDDAY, ZONE));
+            clock);
     return new SnapshotRunner(service, metrics, window);
   }
 
@@ -228,13 +316,17 @@ class SnapshotRunnerTest {
   }
 
   private void unitsFor(String participantRef, long unitsScaled) {
+    unitsFor(participantRef, unitsScaled, TODAY);
+  }
+
+  private void unitsFor(String participantRef, long unitsScaled, LocalDate effectiveDate) {
     HoldingKey key = new HoldingKey(organizationId, participantRef, fundId);
     unitRows.with(
         tenantRefs.derive(organizationId).asUnsignedDecimal(),
         accountIds
             .derive(LedgerCodes.AccountCode.PARTICIPANT_HOLDINGS_VESTED, key.scope())
             .asUnsignedDecimal(),
-        TODAY,
+        effectiveDate,
         unitsScaled);
   }
 
