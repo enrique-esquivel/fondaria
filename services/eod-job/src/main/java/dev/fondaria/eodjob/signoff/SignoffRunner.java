@@ -4,7 +4,9 @@ import dev.fondaria.eodjob.custodian.CustodianCloseBlockedException;
 import dev.fondaria.eodjob.reconciliation.CloseBlockedException;
 import dev.fondaria.eodjob.schedule.CloseWindow;
 import dev.fondaria.eodjob.snapshot.EodHashChainVerifier;
+import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,11 +15,12 @@ import org.springframework.stereotype.Component;
 /**
  * The scheduled sign-off pass — the last step of the daily close.
  *
- * <p>Its job each tick is <b>"re-announce any stranded sign-off, then ensure the current business
- * date is signed off"</b>. {@link SignoffService#signOff()} re-publishes {@code
- * close.signed-off.v1} for every row whose event is not yet confirmed before it touches today, so a
- * broker outage that outlasts the cut-off recovers on the next healthy sweep rather than leaving
- * yesterday's event unpublished for good.
+ * <p>Its job each tick is <b>"re-announce any stranded sign-off, then ensure the closing date is
+ * signed off"</b> — {@link CloseWindow}'s closing date, which is today unless an earlier date is
+ * still unsigned after its cut-off; then that date, until it signs off. {@link
+ * SignoffService#signOff()} re-publishes {@code close.signed-off.v1} for every row whose event is
+ * not yet confirmed before it touches today, so a broker outage that outlasts the cut-off recovers
+ * on the next healthy sweep rather than leaving yesterday's event unpublished for good.
  *
  * <p><b>A blocked gate is logged at {@code warn}, not {@code error}</b>, exactly as {@code
  * SnapshotRunner} logs one: it means an <i>upstream</i> control is holding the close — internal
@@ -31,7 +34,10 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>Before the {@link CloseWindow} opens</b> a sweep still verifies the hash chain and still
  * re-announces any stranded sign-off — neither depends on today's book — but does not attempt
- * today's sign-off, and records neither a pass nor a block.
+ * today's sign-off, and records neither a pass nor a block. A past closing date is always
+ * attempted.
+ *
+ * <p>Every sweep sets {@code eod_close_dates_behind}, window or not.
  *
  * <p>No transaction around the pass and no lock: two instances signing off the same date both write
  * through {@code ON CONFLICT (business_date) DO NOTHING}, and the second is a no-op.
@@ -61,13 +67,15 @@ public class SignoffRunner {
   @Scheduled(fixedDelayString = "${fondaria.signoff.poll-interval}")
   public void sweep() {
     hashChainVerifier.verify();
-    if (!window.admitsSignoff()) {
+    Optional<LocalDate> businessDate = window.dateForSignoff();
+    if (businessDate.isEmpty()) {
       reannounceOnly();
       refreshAnnouncePendingGauge();
+      refreshDatesBehindGauge();
       return;
     }
     try {
-      SignoffResult result = signoff.signOff();
+      SignoffResult result = signoff.signOff(businessDate.get());
       metrics.record(result);
       if (!result.announced()) {
         LOGGER.warn(
@@ -82,6 +90,15 @@ public class SignoffRunner {
       LOGGER.error("the sign-off pass did not complete", e);
     }
     refreshAnnouncePendingGauge();
+    refreshDatesBehindGauge();
+  }
+
+  private void refreshDatesBehindGauge() {
+    try {
+      metrics.setDatesBehind(window.businessDatesBehind());
+    } catch (RuntimeException e) {
+      LOGGER.warn("could not read how far behind the close is: {}", e.getMessage());
+    }
   }
 
   private void reannounceOnly() {

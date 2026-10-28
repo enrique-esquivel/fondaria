@@ -77,18 +77,19 @@ public class SignoffService {
   }
 
   /**
-   * One sweep: re-announce every sign-off whose event is still pending, then sign off the business
-   * date the clock currently falls in.
+   * One sweep: re-announce every sign-off whose event is still pending, then sign off {@code
+   * businessDate} — {@code CloseWindow}'s closing date, which is a past date while that date is
+   * still unsigned after its cut-off.
    *
    * @throws dev.fondaria.eodjob.reconciliation.CloseBlockedException internal reconciliation has
    *     not passed for today
    * @throws dev.fondaria.eodjob.custodian.CustodianCloseBlockedException custodian reconciliation
-   *     has not passed for today
-   * @throws SnapshotNotTakenException no dense snapshot of record exists for today
+   *     has not passed for the date
+   * @throws SnapshotNotTakenException no dense snapshot of record exists for the date
    */
-  public SignoffResult signOff() {
+  public SignoffResult signOff(LocalDate businessDate) {
     reannouncePending();
-    return signOffFor(calendar.businessDateOf(clock.instant()));
+    return signOffFor(businessDate);
   }
 
   /**

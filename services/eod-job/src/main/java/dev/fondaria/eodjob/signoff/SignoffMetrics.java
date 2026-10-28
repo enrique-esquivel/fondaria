@@ -22,6 +22,10 @@ import org.springframework.stereotype.Component;
  *       stranded by an overnight broker outage keeps this above zero until a later sweep publishes
  *       it. Non-zero for more than a sweep or two means Redpanda is unreachable and the statement
  *       chain is not advancing.
+ *   <li>{@code eod_close_dates_behind} — how many business dates the close is behind today: {@code
+ *       0} while it works on today, {@code 1} while yesterday is still unsigned after its cut-off.
+ *       The close does not skip a date ({@code CloseWindow}), so above zero for long means a past
+ *       date cannot tie and every later date is waiting behind it.
  *   <li>{@code eod_signoff_total} — dates signed off, ever. Its rate is one per business day on a
  *       healthy platform.
  * </ul>
@@ -31,6 +35,7 @@ public class SignoffMetrics {
 
   private final AtomicLong blocked = new AtomicLong(1L);
   private final AtomicLong announcePending = new AtomicLong(0L);
+  private final AtomicLong datesBehind = new AtomicLong(0L);
   private final Counter signedOff;
 
   public SignoffMetrics(MeterRegistry registry) {
@@ -38,6 +43,7 @@ public class SignoffMetrics {
     // Starts at 1: before the first successful sweep, no close is signed off, and the gate agrees.
     registry.gauge("eod_signoff_blocked", blocked, AtomicLong::doubleValue);
     registry.gauge("eod_signoff_announce_pending", announcePending, AtomicLong::doubleValue);
+    registry.gauge("eod_close_dates_behind", datesBehind, AtomicLong::doubleValue);
     this.signedOff =
         Counter.builder("eod_signoff_total")
             .description("Business dates whose daily close was signed off")
@@ -55,6 +61,11 @@ public class SignoffMetrics {
   /** Records a sweep blocked by an upstream gate, or one that could not complete. */
   public void recordBlocked() {
     blocked.set(1L);
+  }
+
+  /** Sets how many business dates the close is behind today. */
+  public void setDatesBehind(long count) {
+    datesBehind.set(count);
   }
 
   /**

@@ -89,10 +89,19 @@ public class CustodianReconciliationService {
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
   }
 
-  /** Runs one pass and records it, opened {@code RUNNING} before any comparison. */
+  /** Runs one pass for the business date the clock currently falls in. */
   public CustodianReconciliationResult reconcile() {
+    return reconcile(calendar.businessDateOf(clock.instant()));
+  }
+
+  /**
+   * Runs one pass for {@code businessDate} — {@code CloseWindow}'s closing date, a past date while
+   * that date is still unsigned after its cut-off — and records it, opened {@code RUNNING} before
+   * any comparison.
+   */
+  public CustodianReconciliationResult reconcile(LocalDate businessDate) {
+    Objects.requireNonNull(businessDate, "businessDate must not be null");
     Instant startedAt = clock.instant();
-    LocalDate businessDate = calendar.businessDateOf(startedAt);
     UUID runId = UUID.randomUUID();
     runs.open(runId, businessDate, startedAt);
     try {

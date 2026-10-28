@@ -127,16 +127,26 @@ public class ReconciliationService {
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
   }
 
+  /** Runs one pass for the business date the clock currently falls in, and records it. */
+  public ReconciliationResult reconcile() {
+    return reconcile(calendar.businessDateOf(clock.instant()));
+  }
+
   /**
-   * Runs one pass and records it.
+   * Runs one pass for {@code businessDate} and records it.
+   *
+   * <p>The scheduled close passes {@code CloseWindow}'s closing date, which is a past date while
+   * that date is still unsigned after its cut-off. The book is still read live (see "Live against
+   * live"), so a run labelled with a past date proves the book as it stands now — which still
+   * contains everything that date posted, and nothing more while the next date has not started.
    *
    * <p>The run row is opened {@code RUNNING} <b>before</b> any comparison, so a process that dies
    * mid-pass leaves a row that is visibly not a pass rather than no row at all — the gate cannot
    * tell "never ran" from "crashed", and treats both as blocked, but an operator can.
    */
-  public ReconciliationResult reconcile() {
+  public ReconciliationResult reconcile(LocalDate businessDate) {
+    Objects.requireNonNull(businessDate, "businessDate must not be null");
     Instant startedAt = clock.instant();
-    LocalDate businessDate = calendar.businessDateOf(startedAt);
     UUID runId = UUID.randomUUID();
     runs.open(runId, businessDate, startedAt);
     try {

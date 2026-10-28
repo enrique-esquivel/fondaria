@@ -89,6 +89,17 @@ class JdbcSignoffRepositoryIntegrationTest extends ServiceIntegrationTest {
   }
 
   @Test
+  @DisplayName("the latest signed-off date is at least the one this test signed off")
+  void latestSignedOffDateIsTheMaximum() {
+    // The fixture is shared, so other tests' later dates may outrank this one; only the lower
+    // bound is this test's to assert (docs/ENGINEERING-RULES.md §4).
+    repository.insertIfAbsent(signoffFor(businessDate));
+
+    assertThat(repository.latestSignedOffDate())
+        .hasValueSatisfying(latest -> assertThat(latest).isAfterOrEqualTo(businessDate));
+  }
+
+  @Test
   @DisplayName("a second insert for the same date is a no-op, not an error")
   void insertIsIdempotentOnBusinessDate() {
     UUID snapshot = runs.completedSnapshotRun(businessDate, at, 4242L);

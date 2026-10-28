@@ -5,6 +5,7 @@ import dev.fondaria.eodjob.reconciliation.CloseBlockedException;
 import dev.fondaria.eodjob.schedule.CloseWindow;
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -46,11 +47,10 @@ import org.springframework.stereotype.Component;
  * read. With a window configured, that is what stops the sweep from taking a date's snapshot of
  * record before the day's business has reached the book.
  *
- * <p><b>Known limitation, recorded rather than built</b> (`ADR-0020`): the sweep only ever
- * considers <i>today's</i> business date. A date that never got a snapshot — an object-store outage
- * outlasting the cut-off — is never retried, and once a later date succeeds {@code
- * eod_snapshot_missing} reads zero while the hole remains. Catching up past dates, and alerting on
- * a gap in the manifest chain, belong with Task 7.6's runbooks and Phase 11's alert rules.
+ * <p><b>The date is {@link CloseWindow}'s closing date</b>, not the date the clock falls in: a date
+ * still unsigned after its cut-off — an object-store outage, or a projection still draining — keeps
+ * being retried, and the next date's snapshot is not taken until it is signed off. That is what
+ * keeps each manifest linked to the previous business date's (`ADR-0020`).
  */
 @Component
 public class SnapshotRunner {
@@ -69,16 +69,17 @@ public class SnapshotRunner {
 
   @Scheduled(fixedDelayString = "${fondaria.snapshot.poll-interval}")
   public void sweep() {
-    if (!window.admitsControls()) {
+    Optional<LocalDate> closing = window.dateForControls();
+    if (closing.isEmpty()) {
       return;
     }
     try {
-      LocalDate businessDate = snapshots.businessDateNow();
+      LocalDate businessDate = closing.get();
       if (snapshots.isTaken(businessDate)) {
         metrics.recordAlreadyTaken();
         return;
       }
-      metrics.record(snapshots.snapshot());
+      metrics.record(snapshots.snapshot(businessDate));
     } catch (CloseBlockedException | CustodianCloseBlockedException e) {
       metrics.recordFailure();
       LOGGER.warn("the daily snapshot did not run: {}", e.getMessage());

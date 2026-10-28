@@ -222,6 +222,7 @@ class MetricNamesAreRealIntegrationTest {
       registry.gauge("eod.custodian.reconciliation.blocked", 0);
       registry.gauge("eod.signoff.blocked", 0);
       registry.gauge("eod.signoff.announce.pending", 0);
+      registry.gauge("eod.close.dates.behind", 0);
       registry.gauge("projection.halted", 0);
       registry.gauge("ledger.head.timestamp", 1000000000L);
       registry.gauge("last.timestamp", Tags.of("group", "projection-worker"), 1000000000L);

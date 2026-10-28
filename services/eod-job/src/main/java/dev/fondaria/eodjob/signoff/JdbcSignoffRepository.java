@@ -93,6 +93,13 @@ public class JdbcSignoffRepository implements SignoffRepository {
         .optional();
   }
 
+  @Override
+  public Optional<LocalDate> latestSignedOffDate() {
+    return jdbc.sql("SELECT max(business_date) FROM workflow.close_signoff")
+        .query((rs, rowNum) -> Optional.ofNullable(rs.getObject(1, LocalDate.class)))
+        .single();
+  }
+
   private static CloseSignoff map(ResultSet rs, int rowNum) throws SQLException {
     Timestamp announcedAt = rs.getTimestamp("announced_at");
     return new CloseSignoff(
