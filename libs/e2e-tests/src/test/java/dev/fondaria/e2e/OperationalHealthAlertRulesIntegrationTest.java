@@ -76,6 +76,11 @@ class OperationalHealthAlertRulesIntegrationTest {
             .withCopyToContainer(
                 Transferable.of("scrape_config_files:\n  - /etc/prometheus/scrape-k8s/*.yml\n"),
                 CONTAINER_RULES_DIR + "/k8s-scrape.yml")
+            // cadvisor.yml authenticates with the pod's service-account token, and promtool
+            // refuses a config whose credentials file does not exist.
+            .withCopyToContainer(
+                Transferable.of("placeholder"),
+                "/var/run/secrets/kubernetes.io/serviceaccount/token")
             .withCreateContainerCmdModifier(
                 cmd -> cmd.withEntrypoint("promtool").withCmd(promtoolArgs))
             .withStartupCheckStrategy(
