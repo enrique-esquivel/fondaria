@@ -353,6 +353,43 @@ class BridgeIntegrationTest {
             () -> assertThat(queueDepth(QUEUE)).as("poison message acknowledged").isZero());
   }
 
+  // -------------------------------------------------------------------------------------------
+  // Batching: a poison message inside a burst is dead-lettered without holding back its batch
+  // -------------------------------------------------------------------------------------------
+
+  @Test
+  void aPoisonMessageInsideABatchIsDeadLetteredAndItsNeighboursStillGo() throws Exception {
+    purgeQueue(QUEUE);
+    String marker = "poison-" + freshId();
+    List<String> transferIds = new ArrayList<>();
+    // Queued before the bridge starts, so the first consumer's first batch holds all of them.
+    for (int i = 0; i < 20; i++) {
+      String transferId = freshId();
+      transferIds.add(transferId);
+      publishChangeEvent(changeEvent(transferId, freshId(), freshId(), "1", 484));
+      if (i == 9) {
+        publishRaw(("{\"marker\":\"" + marker + "\"}").getBytes(StandardCharsets.UTF_8));
+      }
+    }
+
+    try (Harvest harvest = new Harvest("batch")) {
+      harvest.bindTransfers();
+      harvest.bindDlq();
+      bridge = startBridge(Map.of("BRIDGE_AMQP_CONCURRENCY", "1"));
+      await()
+          .atMost(Duration.ofSeconds(30))
+          .untilAsserted(
+              () -> {
+                assertThat(harvest.transferKeys()).containsAll(transferIds);
+                assertThat(harvest.dlq()).filteredOn(b -> b.contains(marker)).hasSize(1);
+              });
+    }
+    await()
+        .atMost(Duration.ofSeconds(10))
+        .untilAsserted(
+            () -> assertThat(queueDepth(QUEUE)).as("the whole batch acknowledged").isZero());
+  }
+
   // =========================================================================================
   // bridge context
   // =========================================================================================
