@@ -85,13 +85,13 @@ public final class StatementsCommand {
       json = kubectl.readObject(bucket + "/" + key, env("OBJECT_STORE_REGION", "us-east-1"));
     } catch (DemoToolsException e) {
       throw new DemoToolsException(
-          "the hero participant "
+          "could not read the hero participant "
               + hero.participantId()
-              + " has no statement at s3://"
+              + "'s statement at s3://"
               + bucket
               + "/"
               + key
-              + " -- a participant with no open position at month end gets none ("
+              + " -- one with no open position at month end has none ("
               + e.getMessage()
               + ")");
     }

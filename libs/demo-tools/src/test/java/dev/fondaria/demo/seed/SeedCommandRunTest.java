@@ -316,8 +316,13 @@ class SeedCommandRunTest {
         allotted.add(organizationId);
         allottedAtSettle.add(organizationId);
       }
+      // As the contract has it: dealingDate is present if and only if the batch awaits allotment.
       Map<String, Object> response = new LinkedHashMap<>(batch);
+      if (struck) {
+        response.remove("dealingDate");
+      }
       response.put("status", struck ? "ALLOTTED" : "STAGED");
+      response.put("awaitingAllotment", !struck);
       return response;
     }
 

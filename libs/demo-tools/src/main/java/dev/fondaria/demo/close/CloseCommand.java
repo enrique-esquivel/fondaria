@@ -129,11 +129,23 @@ public final class CloseCommand {
     Instant deadline = Instant.now().plus(timeout);
     Optional<CloseProgress> last = Optional.empty();
     while (true) {
-      CloseProgress progress =
-          CloseProgress.fromRow(
-              PsqlRows.single(
-                      kubectl.query(credential, CloseProgress.QUERY.formatted(businessDate)))
-                  .orElseThrow());
+      CloseProgress progress;
+      try {
+        progress =
+            CloseProgress.fromRow(
+                PsqlRows.single(
+                        kubectl.query(credential, CloseProgress.QUERY.formatted(businessDate)))
+                    .orElseThrow());
+      } catch (DemoToolsException e) {
+        // One status read that failed -- a slow kubectl exec, Postgres restarting under load --
+        // says nothing about the close itself: keep waiting until the deadline, and fail on it.
+        if (Instant.now().isAfter(deadline)) {
+          throw e;
+        }
+        System.out.println("  status read failed, retrying: " + lastLine(e.getMessage()));
+        DemoClock.sleep(POLL_INTERVAL);
+        continue;
+      }
       if (last.isEmpty() || !last.get().equals(progress)) {
         System.out.println("  " + progress.describe());
         last = Optional.of(progress);
@@ -163,6 +175,12 @@ public final class CloseCommand {
       }
       DemoClock.sleep(POLL_INTERVAL);
     }
+  }
+
+  /** The cause at the end of a kubectl failure, without the command and SQL echoed before it. */
+  static String lastLine(String message) {
+    String trimmed = message == null ? "" : message.strip();
+    return trimmed.substring(trimmed.lastIndexOf('\n') + 1).strip();
   }
 
   private static String env(String variable, String defaultValue) {

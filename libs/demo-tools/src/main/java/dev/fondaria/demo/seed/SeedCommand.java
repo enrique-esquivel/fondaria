@@ -206,7 +206,13 @@ public final class SeedCommand {
             batch
                 .dealingDate()
                 .orElseThrow(
-                    () -> new DemoToolsException("a settled seed batch has no dealing date"));
+                    () ->
+                        new DemoToolsException(
+                            "organization "
+                                + seeded.organization().organizationId()
+                                + "'s seed batch settled "
+                                + seeded.status()
+                                + " with no dealing date to record its cash against"));
         flows.add(fund.fundId(), dealingDate, batch.declaredTotalCents());
         flows.writeTo(paths.fundFlows());
       }
@@ -393,7 +399,9 @@ public final class SeedCommand {
     Optional<LocalDate> dealingDate =
         "REJECTED".equals(status)
             ? Optional.empty()
-            : Optional.ofNullable((String) settled.get("dealingDate")).map(LocalDate::parse);
+            : Optional.ofNullable((String) settled.get("dealingDate"))
+                .map(LocalDate::parse)
+                .or(() -> allottedDealingDate(status, valueDate, fund));
 
     List<HeroParticipant> heroes = new ArrayList<>();
     if (!"REJECTED".equals(status)) {
@@ -418,6 +426,22 @@ public final class SeedCommand {
             heroes,
             Optional.of(new SeedBatch(batchId, dealingDate, file.declaredTotalCents())));
     return new OrganizationAndBatch(record, status, settled.get("rejection"));
+  }
+
+  /**
+   * The dealing date of a batch that had already allotted by the time it was first seen settled --
+   * the opening NAV is struck before any organization, so a small batch dealing that day can pass
+   * through {@code STAGED} between two polls. The platform reports {@code dealingDate} only while a
+   * batch is awaiting allotment, so it has to be inferred here: a dealing date is never earlier
+   * than the value date (`DealingDateRule`), and on launch day the only NAV struck on or after it
+   * is the fund's opening one. On any later day it cannot be told apart from a later strike, so it
+   * stays empty and the caller refuses it rather than guessing where its cash belongs.
+   */
+  static Optional<LocalDate> allottedDealingDate(
+      String status, LocalDate valueDate, FundRecord fund) {
+    return "ALLOTTED".equals(status) && valueDate.equals(fund.launchDate())
+        ? Optional.of(fund.launchDate())
+        : Optional.empty();
   }
 
   private static void strikeOpeningNavs(ValuationApiClient valuationApi, List<FundRecord> funds) {

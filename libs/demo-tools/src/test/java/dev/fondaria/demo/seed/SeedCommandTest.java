@@ -134,6 +134,15 @@ class SeedCommandTest {
         .hasMessageContaining("org-legacy");
   }
 
+  @Test
+  void aBatchAlreadyAllottedOnLaunchDayDealtAtTheOpeningNavAndOnAnyOtherDayIsUnknown() {
+    FundRecord fund = fund("fund-1", LAUNCH);
+
+    assertThat(SeedCommand.allottedDealingDate("ALLOTTED", LAUNCH, fund)).contains(LAUNCH);
+    assertThat(SeedCommand.allottedDealingDate("ALLOTTED", LAUNCH.plusDays(1), fund)).isEmpty();
+    assertThat(SeedCommand.allottedDealingDate("STAGED", LAUNCH, fund)).isEmpty();
+  }
+
   private static FundRecord fund(String fundId, LocalDate launchDate) {
     return new FundRecord(fundId, 1L, "CAJA_DE_AHORRO", fundId, launchDate);
   }
