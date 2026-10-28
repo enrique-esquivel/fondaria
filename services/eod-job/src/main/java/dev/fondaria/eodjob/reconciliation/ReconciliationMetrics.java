@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * silently would turn a detected break into a missing statement run nobody explains until someone
  * asks.
  *
- * <p>Four meters, and no participant, organization or fund identifier on any of them — a label is
+ * <p>Five meters, and no participant, organization or fund identifier on any of them — a label is
  * as much a log line as a message is (docs/ENGINEERING-RULES.md §7), and an alert only has to say
  * <i>that</i> the close is blocked. Which fund is in {@code workflow.reconciliation_break}, behind
  * authentication.
@@ -51,6 +51,7 @@ public class ReconciliationMetrics {
   private final AtomicLong blocked = new AtomicLong(1L);
   private final Counter breaksRaised;
   private final Timer duration;
+  private final Counter skipped;
   private final ConcurrentMap<Long, AtomicLong> driftByLedger = new ConcurrentHashMap<>();
 
   public ReconciliationMetrics(MeterRegistry registry) {
@@ -65,6 +66,10 @@ public class ReconciliationMetrics {
     this.duration =
         Timer.builder("eod_reconciliation_duration")
             .description("How long one internal-reconciliation pass took")
+            .register(registry);
+    this.skipped =
+        Counter.builder("eod_reconciliation_skipped_total")
+            .description("Internal-reconciliation passes skipped while the projection catches up")
             .register(registry);
 
     // Cash drift gauge initialized up front with ledger_id 484
@@ -129,6 +134,14 @@ public class ReconciliationMetrics {
               return newHolder;
             });
     cashHolder.set(cashDrift);
+  }
+
+  /**
+   * Records a pass not run because the projection is still catching up. Leaves the blocked gauge as
+   * it was: nothing new has been proved either way.
+   */
+  public void recordSkipped() {
+    skipped.increment();
   }
 
   /** Records a pass that could not finish. Not a pass, so the gauge stays raised. */

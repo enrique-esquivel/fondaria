@@ -29,6 +29,11 @@ import org.springframework.stereotype.Component;
  * <p>A sweep reconciles {@link CloseWindow}'s closing date — today, or the earliest date still
  * unsigned after its cut-off. Outside the window it does nothing at all — no run row, no metric.
  * Unset, the window is always open.
+ *
+ * <p><b>Inside the window it first asks {@link ProjectionCatchUp}</b> whether the projection has
+ * reached the ledger's head, and skips the tick if not (ADR-0038): a pass against a projection
+ * still draining can only fail, and each one re-reads the whole history. A skip writes no run row,
+ * so the gate stays closed exactly as it would for a failed pass; it is counted and logged instead.
  */
 @Component
 public class ReconciliationRunner {
@@ -38,12 +43,17 @@ public class ReconciliationRunner {
   private final ReconciliationService reconciliation;
   private final ReconciliationMetrics metrics;
   private final CloseWindow window;
+  private final ProjectionCatchUp catchUp;
 
   public ReconciliationRunner(
-      ReconciliationService reconciliation, ReconciliationMetrics metrics, CloseWindow window) {
+      ReconciliationService reconciliation,
+      ReconciliationMetrics metrics,
+      CloseWindow window,
+      ProjectionCatchUp catchUp) {
     this.reconciliation = Objects.requireNonNull(reconciliation, "reconciliation must not be null");
     this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
     this.window = Objects.requireNonNull(window, "window must not be null");
+    this.catchUp = Objects.requireNonNull(catchUp, "catchUp must not be null");
   }
 
   @Scheduled(fixedDelayString = "${fondaria.reconciliation.poll-interval}")
@@ -53,6 +63,18 @@ public class ReconciliationRunner {
       return;
     }
     try {
+      ProjectionCatchUp.Decision decision = catchUp.check();
+      if (!decision.runPass()) {
+        metrics.recordSkipped();
+        LOGGER.info(
+            "internal reconciliation skipped, projection still catching up: businessDate={}"
+                + " gapMillis={} consumersDraining={}",
+            businessDate.get(),
+            decision.gap().toMillis(),
+            decision.busyConsumersBehind());
+        return;
+      }
+      LOGGER.debug("internal reconciliation proceeding: {}", decision.reason());
       ReconciliationResult result = reconciliation.reconcile(businessDate.get());
       metrics.record(result);
       if (!result.passed()) {

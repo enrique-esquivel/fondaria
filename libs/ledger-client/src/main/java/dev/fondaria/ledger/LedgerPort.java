@@ -1,5 +1,6 @@
 package dev.fondaria.ledger;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,4 +62,18 @@ public interface LedgerPort {
   Optional<LedgerTransfer> lookupTransfer(TransferId id);
 
   List<LedgerTransfer> accountTransfers(AccountId id, TransferQuery query);
+
+  /**
+   * The timestamp of the most recent transfer the ledger has committed, on any account, or empty
+   * when it has committed none — or when this implementation cannot tell.
+   *
+   * <p>A <b>progress marker</b>, not a balance and not a watermark anything may be summed up to: it
+   * exists so a reader of the CDC-fed projection can tell, cheaply, that the projection has not yet
+   * received everything the ledger holds (ADR-0038). Empty means "unknown", so a caller must treat
+   * it as "cannot tell" and fall back to whatever it did before it had this; the default below is
+   * that answer, so a test double gets it for free.
+   */
+  default Optional<Instant> latestTransferTimestamp() {
+    return Optional.empty();
+  }
 }
