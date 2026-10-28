@@ -36,6 +36,15 @@ done
 
 pkill -f "kubectl.*port-forward" 2>/dev/null || true
 
+# How long the big machines billed (stateful-pool.sh started the clock).
+if [ -n "${GKE_STATEFUL_SINCE:-}" ]; then
+  echo "gke-down: stateful pool up since ${GKE_STATEFUL_SINCE}: $(SINCE="${GKE_STATEFUL_SINCE}" python3 -c '
+import datetime as d, os
+s = d.datetime.strptime(os.environ["SINCE"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=d.timezone.utc)
+m = int((d.datetime.now(d.timezone.utc) - s).total_seconds() // 60)
+print(f"{m // 60} h {m % 60:02d} min")') on ${GKE_STATEFUL_MACHINE:-?} x $(( ${GKE_STATEFUL_NODES_PER_ZONE:-0} * 3 ))"
+fi
+
 P="${GKE_PROJECT}"
 confirm() {
   [ "${yes}" = true ] && return 0

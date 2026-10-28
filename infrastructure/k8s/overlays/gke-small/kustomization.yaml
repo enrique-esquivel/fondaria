@@ -113,10 +113,15 @@ patches:
         postgresql:
           parameters:
             shared_buffers: "512MB"
+        # overlays/gke sizes Postgres for 8-vCPU stateful nodes; on 4-vCPU
+        # shared nodes the base's limits stand.
         resources:
           requests:
             cpu: 250m
             memory: 1024Mi
+          limits:
+            cpu: "2"
+            memory: 4Gi
 
   # --------------------------------------------------------------- RabbitMQ --
   - target:
@@ -134,6 +139,9 @@ patches:
           requests:
             cpu: 200m
             memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 2Gi
 
   # ------------------------------------------------------------ autoscalers --
   # Three nodes: at most 3 pods per API, scaling up one pod a minute after 5

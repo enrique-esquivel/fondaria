@@ -67,6 +67,7 @@ infrastructure/k8s/overlays/local/generated/
 # the id of the project infrastructure/gke/up.sh created
 infrastructure/k8s/overlays/gke/generated/
 infrastructure/gke/.state
+infrastructure/gke/.build-artifacts.json
 
 # =========================================================================
 # 3. JAVA & BUILD TOOLS (Maven / Gradle) & DOMAIN SPECIFIC
