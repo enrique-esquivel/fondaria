@@ -289,13 +289,18 @@ spec:
                 secretKeyRef:
                   name: object-store-credentials
                   key: OBJECT_STORE_ROOT_SECRET_KEY
+          # Sized from the 300k-participant load run: one pod rendering the month-end
+          # statements sat at 0.86 of 1 CPU and 1,013 of 1,024 MiB for ~20 min. Rendering is
+          # CPU-bound and STATEMENT_WORKER_CONCURRENCY (6) consumers can use more than one
+          # core, so the limit is 2 CPUs; the heap is 75% of the container (pom.xml jvmFlags),
+          # so 2 GiB gives it 1.5 GiB instead of 768 MiB.
           resources:
             requests:
-              cpu: 250m
-              memory: 512Mi
+              cpu: 500m
+              memory: 1Gi
             limits:
-              cpu: 1000m
-              memory: 1024Mi
+              cpu: 2000m
+              memory: 2Gi
           # Startup probe: Spring Boot 3.5 initializes Flyway schema check, database pool,
           # and AMQP statement job listener. Allows up to 60s (30 * 2s) before failing.
           startupProbe:
