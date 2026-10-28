@@ -134,6 +134,12 @@ spec:
           port: 443
         - protocol: TCP
           port: 6443
+    # Each node's kubelet, for per-container cAdvisor metrics
+    # (prometheus configmap, cadvisor.yml). A node IP has no pod or
+    # namespace to select, so by port.
+    - ports:
+        - protocol: TCP
+          port: 10250
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
