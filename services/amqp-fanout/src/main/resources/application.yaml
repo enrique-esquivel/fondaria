@@ -92,3 +92,7 @@ fondaria:
     prefetch: ${BRIDGE_AMQP_PREFETCH:64}
     producer-confirm-timeout: ${BRIDGE_PRODUCER_CONFIRM_TIMEOUT:30s}
     producer-retry-backoff: ${BRIDGE_PRODUCER_RETRY_BACKOFF:1s}
+    # Consumer-side batching (BridgeListener): publish a batch's records together, await their
+    # confirms together, acknowledge the batch with one multiple-ack. At most the prefetch.
+    batch-size: ${BRIDGE_AMQP_BATCH_SIZE:32}
+    batch-wait: ${BRIDGE_AMQP_BATCH_WAIT:10ms}

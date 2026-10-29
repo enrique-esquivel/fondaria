@@ -15,10 +15,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     giving up and letting RabbitMQ redeliver.
  * @param producerRetryBackoff how long to pause after a producer failure before nacking the AMQP
  *     message back onto the queue.
+ * @param batchSize {@code BRIDGE_AMQP_BATCH_SIZE} — how many {@code bridge.ledger} messages one
+ *     consumer handles as a batch: their records are published together, their confirms awaited
+ *     together, and the batch is acknowledged with one multiple-ack. At most {@code prefetch}.
+ * @param batchWait {@code BRIDGE_AMQP_BATCH_WAIT} — how long a consumer waits for the next message
+ *     before handing over a partial batch. Bounds the latency an idle feed adds to one event.
  */
 @ConfigurationProperties(prefix = "fondaria.bridge")
 public record BridgeProperties(
-    String amqpHost, int prefetch, Duration producerConfirmTimeout, Duration producerRetryBackoff) {
+    String amqpHost,
+    int prefetch,
+    Duration producerConfirmTimeout,
+    Duration producerRetryBackoff,
+    int batchSize,
+    Duration batchWait) {
 
   public static final String AMQP_HOST_VARIABLE = "BRIDGE_AMQP_HOST";
 
@@ -33,6 +43,22 @@ public record BridgeProperties(
         producerConfirmTimeout == null ? Duration.ofSeconds(30) : producerConfirmTimeout;
     producerRetryBackoff =
         producerRetryBackoff == null ? Duration.ofSeconds(1) : producerRetryBackoff;
+    batchSize = batchSize <= 0 ? 32 : batchSize;
+    batchWait = batchWait == null ? Duration.ofMillis(10) : batchWait;
+    if (batchSize > prefetch) {
+      throw new ConfigurationException(
+          "BRIDGE_AMQP_BATCH_SIZE ("
+              + batchSize
+              + ") exceeds BRIDGE_AMQP_PREFETCH ("
+              + prefetch
+              + ")",
+          "A consumer can only batch what it holds unacknowledged: lower the batch size or raise"
+              + " the prefetch (twice the batch keeps the next batch arriving while one publishes).");
+    }
+    if (batchWait.isNegative() || batchWait.isZero()) {
+      throw new ConfigurationException(
+          "BRIDGE_AMQP_BATCH_WAIT must be positive", "Set it to a duration such as 10ms.");
+    }
   }
 
   /**

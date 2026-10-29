@@ -53,15 +53,29 @@ public class LedgerEventPublisher {
    * acknowledged to the caller until every confirm is in, exactly as before.
    */
   public void publishAll(List<LedgerRecord> records) {
-    List<Pending> pending = new ArrayList<>(records.size());
+    publishBatch(records, List.of());
+  }
+
+  /**
+   * {@link #publishAll} for a whole batch of change events: every record, and every poison
+   * message's DLQ envelope, is sent before any confirm is awaited, so a batch of N events costs one
+   * confirm wait rather than N. Returns only when RabbitMQ has confirmed all of them; throws {@link
+   * ProducerConfirmException} if any was refused or timed out — the caller then acknowledges
+   * nothing, and the records already confirmed are published again on redelivery, which every
+   * consumer absorbs (idempotent on {@code transfer_id}).
+   */
+  public void publishBatch(List<LedgerRecord> records, List<DlqEnvelope> deadLetters) {
+    List<Pending> pending = new ArrayList<>(records.size() + deadLetters.size());
     ProducerConfirmException failure = null;
-    for (LedgerRecord record : records) {
-      try {
+    try {
+      for (LedgerRecord record : records) {
         pending.add(send(record.topic(), record.key(), serialize(record.payload())));
-      } catch (ProducerConfirmException e) {
-        failure = e;
-        break;
       }
+      for (DlqEnvelope envelope : deadLetters) {
+        pending.add(send("", LedgerTopics.ENTRIES_DLQ, serialize(envelope)));
+      }
+    } catch (ProducerConfirmException e) {
+      failure = e;
     }
     for (Pending p : pending) {
       try {
@@ -75,11 +89,6 @@ public class LedgerEventPublisher {
     if (failure != null) {
       throw failure;
     }
-  }
-
-  /** Produces one keyless record to the DLQ and blocks until it is confirmed. */
-  public void publishDlq(DlqEnvelope envelope) {
-    awaitConfirm(send("", LedgerTopics.ENTRIES_DLQ, serialize(envelope)));
   }
 
   /** A record handed to RabbitMQ whose confirm has not been read yet. */
