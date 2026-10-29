@@ -12,11 +12,22 @@ class LedgerEventTransformTest {
 
   private final LedgerEventTransform transform = new LedgerEventTransform();
 
+  private static final long UNIT_LEDGER = 1001;
+  private static final int UNITS_IN_ISSUE = 101;
+  private static final int VESTED = 102;
+  private static final int UNVESTED = 103;
+  private static final int UNIT_ROUNDING = 104;
+
+  /** A VESTING transfer: both legs are participant holdings. */
   private static CdcMessage sampleTransfer() {
+    return sample(UNIT_LEDGER, UNVESTED, VESTED);
+  }
+
+  private static CdcMessage sample(long ledger, int debitCode, int creditCode) {
     return new CdcMessage(
         "1700000000000000000",
         ChangeEventType.SINGLE_PHASE,
-        484,
+        ledger,
         new CdcMessage.Transfer(
             "900000000000000001", "125000", "0", "0", "0", 0, 0, 7, 0, "1700000000000000001"),
         new CdcMessage.Account(
@@ -28,7 +39,7 @@ class LedgerEventTransformTest {
             "0",
             "0",
             0,
-            3,
+            debitCode,
             0,
             "1699999999999999999"),
         new CdcMessage.Account(
@@ -40,16 +51,52 @@ class LedgerEventTransformTest {
             "0",
             "0",
             0,
-            4,
+            creditCode,
             0,
             "1699999999999999998"));
   }
 
   @Test
-  void oneChangeEventBecomesExactlyThreeRecords() {
+  void aTransferBetweenTwoHoldingsBecomesThreeRecords() {
     List<LedgerRecord> records = transform.explode(sampleTransfer());
 
     assertThat(records).hasSize(3);
+  }
+
+  @Test
+  void anAllotmentLegPublishesOnlyTheHoldingEntryNotUnitsInIssue() {
+    List<LedgerRecord> records = transform.explode(sample(UNIT_LEDGER, UNITS_IN_ISSUE, VESTED));
+
+    assertThat(records).extracting(LedgerRecord::topic)
+        .containsExactly(LedgerTopics.TRANSFERS, LedgerTopics.ENTRIES);
+    assertThat(records.get(1).key()).isEqualTo("700000000000000020");
+    assertThat(((EntryEvent) records.get(1).payload()).direction())
+        .isEqualTo(EntryDirection.CREDIT);
+  }
+
+  @Test
+  void aRedemptionLegPublishesOnlyTheHoldingEntry() {
+    List<LedgerRecord> records = transform.explode(sample(UNIT_LEDGER, VESTED, UNITS_IN_ISSUE));
+
+    assertThat(records).hasSize(2);
+    assertThat(records.get(1).key()).isEqualTo("700000000000000010");
+    assertThat(((EntryEvent) records.get(1).payload()).direction()).isEqualTo(EntryDirection.DEBIT);
+  }
+
+  @Test
+  void pooledUnitLegsPublishOnlyTheTransfer() {
+    List<LedgerRecord> records =
+        transform.explode(sample(UNIT_LEDGER, UNITS_IN_ISSUE, UNIT_ROUNDING));
+
+    assertThat(records).singleElement().extracting(LedgerRecord::topic)
+        .isEqualTo(LedgerTopics.TRANSFERS);
+  }
+
+  @Test
+  void aCashEventPublishesOnlyTheTransferEvenWhenItsCodesMatchHoldingNumbers() {
+    // Account codes are read per ledger: 102 on the cash ledger is not a participant holding.
+    assertThat(transform.explode(sample(484, 3, 5))).hasSize(1);
+    assertThat(transform.explode(sample(484, VESTED, UNVESTED))).hasSize(1);
   }
 
   @Test
@@ -95,11 +142,11 @@ class LedgerEventTransformTest {
         .allSatisfy(
             payload -> {
               if (payload instanceof TransferEvent t) {
-                assertThat(t.ledger()).isEqualTo(484);
+                assertThat(t.ledger()).isEqualTo(UNIT_LEDGER);
                 assertThat(t.transferId()).isEqualTo("900000000000000001");
               } else {
                 EntryEvent e = (EntryEvent) payload;
-                assertThat(e.ledger()).isEqualTo(484);
+                assertThat(e.ledger()).isEqualTo(UNIT_LEDGER);
                 assertThat(e.transferId()).isEqualTo("900000000000000001");
               }
             });

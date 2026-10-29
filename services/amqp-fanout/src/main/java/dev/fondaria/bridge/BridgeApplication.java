@@ -14,7 +14,8 @@ import org.springframework.context.annotation.Bean;
  * The CDC bridge (Task 4.3): the transport hop between the two brokers ADR-0002 accepts operating.
  * TigerBeetle's native CDC job (Task 4.2) publishes every committed ledger movement to RabbitMQ;
  * this service consumes {@code bridge.ledger}, explodes each change event into one transfer message
- * and two entry messages (one per leg, so per-account ordering holds on the entries topic), and
+ * and an entry message for each participant-holding leg (keyed by account, so per-account ordering
+ * holds on the entries topic; ADR-0040), and
  * produces them to Redpanda — the broker every downstream consumer actually reads from.
  *
  * <p><b>A pure transform.</b> It reads from one system and writes to one system. It holds no

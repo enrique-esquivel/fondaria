@@ -4,7 +4,7 @@ The transport hop between the two brokers `ADR-0002` accepts operating.
 TigerBeetle's native CDC job (`tigerbeetle amqp`, Task 4.2) publishes every
 committed ledger movement to RabbitMQ; **this service is the only consumer of
 `bridge.ledger`**. It explodes each change event into one transfer message and
-two entry messages and produces them to Redpanda — the broker every downstream
+an entry message per participant-holding leg and produces them to Redpanda — the broker every downstream
 consumer actually reads from.
 
 ```
@@ -27,12 +27,13 @@ TigerBeetle ──(tigerbeetle amqp)──▶ RabbitMQ  bridge.ledger
   no connection pool. It derives no id, enforces no rule, and never reads the
   ledger. Domain decoding of amounts to `Money`/`Units` **by ledger id** is Task
   4.4's job, in a consumer above this service.
-- **One change event → exactly three messages:** the transfer (keyed by
-  `transfer_id`) and one entry per leg (each keyed by its own `account_id`).
+- **One change event → one to three messages:** the transfer (keyed by
+  `transfer_id`) and one entry per participant-holding leg (each keyed by its own
+  `account_id`). Cash and pooled-account legs produce no entry (`ADR-0040`).
   Exploding the legs is what lets the entries topic be partitioned by account so
   per-account ordering holds.
 - **At-least-once, ack last.** The RabbitMQ message is acknowledged only after
-  Redpanda confirms all three records (`acks=all`, idempotent producer). A crash
+  Redpanda confirms every record (`acks=all`, idempotent producer). A crash
   before the ack replays the message; a duplicate downstream is expected and
   tolerated (`ADR-0002`).
 

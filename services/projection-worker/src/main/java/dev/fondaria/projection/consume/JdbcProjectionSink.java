@@ -36,7 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Entry events.</b> {@link ParticipantUnitsProjection} (Task 5.5) maintains the sparse {@code
  * participant_units} holding from every unit-holding entry leg, inside this method's transaction;
  * the checkpoint advance for the entry commits alongside it, so the cursor reflects both topics'
- * progress (a cash leg or a pooled-account leg writes no holding row but still moves the cursor).
+ * progress. The fan-out publishes only participant-holding legs (ADR-0040); any other leg would
+ * write no holding row but still move the cursor.
  *
  * <p><b>Not derivable from the CDC event yet:</b> {@code nav_version_id} (the allotment chain
  * carries no NAV version in its {@code user_data}) is left null; {@code value_date} equals {@code
