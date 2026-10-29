@@ -253,8 +253,15 @@ patches:
         terminationGracePeriodSeconds: 60
         resources:
           requests:
-            cpu: 100m
+            cpu: 1000m
             memory: 256Mi
+          limits:
+            cpu: 2000m
+            memory: 2048Mi
+        # Experiment (exp/rabbitmq-2cpu): no scheduler busy-wait under a CFS quota.
+        rabbitmq:
+          envConfig: |
+            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="+sbwt none +sbwtdcpu none +sbwtdio none"
 
   # Lower resource requests for local lightweight cluster. Requests, not limits:
   # a JVM still gets its 1Gi ceiling, the scheduler just stops reserving it.
