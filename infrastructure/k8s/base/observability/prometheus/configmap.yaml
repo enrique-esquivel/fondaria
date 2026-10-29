@@ -740,3 +740,39 @@ data:
         honor_labels: true
         static_configs:
           - targets: ["kube-state-metrics:8080"]
+  # Per-container CPU, CPU throttling and memory from each node's kubelet
+  # (its built-in cAdvisor). Nothing else in this tree measures how much CPU
+  # Postgres, RabbitMQ or a JVM service actually burns against its limit, so
+  # sizing a cloud profile from a load run was guesswork without it.
+  #
+  # Straight to the kubelet on :10250 with the `nodes/metrics` permission
+  # (serviceaccount.yaml), not through the API server's node proxy: that
+  # route needs `nodes/proxy`, which reaches every kubelet endpoint. The
+  # kubelet's serving certificate is self-signed on kind and not issued by the
+  # cluster CA on GKE, so it cannot be verified with the service-account CA;
+  # the bearer token still authenticates Prometheus to the kubelet.
+  #
+  # Only four series families are kept, and only for real containers (the
+  # pause container and the pod-level rollup, container="", are dropped):
+  # cAdvisor exports ~70 families per container otherwise.
+  cadvisor.yml: |
+    scrape_configs:
+      - job_name: kubelet-cadvisor
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          insecure_skip_verify: true
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: container_cpu_usage_seconds_total|container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_memory_working_set_bytes
+            action: keep
+          - source_labels: [container]
+            regex: "|POD"
+            action: drop

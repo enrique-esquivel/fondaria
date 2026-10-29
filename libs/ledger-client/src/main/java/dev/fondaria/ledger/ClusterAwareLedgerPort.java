@@ -1,5 +1,6 @@
 package dev.fondaria.ledger;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -175,6 +176,22 @@ public final class ClusterAwareLedgerPort implements LedgerPort {
       }
     }
     return List.of();
+  }
+
+  /**
+   * The latest across every cluster. Each cluster stamps its own transfers, so this is a progress
+   * marker (as the port says), never something to order transfers of different clusters by.
+   */
+  @Override
+  public Optional<Instant> latestTransferTimestamp() {
+    Optional<Instant> latest = Optional.empty();
+    for (LedgerPort delegate : delegatesByCluster.values()) {
+      Optional<Instant> head = delegate.latestTransferTimestamp();
+      if (head.isPresent() && (latest.isEmpty() || head.get().isAfter(latest.get()))) {
+        latest = head;
+      }
+    }
+    return latest;
   }
 
   private LedgerPort delegateFor(long ledgerId) {

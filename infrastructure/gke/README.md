@@ -4,8 +4,17 @@ A real multi-node, three-zone Kubernetes cluster for load tests, created in a br
 Cloud project and deleted with that project afterwards, or built inside a project you created and
 keep (`GKE_PROJECT`, below). Why and how it is built: ADR-0036 in `docs/DESIGN-DECISIONS.md`.
 
-Default size: 9 × `n2-standard-4` (36 vCPU, 144 GB), costing about **USD 2 an hour**. It deletes
-itself **5 hours** after `make gke-up` starts, even if you do nothing.
+Default size: 3 × `n2-standard-4` stateless (12 vCPU) from `make gke-up`, plus 6 × `n2-standard-8`
+stateful (48 vCPU) that `make gke-deploy` adds only after the images are pushed: 60 vCPU in all,
+roughly **USD 3–4 an hour** while the stateful pool exists and well under 1 an hour before it (list
+prices, us-central1; check your region). It deletes itself **120 minutes** after `make gke-up`
+starts, and **90 minutes** after the stateful pool is created, even if you do nothing.
+
+**Keep the big pool's window short.** The order below is built for it: `gke-up` (~20 min) runs
+on the cheap pool only; `gke-deploy` builds and pushes every image *before* it creates the
+stateful pool, then deploys and prints the **cost window** (vCPUs, since when, and when the dead
+man's switch ends it); run the load at once; `make gke-down` the moment it finishes. `gke-down`
+prints how long the stateful pool billed.
 
 ## One-time setup (manual)
 
@@ -77,7 +86,9 @@ All commands run from the repository root.
    printed console link (filling the form there gets a human review; the API route is
    auto-denied on new accounts), then run the same command again. It resumes where it stopped.
 
-3. **Deploy the platform** (builds amd64 images and pushes them to the project's registry):
+3. **Deploy the platform.** Builds amd64 images and pushes them to the project's registry, then
+   creates the stateful pool (~5 min), re-arms the switch to 90 minutes from then, deploys and
+   prints the cost window. Be ready to run the load straight after:
 
    ```bash
    make gke-deploy
@@ -149,7 +160,9 @@ All commands run from the repository root.
 
 ## Settings
 
-Everything is in `config.env`; override any value from the environment, e.g. `GKE_TTL_HOURS=3`.
+Everything is in `config.env`; override any value from the environment, e.g.
+`GKE_STATEFUL_TTL_MINUTES=60`. Pool sizes are `GKE_STATEFUL_VCPUS` (8) and `GKE_STATELESS_VCPUS`
+(4); the small profile uses only the latter.
 The current run's project id, profile, placement and kube context are in `.state` (gitignored),
 so later runs reuse them. Every `gke-up` re-arms the self-delete timer from that run's start.
 

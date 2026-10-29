@@ -181,6 +181,12 @@ patches:
   # first GKE deploy, where projection-worker could not open its pool. 400
   # covers every HPA at its maximum. Prod's own budget is an open finding
   # (TASK-LOG), not decided here.
+  #
+  # Sized for the 300k-participant demo load: on the local run Postgres sat at
+  # its 2-CPU cap from day 3 (~70% of periods throttled) while the projection's
+  # per-batch DB time grew 23 -> 415 ms. Four guaranteed CPUs per instance, and
+  # a buffer cache that holds the projection's hot indexes. Fits an
+  # n2-standard-8 stateful node beside a TigerBeetle replica (up.sh).
   - target:
       kind: Cluster
       name: postgres
@@ -193,8 +199,35 @@ patches:
         postgresql:
           parameters:
             max_connections: "400"
+            shared_buffers: "2GB"
             pg_stat_statements.track: "top"
             pg_stat_statements.max: "5000"
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+
+  # RabbitMQ was pinned at its 1-CPU limit for every drain of the local run
+  # (66-91% of periods throttled). Two guaranteed CPUs, bursting to three.
+  - target:
+      kind: RabbitmqCluster
+      name: rabbitmq
+    patch: |-
+      apiVersion: rabbitmq.com/v1beta1
+      kind: RabbitmqCluster
+      metadata:
+        name: rabbitmq
+      spec:
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            cpu: "3"
+            memory: 4Gi
 
   # The demo's accelerated clock (Task D.1), as in overlays/local: the demo-*
   # load generators advance business days through it.

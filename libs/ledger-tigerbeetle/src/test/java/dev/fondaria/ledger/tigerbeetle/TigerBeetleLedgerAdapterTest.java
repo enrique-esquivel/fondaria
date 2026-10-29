@@ -369,6 +369,29 @@ class TigerBeetleLedgerAdapterTest {
     return found.getUserData64();
   }
 
+  @Test
+  void latestTransferTimestampIsTheTimestampOfTheTransferJustCommitted() {
+    AccountId debit = freshAccountId();
+    AccountId credit = freshAccountId();
+    createBankClearingPair(debit, credit);
+    TransferId id = freshTransferId();
+    assertThat(
+            adapter.createTransfer(
+                CreateTransferCommand.Cash.single(
+                    id,
+                    debit,
+                    credit,
+                    LedgerCodes.TransferCode.CASH_RECEIPT,
+                    Money.of(1_00L, CurrencyCode.MXN))))
+        .isInstanceOf(TransferResult.Created.class);
+    java.time.Instant committed = adapter.lookupTransfer(id).orElseThrow().timestamp();
+
+    // The fixture is shared and other tests may commit in between, so the head is at least this
+    // transfer's timestamp, never earlier — exact to the nanosecond when nothing else ran.
+    assertThat(adapter.latestTransferTimestamp()).isPresent();
+    assertThat(adapter.latestTransferTimestamp().orElseThrow()).isAfterOrEqualTo(committed);
+  }
+
   private static void createBankClearingPair(AccountId debit, AccountId credit) {
     adapter.createAccount(
         new CreateAccountCommand(

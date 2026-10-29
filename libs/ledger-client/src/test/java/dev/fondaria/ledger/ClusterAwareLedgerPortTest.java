@@ -223,6 +223,21 @@ class ClusterAwareLedgerPortTest {
   // Fixtures
   // -----------------------------------------------------------------------------------------
 
+  @Test
+  void latestTransferTimestampIsTheLatestAcrossClustersAndEmptyOnlyWhenEveryClusterIsEmpty() {
+    FakeLedgerPort primary = new FakeLedgerPort();
+    FakeLedgerPort secondary = new FakeLedgerPort();
+    ClusterAwareLedgerPort port = twoClusterPort(primary, secondary);
+
+    assertThat(port.latestTransferTimestamp()).isEmpty();
+
+    primary.head = Optional.of(java.time.Instant.ofEpochSecond(1_788_559_800L, 7L));
+    assertThat(port.latestTransferTimestamp()).isEqualTo(primary.head);
+
+    secondary.head = Optional.of(java.time.Instant.ofEpochSecond(1_788_559_800L, 9L));
+    assertThat(port.latestTransferTimestamp()).isEqualTo(secondary.head);
+  }
+
   private static ClusterAwareLedgerPort twoClusterPort(
       FakeLedgerPort primaryDelegate, FakeLedgerPort secondaryDelegate) {
     LedgerClusterResolver resolver =
@@ -257,6 +272,12 @@ class ClusterAwareLedgerPortTest {
     final List<List<CreateTransferCommand>> transferBatches = new ArrayList<>();
     final List<List<CreateTransferCommand>> linkedChains = new ArrayList<>();
     final Map<AccountId, LedgerAccount> accountsById = new HashMap<>();
+    Optional<java.time.Instant> head = Optional.empty();
+
+    @Override
+    public Optional<java.time.Instant> latestTransferTimestamp() {
+      return head;
+    }
 
     @Override
     public AccountId createAccount(CreateAccountCommand cmd) {

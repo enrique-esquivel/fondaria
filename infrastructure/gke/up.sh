@@ -7,11 +7,12 @@
 #   1. A new project per run, or one you created and keep (GKE_PROJECT). Only
 #      the APIs below are enabled -- no Vertex AI, no Gemini/Generative
 #      Language API, no API keys are ever created.
-#   2. A dead man's switch BEFORE anything billable: GKE_TTL_HOURS after this
+#   2. A dead man's switch BEFORE anything billable: GKE_TTL_MINUTES after this
 #      script starts, a Cloud Scheduler job deletes a project up.sh created, or
-#      unlinks the billing of a kept one. It runs as a service account that can
-#      do nothing else (projectDeleter, or projectManager on billing, on this
-#      one project).
+#      unlinks the billing of a kept one; deploy.sh re-arms it to
+#      GKE_STATEFUL_TTL_MINUTES when it creates the stateful pool. It runs as
+#      a service account that can do nothing else (projectDeleter, or
+#      projectManager on billing, on this one project).
 #   3. A billing-account-wide budget alert.
 #   4. Private nodes (no public IPs), egress only through Cloud NAT, no SSH
 #      firewall rule at all.
@@ -23,6 +24,11 @@
 #   7. Pod-to-pod traffic between nodes is WireGuard-encrypted by GKE Dataplane
 #      V2 (inter-node transparent encryption) -- the GKE equivalent of the kind
 #      cluster's Calico WireGuard (ADR-0030).
+#
+# Cheap first: in the full profile this builds only the stateless pool (3 x
+# GKE_STATELESS_VCPUS). The stateful pool -- most of the vCPUs -- is created by
+# stateful-pool.sh from deploy.sh, after the images are pushed, so the big
+# machines bill only while the platform runs.
 #
 # Idempotent: every step checks before it creates, so re-running after a
 # failure resumes. The project id lives in infrastructure/gke/.state.
@@ -37,19 +43,8 @@ state="${here}/.state"
 
 log() { echo "gke-up: $*"; }
 die() { echo "gke-up: $*" >&2; exit 1; }
-
-# A service account is returned by `create` before IAM can bind or use it
-# ("Service account ... does not exist" for up to a minute or two). Retries a
-# command until it succeeds, printing its error only if it never does.
-retry() {
-  attempt=1
-  until err="$("$@" 2>&1 >/dev/null)"; do
-    [ "${attempt}" -lt 24 ] || { echo "${err}" >&2; return 1; }
-    [ "${attempt}" -eq 1 ] && log "waiting for a new service account to propagate in IAM"
-    attempt=$((attempt + 1))
-    sleep 5
-  done
-}
+# shellcheck disable=SC1091
+. "${here}/lib.sh"
 
 for tool in gcloud kubectl linkerd openssl python3 curl; do
   command -v "${tool}" >/dev/null 2>&1 || die "${tool} is not installed (see infrastructure/gke/README.md)"
@@ -84,13 +79,6 @@ case "${GKE_PROFILE}" in
   small) GKE_STATEFUL_NODES_PER_ZONE="${GKE_STATEFUL_NODES_PER_ZONE:-0}" ;;
   *) die "GKE_PROFILE must be full or small, not ${GKE_PROFILE}" ;;
 esac
-# Records KEY=value in .state, replacing an earlier value.
-remember() {
-  touch "${state}"
-  grep -v "^$1=" "${state}" > "${state}.tmp" || true
-  printf '%s=%s\n' "$1" "$2" >> "${state}.tmp"
-  mv "${state}.tmp" "${state}"
-}
 if [ -n "${requested_project}" ] && [ -n "${GKE_PROJECT}" ] && [ "${requested_project}" != "${GKE_PROJECT}" ]; then
   die "this environment is project ${GKE_PROJECT}; run make gke-down before using ${requested_project}"
 fi
@@ -110,8 +98,8 @@ GKE_KEEP_PROJECT="${GKE_KEEP_PROJECT:-false}"
 P="${GKE_PROJECT}"
 # shellcheck disable=SC2086
 set -- ${GKE_REGIONS}
-home_region="$1"
-remember GKE_HOME_REGION "${home_region}"
+GKE_HOME_REGION="$1"
+remember GKE_HOME_REGION "${GKE_HOME_REGION}"
 
 if ! gcloud projects describe "${P}" >/dev/null 2>&1; then
   [ "${GKE_KEEP_PROJECT}" = false ] \
@@ -148,61 +136,11 @@ if gcloud compute networks describe default --project="${P}" >/dev/null 2>&1; th
 fi
 
 # ------------------------------------------------------ dead man's switch ---
-# Ends the PROJECT's spending, not just the cluster's: a deleted cluster leaves
-# its persistent disks, NAT and registry behind, still billing. A project
-# up.sh created is deleted; a kept one (GKE_PROJECT) has its billing unlinked,
-# which stops every charge at once and deletes nothing -- the next gke-up links
-# it again. Re-armed from now on every run, so a project kept waiting for a
-# quota approval is not shut down in the middle of the run that finally uses it.
-deadman="deadman@${P}.iam.gserviceaccount.com"
-if [ "${GKE_KEEP_PROJECT}" = true ]; then
-  deadman_role=roles/billing.projectManager
-  other_role=roles/resourcemanager.projectDeleter
-  deadman_does="Unlinks this project's billing at its TTL; nothing else"
-  deadman_does_log="unlinks project ${P}'s billing"
-  set -- --uri="https://cloudbilling.googleapis.com/v1/projects/${P}/billingInfo" --http-method=PUT \
-    --message-body='{"billingAccountName":""}'
-  headers=Content-Type=application/json
-  update_extra="--update-headers=${headers}"
-else
-  deadman_role=roles/resourcemanager.projectDeleter
-  other_role=roles/billing.projectManager
-  deadman_does="Deletes this project at its TTL; nothing else"
-  deadman_does_log="deletes project ${P}"
-  set -- --uri="https://cloudresourcemanager.googleapis.com/v3/projects/${P}" --http-method=DELETE
-  headers=""
-  update_extra="--clear-headers --clear-message-body"
-fi
-if ! gcloud iam service-accounts describe "${deadman}" --project="${P}" >/dev/null 2>&1; then
-  gcloud iam service-accounts create deadman --project="${P}" --display-name="${deadman_does}"
-fi
-retry gcloud projects add-iam-policy-binding "${P}" --condition=None --quiet \
-  --member="serviceAccount:${deadman}" --role="${deadman_role}"
-# The switch holds exactly one power: drop the other mode's role if an earlier
-# run granted it.
-gcloud projects remove-iam-policy-binding "${P}" --condition=None --quiet \
-  --member="serviceAccount:${deadman}" --role="${other_role}" >/dev/null 2>&1 || true
-expires="$(TTL="${GKE_TTL_HOURS}" python3 -c '
-import datetime as d, os
-t = d.datetime.now(d.timezone.utc).replace(second=0, microsecond=0) + d.timedelta(hours=int(os.environ["TTL"]))
-print(t.strftime("%Y-%m-%dT%H:%MZ"), f"{t.minute} {t.hour} {t.day} {t.month} *")')"
-expires_at="${expires%% *}"
-cron="${expires#* }"
-if gcloud scheduler jobs describe fondaria-ttl --location="${home_region}" --project="${P}" >/dev/null 2>&1; then
-  # The target too, not just the time: what the switch does follows the mode.
-  # shellcheck disable=SC2086
-  gcloud scheduler jobs update http fondaria-ttl --project="${P}" --location="${home_region}" \
-    --schedule="${cron}" --time-zone="Etc/UTC" "$@" ${update_extra} >/dev/null
-  gcloud scheduler jobs resume fondaria-ttl --project="${P}" --location="${home_region}" >/dev/null
-else
-  retry gcloud scheduler jobs create http fondaria-ttl --project="${P}" --location="${home_region}" \
-    --schedule="${cron}" --time-zone="Etc/UTC" "$@" ${headers:+--headers="${headers}"} \
-    --oauth-service-account-email="${deadman}" \
-    --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform" \
-    --attempt-deadline=60s --max-retry-attempts=5
-fi
-remember GKE_EXPIRES_AT "${expires_at}"
-log "dead man's switch armed: ${deadman_does_log} at ${expires_at}"
+# Before anything billable; lib.sh says what it ends and how. Re-armed from now
+# on every run, so a project kept waiting for a quota approval is not shut down
+# in the middle of the run that finally uses it.
+arm_deadman "${GKE_TTL_MINUTES}"
+log "dead man's switch armed: ${deadman_does_log} at ${GKE_EXPIRES_AT}"
 
 # ------------------------------------------------------------ budget alert ---
 if ! gcloud billing budgets list --billing-account="${GKE_BILLING_ACCOUNT}" --billing-project="${P}" \
@@ -223,9 +161,15 @@ if ! gcloud billing budgets list --billing-account="${GKE_BILLING_ACCOUNT}" --bi
 fi
 
 # -------------------------------------------------------------- placement ---
-[ "${GKE_NODE_VCPUS}" -ge 4 ] || die "GKE_NODE_VCPUS must be at least 4 (see config.env)"
-nodes=$(( (GKE_STATEFUL_NODES_PER_ZONE + GKE_STATELESS_NODES_PER_ZONE) * 3 ))
-need_cpus=$(( nodes * GKE_NODE_VCPUS ))
+[ "${GKE_STATELESS_VCPUS}" -ge 4 ] || die "GKE_STATELESS_VCPUS must be at least 4 (see config.env)"
+[ "${GKE_STATEFUL_NODES_PER_ZONE}" -eq 0 ] || [ "${GKE_STATEFUL_VCPUS}" -ge 8 ] \
+  || die "GKE_STATEFUL_VCPUS must be at least 8 (see config.env)"
+stateful_nodes=$(( GKE_STATEFUL_NODES_PER_ZONE * 3 ))
+stateless_nodes=$(( GKE_STATELESS_NODES_PER_ZONE * 3 ))
+nodes=$(( stateful_nodes + stateless_nodes ))
+# Quota is checked for the whole cluster now, though the stateful pool comes
+# later: finding it short then would strand an environment half built.
+need_cpus=$(( stateful_nodes * GKE_STATEFUL_VCPUS + stateless_nodes * GKE_STATELESS_VCPUS ))
 "${here}/secrets.sh" >/dev/null
 # Disk the profile's data volumes claim, SSD and standard, in GB.
 case "${GKE_PROFILE}" in small) overlay=gke-small ;; *) overlay=gke ;; esac
@@ -237,7 +181,7 @@ case "${GKE_BOOT_DISK_TYPE}" in
   pd-standard) need_std=$(( need_std + boot_gb )) ;;
   *) need_ssd=$(( need_ssd + boot_gb )) ;;
 esac
-log "profile ${GKE_PROFILE}: the cluster needs ${nodes} nodes x ${GKE_NODE_VCPUS} vCPU = ${need_cpus} vCPU, ${need_ssd} GB SSD, ${need_std} GB standard disk"
+log "profile ${GKE_PROFILE}: the cluster needs ${stateless_nodes} x ${GKE_STATELESS_VCPUS} vCPU stateless + ${stateful_nodes} x ${GKE_STATEFUL_VCPUS} vCPU stateful = ${need_cpus} vCPU, ${need_ssd} GB SSD, ${need_std} GB standard disk"
 
 family_quota() {
   case "$1" in
@@ -298,12 +242,25 @@ if ! gcloud compute networks describe fondaria --project="${P}" >/dev/null 2>&1;
   gcloud compute networks create fondaria --project="${P}" --subnet-mode=custom >/dev/null
 fi
 
-if [ -z "${GKE_REGION}" ] || [ -z "${GKE_NODE_ZONES}" ] || [ -z "${GKE_MACHINE}" ]; then
-  GKE_REGION="" GKE_NODE_ZONES="" GKE_MACHINE=""
+# Both pools share the cluster's three zones, so a zone qualifies only with
+# capacity for both machine types. $1 = zone.
+probe_zone_pools() {
+  probe_zone "$1" "${stateless_machine}" || return 1
+  [ "${stateful_nodes}" -eq 0 ] || probe_zone "$1" "${stateful_machine}"
+}
+
+placement_pinned=true
+[ -n "${GKE_REGION}" ] && [ -n "${GKE_NODE_ZONES}" ] && [ -n "${GKE_STATELESS_MACHINE}" ] || placement_pinned=false
+[ "${stateful_nodes}" -eq 0 ] || [ -n "${GKE_STATEFUL_MACHINE}" ] || placement_pinned=false
+if [ "${placement_pinned}" = false ]; then
+  GKE_REGION="" GKE_NODE_ZONES="" GKE_STATELESS_MACHINE="" GKE_STATEFUL_MACHINE=""
   shortfalls=""
   for region in ${GKE_REGIONS}; do
     for family in ${GKE_MACHINE_FAMILIES}; do
-      machine="${family}-standard-${GKE_NODE_VCPUS}"
+      stateless_machine="${family}-standard-${GKE_STATELESS_VCPUS}"
+      stateful_machine="${family}-standard-${GKE_STATEFUL_VCPUS}"
+      machine="${stateless_machine}"
+      [ "${stateful_nodes}" -eq 0 ] || machine="${stateless_machine} + ${stateful_machine}"
       short="$(quota_shortfalls "${region}" "${family}")"
       if [ -n "${short}" ]; then
         log "${region} ${machine}: quota too low"
@@ -317,8 +274,8 @@ if [ -z "${GKE_REGION}" ] || [ -z "${GKE_NODE_ZONES}" ] || [ -z "${GKE_MACHINE}"
       found=""
       count=0
       for zone in $(gcloud compute machine-types list --project="${P}" \
-          --filter="name=${machine} AND zone~^${region}-" --format='value(zone)' | sort); do
-        if probe_zone "${zone}" "${machine}"; then
+          --filter="name=${stateless_machine} AND zone~^${region}-" --format='value(zone)' | sort); do
+        if probe_zone_pools "${zone}"; then
           found="${found:+${found},}${zone}"
           count=$((count + 1))
           [ "${count}" -eq 3 ] && break
@@ -327,13 +284,15 @@ if [ -z "${GKE_REGION}" ] || [ -z "${GKE_NODE_ZONES}" ] || [ -z "${GKE_MACHINE}"
       gcloud compute networks subnets delete fondaria-probe --project="${P}" --region="${region}" \
         --quiet >/dev/null 2>&1 || true
       if [ "${count}" -eq 3 ]; then
-        GKE_REGION="${region}" GKE_NODE_ZONES="${found}" GKE_MACHINE="${machine}"
+        GKE_REGION="${region}" GKE_NODE_ZONES="${found}"
+        GKE_STATELESS_MACHINE="${stateless_machine}"
+        [ "${stateful_nodes}" -eq 0 ] || GKE_STATEFUL_MACHINE="${stateful_machine}"
         break 2
       fi
       log "${region} ${machine}: only ${count} zone(s) with capacity, need 3"
     done
   done
-  if [ -z "${GKE_MACHINE}" ]; then
+  if [ -z "${GKE_STATELESS_MACHINE}" ]; then
     echo "gke-up: no region in '${GKE_REGIONS}' has the quota and capacity for this cluster." >&2
     if [ -n "${shortfalls}" ]; then
       echo "gke-up: quota shortfalls (raising them for ONE region is enough):" >&2
@@ -347,11 +306,14 @@ fi
 remember GKE_PROFILE "${GKE_PROFILE}"
 remember GKE_REGION "${GKE_REGION}"
 remember GKE_NODE_ZONES "${GKE_NODE_ZONES}"
-remember GKE_MACHINE "${GKE_MACHINE}"
+remember GKE_STATELESS_MACHINE "${GKE_STATELESS_MACHINE}"
+remember GKE_STATEFUL_MACHINE "${GKE_STATEFUL_MACHINE}"
+remember GKE_STATEFUL_NODES_PER_ZONE "${GKE_STATEFUL_NODES_PER_ZONE}"
+remember GKE_STATELESS_NODES_PER_ZONE "${GKE_STATELESS_NODES_PER_ZONE}"
 GKE_ZONE="${GKE_NODE_ZONES%%,*}"
 remember GKE_ZONE "${GKE_ZONE}"
 CONTEXT="gke_${P}_${GKE_ZONE}_${GKE_CLUSTER}"
-log "placement: ${GKE_MACHINE} in ${GKE_NODE_ZONES} (control plane in ${GKE_ZONE})"
+log "placement: ${GKE_STATELESS_MACHINE}${GKE_STATEFUL_MACHINE:+ + ${GKE_STATEFUL_MACHINE}} in ${GKE_NODE_ZONES} (control plane in ${GKE_ZONE})"
 
 # ---------------------------------------------------------------- network ---
 # A subnet left in another region by an earlier placement would overlap this
@@ -411,7 +373,7 @@ fi
 # add its extra node: upgrade one node at a time in place instead.
 upgrade_flags=""
 [ "${GKE_PROFILE}" = small ] && upgrade_flags="--max-surge-upgrade=0 --max-unavailable-upgrade=1"
-node_flags="${upgrade_flags} --machine-type=${GKE_MACHINE} --service-account=${nodes_sa} --workload-metadata=GKE_METADATA \
+node_flags="${upgrade_flags} --machine-type=${GKE_STATELESS_MACHINE} --service-account=${nodes_sa} --workload-metadata=GKE_METADATA \
   --shielded-secure-boot --shielded-integrity-monitoring \
   --disk-type=${GKE_BOOT_DISK_TYPE} --disk-size=${GKE_BOOT_DISK_GB}"
 
@@ -438,18 +400,8 @@ else
     --enable-master-authorized-networks --master-authorized-networks="${admin_ip}/32" >/dev/null
 fi
 
-if [ "${GKE_STATEFUL_NODES_PER_ZONE}" -gt 0 ] \
-    && ! gcloud container node-pools describe stateful --cluster="${GKE_CLUSTER}" --zone="${GKE_ZONE}" \
-    --project="${P}" >/dev/null 2>&1; then
-  log "creating the stateful node pool (tainted: only the datastores, which tolerate it, land here)"
-  # shellcheck disable=SC2086
-  gcloud container node-pools create stateful --project="${P}" --zone="${GKE_ZONE}" \
-    --cluster="${GKE_CLUSTER}" --node-locations="${GKE_NODE_ZONES}" \
-    --num-nodes="${GKE_STATEFUL_NODES_PER_ZONE}" \
-    --node-labels=fondaria.example/node-pool=stateful \
-    --node-taints=fondaria.example/node-pool=stateful:NoSchedule \
-    ${node_flags}
-fi
+# The stateful pool is not created here: stateful-pool.sh does it from
+# deploy.sh, once the images are in the registry (see the header).
 
 gcloud container clusters get-credentials "${GKE_CLUSTER}" --zone="${GKE_ZONE}" --project="${P}"
 remember GKE_CONTEXT "${CONTEXT}"
@@ -505,5 +457,11 @@ ${K} get namespace fondaria >/dev/null 2>&1 || ${K} create namespace fondaria
 kubectl config set-context "${CONTEXT}" --namespace=fondaria >/dev/null
 
 log "ready. Project ${P}, context ${CONTEXT}."
-log "the dead man's switch ${deadman_does_log} at ${expires_at} even if you do nothing (every gke-up re-arms it)."
-log "next: make gke-deploy"
+log "running now: ${stateless_nodes} x ${GKE_STATELESS_MACHINE} (${stateless_nodes} x ${GKE_STATELESS_VCPUS} vCPU)."
+log "the dead man's switch ${deadman_does_log} at ${GKE_EXPIRES_AT} even if you do nothing (every gke-up re-arms it)."
+if [ "${stateful_nodes}" -gt 0 ]; then
+  log "next: make gke-deploy -- it pushes the images, THEN creates the ${stateful_nodes} x ${GKE_STATEFUL_MACHINE} stateful pool"
+  log "and re-arms the switch to ${GKE_STATEFUL_TTL_MINUTES} min from then. Run make gke-down the moment the load finishes."
+else
+  log "next: make gke-deploy"
+fi

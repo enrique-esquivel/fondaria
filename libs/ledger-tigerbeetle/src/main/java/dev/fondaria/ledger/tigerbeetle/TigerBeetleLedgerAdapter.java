@@ -9,6 +9,7 @@ import com.tigerbeetle.CreateAccountStatus;
 import com.tigerbeetle.CreateTransferResultBatch;
 import com.tigerbeetle.CreateTransferStatus;
 import com.tigerbeetle.IdBatch;
+import com.tigerbeetle.QueryFilter;
 import com.tigerbeetle.TransferBatch;
 import com.tigerbeetle.TransferFlags;
 import com.tigerbeetle.UInt128;
@@ -160,6 +161,25 @@ public final class TigerBeetleLedgerAdapter implements LedgerPort {
   @Override
   public List<LedgerTransfer> accountTransfers(AccountId id, TransferQuery query) {
     return observe("ledger.tigerbeetle.account_transfers", () -> doAccountTransfers(id, query));
+  }
+
+  /**
+   * One {@code query_transfers} with an empty filter, newest first, limit one: TigerBeetle walks
+   * its timestamp index from the end, so this costs one round trip whatever the history holds.
+   */
+  @Override
+  public Optional<Instant> latestTransferTimestamp() {
+    return observe(
+        "ledger.tigerbeetle.latest_transfer_timestamp",
+        () -> {
+          QueryFilter filter = new QueryFilter();
+          filter.setLimit(1);
+          filter.setReversed(true);
+          TransferBatch results = await(client.queryTransfersAsync(filter));
+          return results.next()
+              ? Optional.of(Instant.ofEpochSecond(0, results.getTimestamp()))
+              : Optional.empty();
+        });
   }
 
   // ---------------------------------------------------------------------------------------------
