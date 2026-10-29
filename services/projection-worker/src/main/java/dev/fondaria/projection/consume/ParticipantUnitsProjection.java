@@ -200,9 +200,9 @@ public class ParticipantUnitsProjection {
 
   /**
    * Project one entry event onto the sparse holding, when it is a participant unit-holding leg.
-   * Anything else — a cash leg, {@code UNITS_IN_ISSUE}, {@code UNIT_ROUNDING} — is ignored here;
-   * the caller still advances the checkpoint for it, so the cursor reflects the whole entries
-   * topic.
+   * Anything else — a cash leg, {@code UNITS_IN_ISSUE}, {@code UNIT_ROUNDING} — is ignored here,
+   * and the caller still advances the checkpoint for it. Since ADR-0040 the fan-out no longer
+   * publishes those legs; the guard stays, because the entry contract allows them.
    */
   public void project(LedgerEntryEvent event) {
     if (!(event instanceof LedgerEntryEvent.Unit unit)) {

@@ -4,8 +4,9 @@ import dev.fondaria.bridge.cdc.CdcMessage;
 import dev.fondaria.bridge.publish.LedgerTopics;
 
 /**
- * One of the two messages the bridge produces to {@code ledger.entries.v1} for one change event —
- * the debit leg and the credit leg — each keyed by {@link #accountId()}.
+ * One of the messages the bridge produces to {@code ledger.entries.v1} for one change event — the
+ * debit leg, the credit leg, or both, whichever is a participant holding (ADR-0040) — each keyed by
+ * {@link #accountId()}.
  *
  * <p>Exploding the transfer into one message per leg is what lets the entries topic be partitioned
  * by account: every event touching an account lands in the same partition, in commit order

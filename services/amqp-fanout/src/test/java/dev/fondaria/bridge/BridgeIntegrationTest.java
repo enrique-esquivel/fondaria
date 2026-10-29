@@ -56,6 +56,10 @@ class BridgeIntegrationTest {
   private static final String DLQ = "bridge.ledger.dlq";
   private static final String TRANSFERS_EXCHANGE = "ledger.transfers.v1";
   private static final String ENTRIES_EXCHANGE = "ledger.entries.v1";
+  private static final long UNIT_LEDGER = 1001;
+  private static final int UNITS_IN_ISSUE = 101;
+  private static final int VESTED_HOLDING = 102;
+  private static final int UNVESTED_HOLDING = 103;
   private static final String ENTRIES_DLQ_QUEUE = "ledger.entries.dlq";
 
   private static RabbitMqFixture rabbit;
@@ -106,7 +110,8 @@ class BridgeIntegrationTest {
   }
 
   // -------------------------------------------------------------------------------------------
-  // AC1 — one transfer produces exactly three messages (one transfer, two entries)
+  // AC1 — a transfer between two participant holdings produces three messages (one transfer, two
+  // entries); legs on any other account produce no entry (ADR-0040)
   // -------------------------------------------------------------------------------------------
 
   @Test
@@ -122,7 +127,9 @@ class BridgeIntegrationTest {
       harvest.bindEntries(16);
       harvest.bindDlq();
 
-      publishChangeEvent(changeEvent(transferId, debit, credit, "150000", 484));
+      publishChangeEvent(
+          changeEvent(
+              transferId, debit, credit, "150000", UNIT_LEDGER, UNVESTED_HOLDING, VESTED_HOLDING));
 
       await()
           .atMost(Duration.ofSeconds(20))
@@ -155,6 +162,48 @@ class BridgeIntegrationTest {
     }
   }
 
+  @Test
+  void onlyParticipantHoldingLegsBecomeEntries() throws Exception {
+    bridge = startBridge(Map.of());
+
+    String cashTransfer = freshId();
+    String allotment = freshId();
+    String unitsInIssue = freshId();
+    String holding = freshId();
+
+    try (Harvest harvest = new Harvest("ac1b")) {
+      harvest.bindTransfers();
+      harvest.bindEntries(16);
+
+      publishChangeEvent(changeEvent(cashTransfer, freshId(), freshId(), "150000", 484));
+      publishChangeEvent(
+          changeEvent(
+              allotment,
+              unitsInIssue,
+              holding,
+              "1500",
+              UNIT_LEDGER,
+              UNITS_IN_ISSUE,
+              VESTED_HOLDING));
+
+      await()
+          .atMost(Duration.ofSeconds(20))
+          .untilAsserted(
+              () -> {
+                assertThat(harvest.transfers())
+                    .filteredOn(b -> b.contains(cashTransfer))
+                    .hasSize(1);
+                assertThat(harvest.transfers()).filteredOn(b -> b.contains(allotment)).hasSize(1);
+                assertThat(harvest.entries()).filteredOn(b -> b.contains(holding)).hasSize(1);
+              });
+
+      Thread.sleep(1500);
+      assertThat(harvest.entries()).filteredOn(b -> b.contains(cashTransfer)).isEmpty();
+      assertThat(harvest.entries()).filteredOn(b -> b.contains(allotment)).hasSize(1);
+      assertThat(harvest.entries()).filteredOn(b -> b.contains(unitsInIssue)).isEmpty();
+    }
+  }
+
   // -------------------------------------------------------------------------------------------
   // AC2 — all events for one account land in one queue, verified across 10,000 transfers
   // -------------------------------------------------------------------------------------------
@@ -182,7 +231,9 @@ class BridgeIntegrationTest {
         do {
           credit = accounts.get(ThreadLocalRandom.current().nextInt(accounts.size()));
         } while (credit.equals(debit));
-        publishChangeEvent(changeEvent(transferId, debit, credit, "1", 484));
+        publishChangeEvent(
+            changeEvent(
+                transferId, debit, credit, "1", UNIT_LEDGER, VESTED_HOLDING, UNVESTED_HOLDING));
       }
       LOGGER.info("published {} change events", transferCount);
 
@@ -609,6 +660,17 @@ class BridgeIntegrationTest {
 
   private static String changeEvent(
       String transferId, String debitId, String creditId, String amount, long ledger) {
+    return changeEvent(transferId, debitId, creditId, amount, ledger, 1, 1);
+  }
+
+  private static String changeEvent(
+      String transferId,
+      String debitId,
+      String creditId,
+      String amount,
+      long ledger,
+      int debitCode,
+      int creditCode) {
     return "{\"timestamp\":\""
         + (System.currentTimeMillis() * 1_000_000L)
         + "\",\"type\":\"single_phase\",\"ledger\":"
@@ -624,13 +686,16 @@ class BridgeIntegrationTest {
         + "\",\"debits_pending\":\"0\",\"debits_posted\":\""
         + amount
         + "\",\"credits_pending\":\"0\",\"credits_posted\":\"0\",\"user_data_128\":\"0\","
-        + "\"user_data_64\":\"0\",\"user_data_32\":0,\"code\":1,\"flags\":0,\"timestamp\":\"1\"},"
+        + "\"user_data_64\":\"0\",\"user_data_32\":0,\"code\":"
+        + debitCode
+        + ",\"flags\":0,\"timestamp\":\"1\"},"
         + "\"credit_account\":{\"id\":\""
         + creditId
         + "\",\"debits_pending\":\"0\",\"debits_posted\":\"0\",\"credits_pending\":\"0\","
         + "\"credits_posted\":\""
         + amount
-        + "\",\"user_data_128\":\"0\",\"user_data_64\":\"0\",\"user_data_32\":0,\"code\":1,"
-        + "\"flags\":0,\"timestamp\":\"1\"}}";
+        + "\",\"user_data_128\":\"0\",\"user_data_64\":\"0\",\"user_data_32\":0,\"code\":"
+        + creditCode
+        + ",\"flags\":0,\"timestamp\":\"1\"}}";
   }
 }

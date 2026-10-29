@@ -60,14 +60,21 @@ value in either form is rejected, never coerced.
 `timeout` is dropped by the bridge (only meaningful before a pending transfer
 resolves, and never on a posted movement).
 
-## How the bridge maps it — one change event, three messages
+## How the bridge maps it — one change event, one to three messages
 
 `services/amqp-redpanda-bridge` explodes each change event into:
 
 - **one** `ledger.transfers.v1` message, keyed by `transferId` — the transfer and
   the identity of both legs, no balance counters;
-- **two** `ledger.entries.v1` messages, keyed by `accountId` — the debit leg and
-  the credit leg, each carrying that one account's post-event balance counters.
+- **zero, one or two** `ledger.entries.v1` messages, keyed by `accountId`: one for
+  each leg whose account is a **participant holding** (a unit ledger and account
+  code `PARTICIPANT_HOLDINGS_VESTED` 102 or `_UNVESTED` 103), each carrying that
+  one account's post-event balance counters. A cash leg, `UNITS_IN_ISSUE` or
+  `UNIT_ROUNDING` produces no entry (`ADR-0040`): nothing projects them, and a
+  fund's `UNITS_IN_ISSUE`, on one leg of every allotment, put a whole fund's
+  entries on the one queue its id hashes to. A `CONTRIBUTION_ALLOTMENT` unit leg
+  yields one entry, a `VESTING` two, a cash movement none. The entry schema is
+  unchanged; a consumer that needs other legs changes the bridge's filter.
 
 Splitting the legs is what lets `ledger.entries.v1` be partitioned by account:
 every event touching an account lands in one partition, in commit order.
