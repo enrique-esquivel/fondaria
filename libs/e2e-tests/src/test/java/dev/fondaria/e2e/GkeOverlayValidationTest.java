@@ -45,6 +45,72 @@ class GkeOverlayValidationTest {
   }
 
   @Test
+  @DisplayName(
+      "The GKE overlay sizes Postgres and RabbitMQ for the demo load; the small profile does not")
+  void datastoresSizedForTheDemoLoad() throws Exception {
+    Map<String, Object> postgres = map(find(renderOverlay("gke"), "Cluster", "postgres"), "spec");
+    assertThat(map(postgres, "resources"))
+        .as("4 guaranteed CPUs and 8 GiB per Postgres instance")
+        .isEqualTo(
+            Map.of(
+                "requests", Map.of("cpu", "4", "memory", "8Gi"),
+                "limits", Map.of("cpu", "4", "memory", "8Gi")));
+    assertThat(map(map(postgres, "postgresql"), "parameters").get("shared_buffers"))
+        .isEqualTo("2GB");
+    Map<String, Object> rabbit =
+        map(find(renderOverlay("gke"), "RabbitmqCluster", "rabbitmq"), "spec");
+    assertThat(map(rabbit, "resources"))
+        .isEqualTo(
+            Map.of(
+                "requests", Map.of("cpu", "2", "memory", "4Gi"),
+                "limits", Map.of("cpu", "3", "memory", "4Gi")));
+
+    List<Map<String, Object>> small = renderOverlay("gke-small");
+    assertThat(map(map(map(find(small, "Cluster", "postgres"), "spec"), "resources"), "limits"))
+        .as("4-vCPU shared nodes keep the base's Postgres limits")
+        .isEqualTo(Map.of("cpu", "2", "memory", "4Gi"));
+    assertThat(
+            map(
+                map(map(find(small, "RabbitmqCluster", "rabbitmq"), "spec"), "resources"),
+                "limits"))
+        .isEqualTo(Map.of("cpu", "1", "memory", "2Gi"));
+  }
+
+  @Test
+  @DisplayName(
+      "The big stateful pool is created only after the images are pushed, under a short switch")
+  void statefulPoolBillsOnlyWhileDeployed() throws Exception {
+    String up = Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/up.sh")));
+    assertThat(up).as("gke-up builds only the stateless pool").doesNotContain("node-pools create");
+    assertThat(up).contains("arm_deadman \"${GKE_TTL_MINUTES}\"");
+
+    String deploy = Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/deploy.sh")));
+    int build = deploy.indexOf("skaffold build");
+    int pool = deploy.indexOf("stateful-pool.sh\"");
+    int apply = deploy.indexOf("skaffold deploy");
+    assertThat(build).as("images are built and pushed").isNotNegative();
+    assertThat(pool).as("before the stateful pool exists").isGreaterThan(build);
+    assertThat(apply).as("which exists before the platform is deployed").isGreaterThan(pool);
+
+    String statefulPool =
+        Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/stateful-pool.sh")));
+    assertThat(statefulPool.indexOf("arm_deadman \"${GKE_STATEFUL_TTL_MINUTES}\""))
+        .as("the switch is re-armed before the pool is created")
+        .isNotNegative()
+        .isLessThan(statefulPool.indexOf("node-pools create stateful"));
+    assertThat(statefulPool)
+        .contains("--machine-type=\"${GKE_STATEFUL_MACHINE}\"")
+        .contains("COST WINDOW");
+
+    String config = Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/config.env")));
+    assertThat(config)
+        .contains("GKE_TTL_MINUTES=\"${GKE_TTL_MINUTES:-120}\"")
+        .contains("GKE_STATEFUL_TTL_MINUTES=\"${GKE_STATEFUL_TTL_MINUTES:-90}\"")
+        .contains("GKE_STATEFUL_VCPUS=\"${GKE_STATEFUL_VCPUS:-8}\"")
+        .contains("GKE_STATELESS_VCPUS=\"${GKE_STATELESS_VCPUS:-4}\"");
+  }
+
+  @Test
   @DisplayName("Nothing in the GKE overlay is exposed outside the cluster")
   void exposesNothingPublicly() throws Exception {
     List<Map<String, Object>> docs = renderOverlay("gke");
