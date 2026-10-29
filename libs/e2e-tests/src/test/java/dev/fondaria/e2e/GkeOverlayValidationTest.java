@@ -289,6 +289,25 @@ class GkeOverlayValidationTest {
   }
 
   @Test
+  @DisplayName(
+      "Every overlay spaces checkpoints out (load run 6) on a WAL volume that holds max_wal_size")
+  void everyOverlayCarriesTheWalSettings() throws Exception {
+    for (String overlay : List.of("local", "prod", "gke", "gke-small")) {
+      Map<String, Object> postgres =
+          map(find(renderOverlay(overlay), "Cluster", "postgres"), "spec");
+      assertThat(map(map(postgres, "postgresql"), "parameters"))
+          .as("WAL parameters in overlay %s", overlay)
+          .containsEntry("max_wal_size", "8GB")
+          .containsEntry("checkpoint_timeout", "15min")
+          .containsEntry("wal_compression", "lz4");
+      // max_wal_size is a soft limit: WAL can overshoot it between checkpoints.
+      assertThat(gib(map(postgres, "walStorage").get("size")))
+          .as("walStorage in overlay %s must hold 1.5x max_wal_size", overlay)
+          .isGreaterThanOrEqualTo(8 * 1.5);
+    }
+  }
+
+  @Test
   @DisplayName("The small GKE profile fits a new billing account's 250 GB SSD quota")
   void smallProfileFitsDefaultSsdQuota() throws Exception {
     List<Map<String, Object>> docs = renderOverlay("gke-small");

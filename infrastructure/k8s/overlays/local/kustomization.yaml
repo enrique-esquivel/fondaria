@@ -224,8 +224,10 @@ patches:
         smartShutdownTimeout: 15
         postgresql:
           parameters:
-            # The operator refuses a memory request below shared_buffers.
-            shared_buffers: "64MB"
+            # The operator refuses a memory request below shared_buffers. Load run 6: 64MB gave
+            # an 83% cache hit rate on the 300k-participant load; 1GB gave 99.8%. The WAL
+            # settings come from base.
+            shared_buffers: "1GB"
             # Row 26o: per-statement timings for the allotment database breakdown. Setting any
             # pg_stat_statements.* parameter makes CNPG preload the library and create the
             # extension itself. Local only; production has not decided to carry its overhead.
@@ -234,7 +236,7 @@ patches:
         resources:
           requests:
             cpu: 100m
-            memory: 256Mi
+            memory: 1280Mi
 
   - target:
       kind: RabbitmqCluster
@@ -251,10 +253,15 @@ patches:
         # node sat in Terminating for it. The operator derives both the hook's timeout and the
         # pod's grace period from this one field. Prod keeps the default.
         terminationGracePeriodSeconds: 60
+        # Load run 4: at base's 1-CPU limit RabbitMQ was throttled for most of every drain;
+        # at 2 it sat near 40%.
         resources:
           requests:
-            cpu: 100m
+            cpu: 1000m
             memory: 256Mi
+          limits:
+            cpu: 2000m
+            memory: 2048Mi
 
   # Lower resource requests for local lightweight cluster. Requests, not limits:
   # a JVM still gets its 1Gi ceiling, the scheduler just stops reserving it.

@@ -201,7 +201,9 @@ class StatefulOperatorsValidationTest {
     // Local Postgres: the operator refuses a memory request below shared_buffers
     Map<String, Object> localPgParams =
         getMap(getMap(getMap(localPg, "spec"), "postgresql"), "parameters");
-    assertThat(localPgParams.get("shared_buffers")).isEqualTo("64MB");
+    assertThat(localPgParams.get("shared_buffers")).isEqualTo("1GB");
+    assertThat(getMap(getMap(getMap(localPg, "spec"), "resources"), "requests").get("memory"))
+        .isEqualTo("1280Mi");
 
     // Row 26j: a local restart must not sit in Terminating for the operator defaults
     // (CNPG stopDelay 1800 s, RabbitMQ one week) while every service crash-loops.
