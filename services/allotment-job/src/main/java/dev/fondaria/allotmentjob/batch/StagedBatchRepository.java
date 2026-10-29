@@ -1,5 +1,6 @@
 package dev.fondaria.allotmentjob.batch;
 
+import dev.fondaria.common.OrganizationId;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -31,8 +32,11 @@ public interface StagedBatchRepository {
    */
   Optional<StagedBatch> lockForAllotment(UUID batchId);
 
-  /** Every staged row for one batch — {@code workflow.contribution_batch_row}, unordered. */
-  List<StagedRow> rowsFor(UUID batchId);
+  /**
+   * Every staged row for one batch of one organization — {@code workflow.contribution_batch_row},
+   * ordered by {@code participant_internal_ref}.
+   */
+  List<StagedRow> rowsFor(OrganizationId organizationId, UUID batchId);
 
   /**
    * {@code STAGED -> ALLOTTED}, guarded by {@code status = 'STAGED'} the same way
