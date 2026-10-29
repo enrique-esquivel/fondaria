@@ -86,8 +86,14 @@ class KustomizeOverlaysValidationTest {
     for (Map<String, Object> dep : deployments) {
       String name = getName(dep);
       Map<String, Object> spec = getMap(dep, "spec");
-      // ADR-0032 / row 26g: projection-worker runs 3 locally so the scale-out is exercised.
-      int expectedReplicas = "projection-worker".equals(name) ? 3 : 1;
+      // ADR-0032 / row 26g: projection-worker runs 3 locally so the scale-out is exercised;
+      // statement-worker runs 2 so the month-end's statements render on two pods.
+      int expectedReplicas =
+          switch (name) {
+            case "projection-worker" -> 3;
+            case "statement-worker" -> 2;
+            default -> 1;
+          };
       assertThat(spec.get("replicas"))
           .as("Deployment %s must have replicas: %d in local overlay", name, expectedReplicas)
           .isEqualTo(expectedReplicas);

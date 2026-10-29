@@ -180,6 +180,18 @@ patches:
         path: /spec/replicas
         value: 3
 
+  # statement-worker is the second exception: the month-end renders one statement
+  # per participant (300k on the demo load), CPU-bound, after the close has
+  # finished draining, so a second pod has the machine to itself. Two pods x 10
+  # pooled connections fit the local Postgres budget.
+  - target:
+      kind: Deployment
+      name: statement-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
   - target:
       kind: StatefulSet
       name: tigerbeetle

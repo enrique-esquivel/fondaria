@@ -107,13 +107,15 @@ spec:
                 secretKeyRef:
                   name: object-store-credentials
                   key: OBJECT_STORE_ROOT_SECRET_KEY
+          # 2 GiB: the 300k-participant month-end (statements written while snapshots
+          # are read) peaked at 1,020 of 1,024 MiB.
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
               cpu: 1000m
-              memory: 1024Mi
+              memory: 2Gi
           # Startup probe: the S3 gateway's own health endpoint (anonymous,
           # unlike every other S3 path). A cold start with master election and
           # filer start is ~10s; 60 x 2s is generous.
