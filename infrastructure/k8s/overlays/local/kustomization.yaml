@@ -225,7 +225,12 @@ patches:
         postgresql:
           parameters:
             # The operator refuses a memory request below shared_buffers.
-            shared_buffers: "64MB"
+            # Experiment (exp/postgres-wal-tuning): run 5 showed a 81% cache hit rate and
+            # checkpoints forced every ~2.5 min, with full-page images reaching 84% of WAL.
+            shared_buffers: "1GB"
+            max_wal_size: "8GB"
+            checkpoint_timeout: "15min"
+            wal_compression: "lz4"
             # Row 26o: per-statement timings for the allotment database breakdown. Setting any
             # pg_stat_statements.* parameter makes CNPG preload the library and create the
             # extension itself. Local only; production has not decided to carry its overhead.
@@ -234,7 +239,7 @@ patches:
         resources:
           requests:
             cpu: 100m
-            memory: 256Mi
+            memory: 1280Mi
 
   - target:
       kind: RabbitmqCluster
@@ -253,8 +258,11 @@ patches:
         terminationGracePeriodSeconds: 60
         resources:
           requests:
-            cpu: 100m
+            cpu: 1000m
             memory: 256Mi
+          limits:
+            cpu: 2000m
+            memory: 2048Mi
 
   # Lower resource requests for local lightweight cluster. Requests, not limits:
   # a JVM still gets its 1Gi ceiling, the scheduler just stops reserving it.
