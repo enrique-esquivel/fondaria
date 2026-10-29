@@ -16,6 +16,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * round-trips parks a virtual thread rather than occupying a platform one.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(ReconciliationProperties.class)
+@EnableConfigurationProperties({ReconciliationProperties.class, ProjectionCatchUpProperties.class})
 @EnableScheduling
 public class ReconciliationConfiguration {}

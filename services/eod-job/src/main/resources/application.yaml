@@ -132,6 +132,10 @@ fondaria:
     # (LedgerLimits, ADR-0017). A larger value fails startup rather than being truncated.
     account-lookup-batch-size: ${RECONCILIATION_ACCOUNT_LOOKUP_BATCH:8189}
     holding-page-size: ${RECONCILIATION_HOLDING_PAGE_SIZE:50000}
+    # ADR-0038: skip a pass while the projection is still behind the ledger head.
+    catch-up:
+      quiet-period: ${RECONCILIATION_CATCH_UP_QUIET_PERIOD:15s}
+      stall-after: ${RECONCILIATION_CATCH_UP_STALL_AFTER:2m}
 
   custodian-reconciliation:
     # Task 7.3. Same reasoning as fondaria.reconciliation above — operational tuning,

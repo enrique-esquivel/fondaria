@@ -24,5 +24,9 @@ data:
   # Empty: no close window, every close sweep runs on every tick (CloseWindow).
   # Only the demo overlays set it.
   CLOSE_WINDOW_START: ""
+  # ADR-0038: skip a reconciliation pass while the projection is behind the
+  # ledger head; run it anyway once no consumer has advanced for STALL_AFTER.
+  RECONCILIATION_CATCH_UP_QUIET_PERIOD: "15s"
+  RECONCILIATION_CATCH_UP_STALL_AFTER: "2m"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
   DEMO_CLOCK_ENABLED: "false"

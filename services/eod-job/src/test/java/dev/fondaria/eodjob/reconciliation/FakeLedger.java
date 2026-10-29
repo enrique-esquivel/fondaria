@@ -33,6 +33,16 @@ final class FakeLedger implements LedgerPort {
 
   private final Map<AccountId, LedgerAccount> accounts = new HashMap<>();
   private final List<Integer> lookupBatchSizes = new ArrayList<>();
+  private Optional<java.time.Instant> head = Optional.empty();
+
+  void headAt(java.time.Instant latestTransfer) {
+    head = Optional.of(latestTransfer);
+  }
+
+  @Override
+  public Optional<java.time.Instant> latestTransferTimestamp() {
+    return head;
+  }
 
   void putUnits(AccountId id, LedgerCodes.AccountCode code, long fundLedgerId, long unitsScaled) {
     accounts.put(
