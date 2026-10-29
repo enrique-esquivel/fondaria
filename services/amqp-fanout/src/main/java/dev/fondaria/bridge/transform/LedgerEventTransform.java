@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * The fanout service's whole business logic: one change event becomes one transfer message
- * published to ledger.transfers.v1, plus one entry message on ledger.entries.v1 keyed by account
- * id for each leg that is a participant holding (ADR-0022, ADR-0040).
+ * published to ledger.transfers.v1, plus one entry message on ledger.entries.v1 keyed by account id
+ * for each leg that is a participant holding (ADR-0022, ADR-0040).
  *
  * <p>Only participant-holding legs are published as entries, because they are the only legs any
  * consumer projects ({@code ParticipantUnitsProjection}). A pooled account such as a fund's {@code

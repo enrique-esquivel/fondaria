@@ -57,7 +57,9 @@ class BridgeListenerTest {
 
     ArgumentCaptor<List<LedgerRecord>> records = recordsCaptor();
     verify(publisher).publishBatch(records.capture(), anyList());
-    assertThat(records.getValue()).as("a cash event is one transfer and no entry (ADR-0040)").hasSize(10);
+    assertThat(records.getValue())
+        .as("a cash event is one transfer and no entry (ADR-0040)")
+        .hasSize(10);
     verify(channel).basicAck(20L, true);
     verifyNoMoreInteractions(channel);
   }

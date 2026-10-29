@@ -178,13 +178,21 @@ class BridgeIntegrationTest {
       publishChangeEvent(changeEvent(cashTransfer, freshId(), freshId(), "150000", 484));
       publishChangeEvent(
           changeEvent(
-              allotment, unitsInIssue, holding, "1500", UNIT_LEDGER, UNITS_IN_ISSUE, VESTED_HOLDING));
+              allotment,
+              unitsInIssue,
+              holding,
+              "1500",
+              UNIT_LEDGER,
+              UNITS_IN_ISSUE,
+              VESTED_HOLDING));
 
       await()
           .atMost(Duration.ofSeconds(20))
           .untilAsserted(
               () -> {
-                assertThat(harvest.transfers()).filteredOn(b -> b.contains(cashTransfer)).hasSize(1);
+                assertThat(harvest.transfers())
+                    .filteredOn(b -> b.contains(cashTransfer))
+                    .hasSize(1);
                 assertThat(harvest.transfers()).filteredOn(b -> b.contains(allotment)).hasSize(1);
                 assertThat(harvest.entries()).filteredOn(b -> b.contains(holding)).hasSize(1);
               });

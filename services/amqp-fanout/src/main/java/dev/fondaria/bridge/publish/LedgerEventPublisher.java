@@ -21,9 +21,9 @@ import org.springframework.stereotype.Component;
  * Produces records to RabbitMQ exchanges and blocks until every one is confirmed.
  *
  * <p>This is the half of the fan-out service that makes "ack only after the publisher confirms"
- * real: {@link #publishAll} returns only when RabbitMQ has acknowledged every record, and
- * throws {@link ProducerConfirmException} otherwise. The listener does not acknowledge the AMQP
- * message until this returns normally.
+ * real: {@link #publishAll} returns only when RabbitMQ has acknowledged every record, and throws
+ * {@link ProducerConfirmException} otherwise. The listener does not acknowledge the AMQP message
+ * until this returns normally.
  */
 @Component
 public class LedgerEventPublisher {

@@ -67,7 +67,8 @@ class LedgerEventTransformTest {
   void anAllotmentLegPublishesOnlyTheHoldingEntryNotUnitsInIssue() {
     List<LedgerRecord> records = transform.explode(sample(UNIT_LEDGER, UNITS_IN_ISSUE, VESTED));
 
-    assertThat(records).extracting(LedgerRecord::topic)
+    assertThat(records)
+        .extracting(LedgerRecord::topic)
         .containsExactly(LedgerTopics.TRANSFERS, LedgerTopics.ENTRIES);
     assertThat(records.get(1).key()).isEqualTo("700000000000000020");
     assertThat(((EntryEvent) records.get(1).payload()).direction())
@@ -88,7 +89,9 @@ class LedgerEventTransformTest {
     List<LedgerRecord> records =
         transform.explode(sample(UNIT_LEDGER, UNITS_IN_ISSUE, UNIT_ROUNDING));
 
-    assertThat(records).singleElement().extracting(LedgerRecord::topic)
+    assertThat(records)
+        .singleElement()
+        .extracting(LedgerRecord::topic)
         .isEqualTo(LedgerTopics.TRANSFERS);
   }
 
