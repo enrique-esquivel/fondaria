@@ -98,7 +98,7 @@ public class AllotmentRunner {
       return false;
     }
     StagedBatch batch = locked.get();
-    List<StagedRow> rows = batches.rowsFor(batchId);
+    List<StagedRow> rows = batches.rowsFor(batch.organizationId(), batchId);
 
     Optional<LocalDate> dealingDate = allotmentService.allot(batch, rows);
     if (dealingDate.isEmpty()) {

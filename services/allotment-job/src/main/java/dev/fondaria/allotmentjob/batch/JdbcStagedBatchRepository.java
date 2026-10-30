@@ -69,16 +69,25 @@ public class JdbcStagedBatchRepository implements StagedBatchRepository {
         .optional();
   }
 
+  /**
+   * Scoped by organization first (docs/ENGINEERING-RULES.md §4) so the lookup is a range scan of
+   * {@code contribution_batch_row_pk} {@code (organization_id, batch_id,
+   * participant_internal_ref)}, already in {@code ORDER BY} order. Filtering on {@code batch_id}
+   * alone left the primary key's leading column unbound, and every call was a sequential scan of a
+   * table that grows by one row per participant per payroll.
+   */
   @Override
-  public List<StagedRow> rowsFor(UUID batchId) {
+  public List<StagedRow> rowsFor(OrganizationId organizationId, UUID batchId) {
     return jdbc.sql(
             """
             SELECT organization_id, batch_id, participant_internal_ref,
                    employee_minor_units, employer_minor_units, voluntary_minor_units
               FROM workflow.contribution_batch_row
-             WHERE batch_id = :batchId
+             WHERE organization_id = :organizationId
+               AND batch_id = :batchId
              ORDER BY participant_internal_ref
             """)
+        .param("organizationId", organizationId.value())
         .param("batchId", batchId)
         .query(JdbcStagedBatchRepository::mapRow)
         .list();
