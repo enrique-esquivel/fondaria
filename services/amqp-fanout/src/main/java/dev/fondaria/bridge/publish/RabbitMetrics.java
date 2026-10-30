@@ -2,6 +2,7 @@ package dev.fondaria.bridge.publish;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,9 +15,23 @@ import org.springframework.stereotype.Component;
 public class RabbitMetrics {
 
   private final MeterRegistry registry;
+  private final AtomicInteger halted = new AtomicInteger();
 
   public RabbitMetrics(MeterRegistry registry) {
     this.registry = registry;
+    // ADR-0041: consumers holding a batch RabbitMQ will not confirm. Non-zero means bridge.ledger
+    // is not draining, by design, until the broker confirms again.
+    registry.gauge("bridge_publish_halted", halted);
+  }
+
+  /** A consumer has started holding a batch it cannot publish. */
+  public void publishHalted() {
+    halted.incrementAndGet();
+  }
+
+  /** That consumer has published its batch, or given it back to RabbitMQ. */
+  public void publishResumed() {
+    halted.decrementAndGet();
   }
 
   /**

@@ -11,10 +11,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     to. Required.
  * @param prefetch how many unacknowledged {@code bridge.ledger} messages the listener may hold at
  *     once.
- * @param producerConfirmTimeout how long to wait for RabbitMQ to confirm published records before
- *     giving up and letting RabbitMQ redeliver.
- * @param producerRetryBackoff how long to pause after a producer failure before nacking the AMQP
- *     message back onto the queue.
+ * @param producerConfirmTimeout how long to wait for RabbitMQ to confirm a batch's published
+ *     records before giving up on that attempt.
+ * @param producerRetryBackoff the first pause before publishing an unconfirmed batch again; it
+ *     doubles on each further failure, up to 30 s. The batch is held, never nacked (ADR-0041).
  * @param batchSize {@code BRIDGE_AMQP_BATCH_SIZE} — how many {@code bridge.ledger} messages one
  *     consumer handles as a batch: their records are published together, their confirms awaited
  *     together, and the batch is acknowledged with one multiple-ack. At most {@code prefetch}.
