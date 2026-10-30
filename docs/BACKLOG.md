@@ -23,6 +23,7 @@ Ideas and known gaps, not commitments. Nothing here is scheduled or prioritised;
 
 | Idea | Why | Source |
 |---|---|---|
+| Drop `workflow.allotment_by_holding` (V25) in a contract migration | Superseded by `allotment_by_holding_c` (V37), which serves the close's `COLLATE "C"` walk and `JdbcCustodianHoldingSource` alike; it only costs write amplification on the platform's hottest insert path. Drop once no eod-job older than V37 runs, and repoint `JdbcCustodianHoldingSource`'s comment | V37 |
 | Retirement mechanism for provider accounts (`effective_to` or sentinel) | Needed before the first real segregated integration | ADR-0019 |
 | Per-datastore TLS (Postgres `sslmode=verify-full`) | WireGuard encrypts the link but does not authenticate the peer | ADR-0029, ADR-0030 |
 | Verify Calico WireGuard on a multi-node cluster | Only a single-node cluster has been checked; the GKE environment checks Dataplane V2's equivalent instead | ADR-0030, ADR-0036 |

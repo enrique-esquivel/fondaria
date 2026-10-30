@@ -17,11 +17,19 @@ import org.springframework.stereotype.Repository;
  * <h2>Why a row-wise keyset predicate rather than {@code OFFSET}</h2>
  *
  * <p>{@code (a, b, c) > (:a, :b, :c)} is a single row comparison, and PostgreSQL serves it from the
- * leading columns of a multicolumn index — {@code allotment_by_holding}, added by {@code V25} for
- * exactly this scan. Each page is therefore a bounded index walk that starts where the last one
- * stopped. {@code OFFSET} would re-read and re-aggregate everything before the page on every page,
+ * leading columns of a multicolumn index — {@code allotment_by_holding_c} ({@code V37}) — provided
+ * the index compares each column in the same collation the statement does. Each page is then a
+ * bounded index-only walk that seeks to where the last one stopped and reads in index order, with
+ * no sort. {@code OFFSET} would re-read and re-aggregate everything before the page on every page,
  * which is quadratic in the number of participants and so is wrong at precisely the scale a close
  * runs at.
+ *
+ * <p><b>That property is asserted, not assumed</b> ({@code
+ * JdbcHoldingAccountSourcePlanIntegrationTest}), because it was lost once without any result
+ * changing. {@code V25}'s {@code allotment_by_holding} is under the default collation; once Task
+ * 7.4 added {@code COLLATE "C"} below, the planner could seek on {@code organization_id} only,
+ * filtered the row comparison, and sorted — every page re-read its organization's whole allotment
+ * history. Load run 8 measured 840k rows read and 333 ms per 40k-row page, growing every day.
  *
  * <p>{@code DISTINCT} rather than {@code GROUP BY}: a participant appears once per (batch, source)
  * they were ever allotted under, and the tie-out wants each holding once. The units on those rows
@@ -45,7 +53,9 @@ import org.springframework.stereotype.Repository;
  *
  * <p>The predicate and the {@code ORDER BY} must carry the collation together, and so must {@code
  * JdbcCostBasisSource}'s range over the same three columns — a page whose boundaries are ordered
- * one way and whose lots are selected another silently drops a participant's cost basis.
+ * one way and whose lots are selected another silently drops a participant's cost basis. And the
+ * index must carry it too: change the collation here without an index in the new one and the walk
+ * silently stops being bounded.
  */
 @Repository
 public class JdbcHoldingAccountSource implements HoldingAccountSource {
@@ -64,7 +74,7 @@ public class JdbcHoldingAccountSource implements HoldingAccountSource {
        LIMIT :limit
       """;
 
-  private static final String NEXT_PAGE =
+  static final String NEXT_PAGE =
       """
       SELECT DISTINCT organization_id,
              participant_internal_ref COLLATE "C" AS participant_internal_ref,

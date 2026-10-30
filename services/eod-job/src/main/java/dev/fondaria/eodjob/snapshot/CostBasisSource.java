@@ -57,9 +57,9 @@ public interface CostBasisSource {
    *
    * <p>A range of holdings rather than a list of keys because a page of the snapshot's keyset scan
    * <i>is</i> a contiguous range in {@code (organization_id, participant_internal_ref, fund_id)}
-   * order — the same order {@code allotment_by_holding} (V25) is built in — so the read is one
+   * order — the same order {@code allotment_by_holding_c} (V37) is built in — so the read is one
    * index range scan over exactly the page, with no per-key round trip and no
-   * thousands-of-parameters statement.
+   * thousands-of-parameters statement. The lots come back in no particular order.
    *
    * <p>{@code postedBefore} is a coarse instant bound, not the precise cut: the caller applies
    * {@code BusinessCalendar} to each lot's {@code allottedAt} to decide membership, because which
