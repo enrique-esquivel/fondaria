@@ -32,6 +32,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the right answer; the demo has many organizations each holding a slice, and a page is a small
  * range inside one of them.
  *
+ * <p>{@code reference.fund_nav} is analyzed too, because the cost-basis read joins it. Left stale,
+ * its histogram ends below the NAV the seeded lots name, the planner concludes a merge join on
+ * {@code nav_version_id} stops after a handful of rows, and walks {@code allotment_by_nav_version}
+ * instead — a plan about the fixture's statistics, not about the index under test.
+ *
  * <p>The rows and their statistics roll back with the transaction. {@code ANALYZE}'s update of
  * {@code pg_class.reltuples} is in place and does not; that only biases the next estimate on a
  * shared test table until autovacuum recomputes it, and no other test asserts on a plan.
@@ -72,6 +77,7 @@ public final class QueryPlans {
               status.setRollbackOnly();
               History history = seed(jdbc);
               jdbc.sql("ANALYZE workflow.allotment").update();
+              jdbc.sql("ANALYZE reference.fund_nav").update();
               return jdbc.sql("EXPLAIN (FORMAT JSON) " + sql)
                   .params(params.apply(history))
                   .query(String.class)
