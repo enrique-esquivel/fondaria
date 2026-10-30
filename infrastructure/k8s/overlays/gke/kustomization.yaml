@@ -211,7 +211,13 @@ patches:
             memory: 8Gi
 
   # RabbitMQ was pinned at its 1-CPU limit for every drain of the local run
-  # (66-91% of periods throttled). Two guaranteed CPUs, bursting to three.
+  # (66-91% of periods throttled), and still at 1.7-1.9 of 2 CPUs (52-64%
+  # throttled) in load runs 8 and 9, once Postgres had room. The demo target
+  # needs ~2x run 9's local throughput. The request stays at two, so it still
+  # schedules on an n2-standard-8 stateful node beside a Postgres instance (4),
+  # a TigerBeetle replica and Valkey; the limit lets it burst to six, which
+  # also gives Erlang six schedulers. Burst headroom on a shared node is not
+  # guaranteed: the GKE run's cAdvisor throttling says whether this is enough.
   - target:
       kind: RabbitmqCluster
       name: rabbitmq
@@ -226,7 +232,7 @@ patches:
             cpu: "2"
             memory: 4Gi
           limits:
-            cpu: "3"
+            cpu: "6"
             memory: 4Gi
 
   # The demo's accelerated clock (Task D.1), as in overlays/local: the demo-*
