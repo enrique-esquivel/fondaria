@@ -2,6 +2,7 @@ package dev.fondaria.contribution.participant;
 
 import dev.fondaria.common.OrganizationId;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -19,13 +20,16 @@ public final class InMemoryParticipantRepository implements ParticipantRepositor
   private final Map<String, Participant> participants = new LinkedHashMap<>();
 
   @Override
-  public boolean insertIfAbsent(Participant participant) {
-    String key = key(participant.organizationId(), participant.internalRef());
-    if (participants.containsKey(key)) {
-      return false;
+  public int insertAllIfAbsent(List<Participant> batch) {
+    int inserted = 0;
+    for (Participant participant : batch) {
+      if (participants.putIfAbsent(
+              key(participant.organizationId(), participant.internalRef()), participant)
+          == null) {
+        inserted++;
+      }
     }
-    participants.put(key, participant);
-    return true;
+    return inserted;
   }
 
   @Override

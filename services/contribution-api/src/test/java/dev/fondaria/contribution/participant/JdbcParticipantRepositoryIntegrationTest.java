@@ -13,7 +13,10 @@ import dev.fondaria.contribution.support.ServiceIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,6 +104,54 @@ class JdbcParticipantRepositoryIntegrationTest extends ServiceIntegrationTest {
   }
 
   @Test
+  @DisplayName(
+      "insertAllIfAbsent spans several statements and counts only the participants it created")
+  void insertAllIsConditionalPerRowAcrossStatements() {
+    OrganizationId organizationId = registerOrganization();
+    int size = JdbcParticipantRepository.ROWS_PER_STATEMENT * 2 + 7;
+    List<Participant> participants =
+        IntStream.range(0, size)
+            .mapToObj(
+                i ->
+                    participant(
+                        organizationId, String.format("P-%06d", i), String.format("E-%06d", i)))
+            .toList();
+    Participant extra = participant(organizationId, "P-EXTRA", "E-EXTRA");
+    List<Participant> again = new ArrayList<>(participants);
+    again.add(extra);
+
+    assertThat(repository.insertAllIfAbsent(participants.subList(0, 10))).isEqualTo(10);
+    assertThat(repository.insertAllIfAbsent(participants)).isEqualTo(size - 10);
+    assertThat(repository.insertAllIfAbsent(again)).isEqualTo(1);
+
+    assertThat(participantCount(organizationId)).isEqualTo(size + 1);
+    assertThat(repository.find(organizationId, String.format("P-%06d", size - 1)))
+        .hasValueSatisfying(
+            p -> {
+              assertThat(p.payrollRef()).isEqualTo(String.format("E-%06d", size - 1));
+              assertThat(p.employmentEndDate()).isEmpty();
+            });
+  }
+
+  @Test
+  @DisplayName("a payroll-ref clash fails its whole statement: none of that statement's rows land")
+  void aPayrollRefClashFailsTheWholeStatement() {
+    OrganizationId organizationId = registerOrganization();
+    repository.insertIfAbsent(participant(organizationId, "P-001", "E-001"));
+
+    assertThatThrownBy(
+            () ->
+                repository.insertAllIfAbsent(
+                    List.of(
+                        participant(organizationId, "P-002", "E-002"),
+                        participant(organizationId, "P-003", "E-001"))))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    assertThat(repository.find(organizationId, "P-002")).isEmpty();
+    assertThat(participantCount(organizationId)).isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("the same payroll ref twice within one organization violates the unique constraint")
   void payrollRefIsUniqueWithinAnOrganization() {
     OrganizationId organizationId = registerOrganization();
@@ -131,6 +182,13 @@ class JdbcParticipantRepositoryIntegrationTest extends ServiceIntegrationTest {
                     .param("planId", PLAN_ID)
                     .update())
         .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  private long participantCount(OrganizationId organizationId) {
+    return jdbc.sql("SELECT count(*) FROM master.participant WHERE organization_id = :id")
+        .param("id", organizationId.value())
+        .query(Long.class)
+        .single();
   }
 
   private boolean privilege(String table, String privilege) {

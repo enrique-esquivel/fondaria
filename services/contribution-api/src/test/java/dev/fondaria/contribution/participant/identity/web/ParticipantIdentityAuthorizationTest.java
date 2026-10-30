@@ -278,13 +278,16 @@ class ParticipantIdentityAuthorizationTest {
     }
 
     @Override
-    public boolean insertIfAbsent(Participant participant) {
-      String k = key(participant.organizationId(), participant.internalRef());
-      if (byRef.containsKey(k)) {
-        return false;
+    public int insertAllIfAbsent(List<Participant> participants) {
+      int inserted = 0;
+      for (Participant participant : participants) {
+        if (byRef.putIfAbsent(
+                key(participant.organizationId(), participant.internalRef()), participant)
+            == null) {
+          inserted++;
+        }
       }
-      byRef.put(k, participant);
-      return true;
+      return inserted;
     }
 
     @Override

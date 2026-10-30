@@ -27,13 +27,16 @@ final class InMemoryStagedRowRepository implements StagedRowRepository {
   }
 
   @Override
-  public boolean insertIfAbsent(StagedRow row) {
-    String key = key(row.organizationId(), row.batchId(), row.participantInternalRef());
-    if (rows.containsKey(key)) {
-      return false;
+  public int insertAllIfAbsent(List<StagedRow> batch) {
+    int inserted = 0;
+    for (StagedRow row : batch) {
+      if (rows.putIfAbsent(
+              key(row.organizationId(), row.batchId(), row.participantInternalRef()), row)
+          == null) {
+        inserted++;
+      }
     }
-    rows.put(key, row);
-    return true;
+    return inserted;
   }
 
   @Override

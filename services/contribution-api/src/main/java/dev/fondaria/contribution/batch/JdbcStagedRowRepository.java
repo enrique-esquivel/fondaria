@@ -5,7 +5,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -27,6 +29,12 @@ public class JdbcStagedRowRepository implements StagedRowRepository {
         FROM workflow.contribution_batch_row r
       """;
 
+  /**
+   * Rows per {@code INSERT}. Eleven bind parameters a row keeps a statement at 11,000 parameters,
+   * far under the driver's bind limit (32,767 in older pgjdbc, 65,535 in PostgreSQL).
+   */
+  static final int ROWS_PER_STATEMENT = 1_000;
+
   private final JdbcClient jdbc;
 
   public JdbcStagedRowRepository(JdbcClient jdbc) {
@@ -38,34 +46,57 @@ public class JdbcStagedRowRepository implements StagedRowRepository {
    * inference specification: the primary key is the only constraint this table has, and a conflict
    * on it means exactly one thing — this row has already been captured for this batch — so
    * re-running structural validation after a crash converges rather than failing.
+   *
+   * <p>One multi-row {@code INSERT} per {@link #ROWS_PER_STATEMENT} rows rather than one per row,
+   * the pattern {@code JdbcAllotmentRepository.recordAll} uses; each row's {@code ON CONFLICT}
+   * still applies on its own.
    */
   @Override
-  public boolean insertIfAbsent(StagedRow row) {
-    int inserted =
-        jdbc.sql(
-                """
-                INSERT INTO workflow.contribution_batch_row (
-                    organization_id, batch_id, participant_internal_ref, participant_payroll_ref,
-                    plan_id, payroll_period, value_date,
-                    employee_minor_units, employer_minor_units, voluntary_minor_units, recorded_at)
-                VALUES (:organizationId, :batchId, :internalRef, :payrollRef,
-                        :planId, :payrollPeriod, :valueDate,
-                        :employeeMinorUnits, :employerMinorUnits, :voluntaryMinorUnits, :recordedAt)
-                ON CONFLICT (organization_id, batch_id, participant_internal_ref) DO NOTHING
-                """)
-            .param("organizationId", row.organizationId().value())
-            .param("batchId", row.batchId())
-            .param("internalRef", row.participantInternalRef())
-            .param("payrollRef", row.participantPayrollRef())
-            .param("planId", row.planId())
-            .param("payrollPeriod", row.payrollPeriod())
-            .param("valueDate", row.valueDate())
-            .param("employeeMinorUnits", row.amountOf(ContributionSource.EMPLOYEE))
-            .param("employerMinorUnits", row.amountOf(ContributionSource.EMPLOYER))
-            .param("voluntaryMinorUnits", row.amountOf(ContributionSource.VOLUNTARY))
-            .param("recordedAt", Timestamp.from(row.recordedAt()))
-            .update();
-    return inserted > 0;
+  public int insertAllIfAbsent(List<StagedRow> rows) {
+    int inserted = 0;
+    for (int from = 0; from < rows.size(); from += ROWS_PER_STATEMENT) {
+      inserted += insertChunk(rows.subList(from, Math.min(rows.size(), from + ROWS_PER_STATEMENT)));
+    }
+    return inserted;
+  }
+
+  private int insertChunk(List<StagedRow> chunk) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
+            INSERT INTO workflow.contribution_batch_row (
+                organization_id, batch_id, participant_internal_ref, participant_payroll_ref,
+                plan_id, payroll_period, value_date,
+                employee_minor_units, employer_minor_units, voluntary_minor_units, recorded_at)
+            VALUES
+            """);
+    Map<String, Object> params = new HashMap<>();
+    for (int i = 0; i < chunk.size(); i++) {
+      StagedRow row = chunk.get(i);
+      if (i > 0) {
+        sql.append(",\n");
+      }
+      sql.append(
+          String.format(
+              Locale.ROOT,
+              "(:organizationId%1$d, :batchId%1$d, :internalRef%1$d, :payrollRef%1$d,"
+                  + " :planId%1$d, :payrollPeriod%1$d, :valueDate%1$d, :employeeMinorUnits%1$d,"
+                  + " :employerMinorUnits%1$d, :voluntaryMinorUnits%1$d, :recordedAt%1$d)",
+              i));
+      params.put("organizationId" + i, row.organizationId().value());
+      params.put("batchId" + i, row.batchId());
+      params.put("internalRef" + i, row.participantInternalRef());
+      params.put("payrollRef" + i, row.participantPayrollRef());
+      params.put("planId" + i, row.planId());
+      params.put("payrollPeriod" + i, row.payrollPeriod());
+      params.put("valueDate" + i, row.valueDate());
+      params.put("employeeMinorUnits" + i, row.amountOf(ContributionSource.EMPLOYEE));
+      params.put("employerMinorUnits" + i, row.amountOf(ContributionSource.EMPLOYER));
+      params.put("voluntaryMinorUnits" + i, row.amountOf(ContributionSource.VOLUNTARY));
+      params.put("recordedAt" + i, Timestamp.from(row.recordedAt()));
+    }
+    sql.append("\nON CONFLICT (organization_id, batch_id, participant_internal_ref) DO NOTHING");
+    return jdbc.sql(sql.toString()).params(params).update();
   }
 
   @Override

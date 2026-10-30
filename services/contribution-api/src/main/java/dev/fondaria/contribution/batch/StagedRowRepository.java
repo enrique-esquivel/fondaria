@@ -25,7 +25,18 @@ public interface StagedRowRepository {
    *
    * @return whether this call recorded the row
    */
-  boolean insertIfAbsent(StagedRow row);
+  default boolean insertIfAbsent(StagedRow row) {
+    return insertAllIfAbsent(List.of(row)) == 1;
+  }
+
+  /**
+   * {@link #insertIfAbsent} for many rows at once, with the same per-row key: each row already
+   * recorded is skipped on its own. {@link ContributionStagingService} calls it inside its one
+   * staging transaction, so batching changes the number of round trips, not what commits together.
+   *
+   * @return how many rows this call recorded
+   */
+  int insertAllIfAbsent(List<StagedRow> rows);
 
   /** Every row a batch has recorded, whatever the batch's current status. */
   List<StagedRow> findByBatch(OrganizationId organizationId, UUID batchId);
