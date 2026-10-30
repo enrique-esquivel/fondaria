@@ -2,11 +2,13 @@ package dev.fondaria.eodjob.snapshot;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import dev.fondaria.common.FundId;
 import dev.fondaria.common.OrganizationId;
 import dev.fondaria.common.Units;
 import dev.fondaria.eodjob.reconciliation.HoldingAccountSource;
 import dev.fondaria.eodjob.reconciliation.HoldingKey;
+import dev.fondaria.eodjob.support.QueryPlans;
 import dev.fondaria.eodjob.support.ServiceIntegrationTest;
 import dev.fondaria.ledger.TenantRefDeriver;
 import java.sql.Timestamp;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The three reads a snapshot position is assembled from, against real PostgreSQL: units as-of from
@@ -53,6 +56,7 @@ class JdbcSnapshotSourcesIntegrationTest extends ServiceIntegrationTest {
   @Autowired private SnapshotNavSource navs;
   @Autowired private HoldingAccountSource holdings;
   @Autowired private JdbcClient jdbc;
+  @Autowired private TransactionTemplate transactions;
 
   private OrganizationId organizationId;
   private FundId fundId;
@@ -198,6 +202,36 @@ class JdbcSnapshotSourcesIntegrationTest extends ServiceIntegrationTest {
     assertThat(costBasis.lotsFor(mine.get(0), mine.get(mine.size() - 1), endOf(MONDAY)))
         .as("the page's own first and last key must enclose every lot the page covers")
         .hasSize(2);
+  }
+
+  @Test
+  @DisplayName("the lot range seeks on both row comparisons and needs no sort")
+  void theLotRangeIsABoundedIndexRange() {
+    // Load run 8: under the default-collation index this range could seek on organization_id
+    // only, reading every lot the organization ever had to return one page's (349 ms mean).
+    List<JsonNode> plan =
+        QueryPlans.overHistory(
+            jdbc,
+            transactions,
+            JdbcCostBasisSource.LOTS_IN_RANGE,
+            history ->
+                Map.of(
+                    "fromOrganizationId", history.organizationId(),
+                    "fromParticipantRef", "EMP-001000",
+                    "fromFundId", history.fundId(),
+                    "toOrganizationId", history.organizationId(),
+                    "toParticipantRef", "EMP-001200",
+                    "toFundId", history.fundId(),
+                    "postedBefore", Timestamp.from(Instant.now())));
+
+    JsonNode scan = QueryPlans.scanOf(plan, "allotment_by_holding_c");
+    assertThat(scan.get("Index Cond").asText())
+        .as("both ends of the page are the seek, not a filter after seeking the organization")
+        .contains(") >= ROW(")
+        .contains(") <= ROW(");
+    assertThat(QueryPlans.nodeTypes(plan))
+        .as("the builder groups lots itself; nothing sorts them")
+        .doesNotContain("Sort", "Incremental Sort");
   }
 
   // ---- the price -----------------------------------------------------------------------------

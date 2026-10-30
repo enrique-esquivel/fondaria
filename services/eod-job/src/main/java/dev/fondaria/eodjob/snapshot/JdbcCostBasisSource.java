@@ -20,10 +20,22 @@ import org.springframework.stereotype.Repository;
  * <h2>The row-wise range is the page</h2>
  *
  * <p>{@code (a, b, c) BETWEEN (:from…) AND (:to…)} is written as two row comparisons because
- * PostgreSQL's {@code BETWEEN} does not accept row constructors. Both are served by {@code
- * allotment_by_holding} (V25), the index built for the close's keyset scan, so this reads exactly
- * the rows belonging to the page the scan just returned — inclusive at both ends, because the
- * page's first and last holdings are in the page.
+ * PostgreSQL's {@code BETWEEN} does not accept row constructors. Both are the seek on {@code
+ * allotment_by_holding_c} (V37), the index built for the close's keyset scan under the same {@code
+ * COLLATE "C"}, so this reads exactly the rows belonging to the page the scan just returned —
+ * inclusive at both ends, because the page's first and last holdings are in the page.
+ *
+ * <p><b>The {@code organization_id BETWEEN} is redundant, and is there for the planner.</b> It
+ * selects nothing the row comparisons do not, but PostgreSQL estimates a row comparison from its
+ * leading column alone and cannot merge two of them into a range, so without it a page inside one
+ * organization looks like a quarter of the table, and the planner seeks the whole organization on
+ * the other index and filters the rest. Measured at the demo's shape (20 organizations × 30k
+ * participants × 6 days): 190 ms reading 180k rows per 10k-lot page without it; 14 ms reading
+ * exactly the page with it, on custom and generic plans alike. {@code
+ * JdbcSnapshotSourcesIntegrationTest} asserts the plan.
+ *
+ * <p>No {@code ORDER BY}: the builder groups lots by holding and sums them exactly, so their order
+ * changes nothing, and the planner is then free to read the range through a bitmap without a sort.
  *
  * <p><b>{@code participant_internal_ref} is compared under {@code COLLATE "C"}, and must be.</b>
  * The page's boundaries come from {@code JdbcHoldingAccountSource}, which orders under the same
@@ -49,18 +61,18 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcCostBasisSource implements CostBasisSource {
 
-  private static final String LOTS_IN_RANGE =
+  static final String LOTS_IN_RANGE =
       """
       SELECT a.organization_id, a.participant_internal_ref, a.fund_id,
              a.units_scaled, a.allotted_at, n.nav_scaled
         FROM workflow.allotment a
         JOIN reference.fund_nav n ON n.nav_version_id = a.nav_version_id
-       WHERE (a.organization_id, a.participant_internal_ref COLLATE "C", a.fund_id)
+       WHERE a.organization_id BETWEEN :fromOrganizationId AND :toOrganizationId
+         AND (a.organization_id, a.participant_internal_ref COLLATE "C", a.fund_id)
              >= (:fromOrganizationId, :fromParticipantRef COLLATE "C", :fromFundId)
          AND (a.organization_id, a.participant_internal_ref COLLATE "C", a.fund_id)
              <= (:toOrganizationId, :toParticipantRef COLLATE "C", :toFundId)
          AND a.allotted_at < :postedBefore
-       ORDER BY a.organization_id, a.participant_internal_ref COLLATE "C", a.fund_id
       """;
 
   private final JdbcClient jdbc;
