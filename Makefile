@@ -186,10 +186,10 @@ k8s-status: ## Pods, operators and HPAs on the local cluster
 	kubectl --context kind-fondaria -n fondaria get pods,hpa
 	kubectl --context kind-fondaria -n fondaria get cluster.postgresql.cnpg.io,rabbitmqcluster
 
-gke-up: ## Create the throwaway GKE load-test environment in a new project, or in GKE_PROJECT if set (ADR-0036; needs GKE_BILLING_ACCOUNT). Builds only the cheap stateless pool; shuts itself down after GKE_TTL_MINUTES (default 120)
+gke-up: ## Create the throwaway GKE load-test environment in a new project, or in GKE_PROJECT if set (ADR-0036; needs GKE_BILLING_ACCOUNT). Builds only the cheap stateless pool, and builds and pushes the amd64 images while the cluster is created; shuts itself down after GKE_TTL_MINUTES (default 120)
 	./infrastructure/gke/up.sh
 
-gke-deploy: local-secrets ## Build and push amd64 images, THEN create the stateful pool (re-arms the switch to GKE_STATEFUL_TTL_MINUTES, default 90) and deploy overlays/gke; prints the cost window
+gke-deploy: local-secrets ## Rebuild and push the amd64 images only if the source changed since gke-up, THEN create the stateful pool (re-arms the switch to GKE_STATEFUL_TTL_MINUTES, default 90) and deploy overlays/gke; prints the cost window
 	./infrastructure/gke/deploy.sh
 
 gke-tunnel: ## Port-forward Grafana (30001) and the three demo APIs (30080-30082) from the GKE environment

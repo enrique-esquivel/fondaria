@@ -11,8 +11,8 @@ prices, us-central1; check your region). It deletes itself **120 minutes** after
 starts, and **90 minutes** after the stateful pool is created, even if you do nothing.
 
 **Keep the big pool's window short.** The order below is built for it: `gke-up` (~20 min) runs
-on the cheap pool only; `gke-deploy` builds and pushes every image *before* it creates the
-stateful pool, then deploys and prints the **cost window** (vCPUs, since when, and when the dead
+on the cheap pool only and builds and pushes every image while the cluster is created;
+`gke-deploy` makes sure the images are pushed *before* it creates the stateful pool, then deploys and prints the **cost window** (vCPUs, since when, and when the dead
 man's switch ends it); run the load at once; `make gke-down` the moment it finishes. `gke-down`
 prints how long the stateful pool billed.
 
@@ -55,7 +55,11 @@ All commands run from the repository root.
    gcloud auth login
    ```
 
-2. **Create the environment** (about 20 minutes):
+2. **Create the environment** (about 20 minutes). As soon as the project's Artifact Registry
+   exists, it starts building the amd64 images and pushing them there in the background
+   (progress in `infrastructure/gke/.build.log`), so the build overlaps the cluster's 10–20
+   minutes; it waits for the build before it reports ready. It needs a Temurin 21 JDK as
+   `JAVA_HOME`, as `make verify` does:
 
    ```bash
    GKE_BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX make gke-up
@@ -86,8 +90,10 @@ All commands run from the repository root.
    printed console link (filling the form there gets a human review; the API route is
    auto-denied on new accounts), then run the same command again. It resumes where it stopped.
 
-3. **Deploy the platform.** Builds amd64 images and pushes them to the project's registry, then
-   creates the stateful pool (~5 min), re-arms the switch to 90 minutes from then, deploys and
+3. **Deploy the platform.** Reuses the images `gke-up` pushed when the source is unchanged
+   (`.build-artifacts.stamp` records the exact working tree, committed or not, that was built);
+   after a new commit or any edit it builds and pushes again first. Then it creates the stateful
+   pool (~5 min), re-arms the switch to 90 minutes from then, deploys and
    prints the cost window. Be ready to run the load straight after:
 
    ```bash
