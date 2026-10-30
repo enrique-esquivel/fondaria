@@ -63,7 +63,7 @@ class GkeOverlayValidationTest {
         .isEqualTo(
             Map.of(
                 "requests", Map.of("cpu", "2", "memory", "4Gi"),
-                "limits", Map.of("cpu", "3", "memory", "4Gi")));
+                "limits", Map.of("cpu", "6", "memory", "4Gi")));
 
     List<Map<String, Object>> small = renderOverlay("gke-small");
     assertThat(map(map(map(find(small, "Cluster", "postgres"), "spec"), "resources"), "limits"))
