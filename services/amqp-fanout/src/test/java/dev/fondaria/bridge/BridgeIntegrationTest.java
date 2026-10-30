@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionNameStrategy;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
@@ -441,11 +442,90 @@ class BridgeIntegrationTest {
             () -> assertThat(queueDepth(QUEUE)).as("the whole batch acknowledged").isZero());
   }
 
+  // -------------------------------------------------------------------------------------------
+  // ADR-0041 — a broker that will not confirm halts the bridge: channels stay bounded, nothing is
+  // dead-lettered, and the held events go out once the broker confirms again
+  // -------------------------------------------------------------------------------------------
+
+  @Test
+  void aBrokerThatRefusesPublishesHaltsTheBridgeWithBoundedChannelsAndNoDeadLetters()
+      throws Exception {
+    purgeQueue(QUEUE);
+    int concurrency = 2;
+    String connectionPrefix = "fanout-halt-" + freshId();
+    // A full reject-publish queue bound to the transfers exchange: RabbitMQ nacks every publish
+    // routed there (a message rejected by any one queue is nacked), the way it refuses publishes
+    // it cannot take. Removing the queue is the broker recovering.
+    String refusing = "fanout-refuse-" + freshId();
+    try (Channel channel = amqp.createChannel()) {
+      channel.queueDeclare(
+          refusing, false, false, false, Map.of("x-max-length", 0, "x-overflow", "reject-publish"));
+      channel.queueBind(refusing, TRANSFERS_EXCHANGE, "");
+    }
+    List<String> transferIds = new ArrayList<>();
+    try (Harvest harvest = new Harvest("halt")) {
+      harvest.bindTransfers();
+      bridge =
+          startBridge(
+              Map.of(
+                  "BRIDGE_AMQP_CONCURRENCY", String.valueOf(concurrency),
+                  "BRIDGE_PRODUCER_RETRY_BACKOFF", "50ms",
+                  "fondaria.bridge.producer-retry-backoff", "50ms"),
+              connectionPrefix);
+      for (int i = 0; i < 3; i++) {
+        String transferId = freshId();
+        transferIds.add(transferId);
+        publishChangeEvent(changeEvent(transferId, freshId(), freshId(), "1", 484));
+      }
+
+      // Under nack-and-requeue, five 50 ms backoffs dead-lettered these within a second. Watch
+      // for ten times that, sampling the bridge's channels throughout.
+      int maxChannels = 0;
+      long until = System.nanoTime() + Duration.ofSeconds(6).toNanos();
+      while (System.nanoTime() < until) {
+        int open = openChannels(connectionPrefix);
+        LOGGER.info("bridge channels open while RabbitMQ refuses: {}", open);
+        maxChannels = Math.max(maxChannels, open);
+        Thread.sleep(200);
+      }
+      assertThat(maxChannels)
+          .as(
+              "consumer channels + one publish channel per consumer, plus a moment's admin"
+                  + " channel; run 8 reached 2047 on one connection")
+          .isPositive()
+          .isLessThanOrEqualTo(2 * concurrency + 1);
+      assertThat(queueDepth(QUEUE)).as("the events are held, not dropped").isEqualTo(3);
+      assertThat(deadLettered(DLQ))
+          .as("nothing dead-lettered")
+          .noneMatch(body -> transferIds.stream().anyMatch(body::contains));
+
+      mgmt("DELETE", "/api/queues/%2F/" + refusing);
+      await()
+          .atMost(Duration.ofSeconds(45))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(
+              () -> {
+                assertThat(harvest.transferKeys()).containsAll(transferIds);
+                assertThat(queueDepth(QUEUE)).as("the held batches acknowledged").isZero();
+              });
+      assertThat(deadLettered(DLQ))
+          .noneMatch(body -> transferIds.stream().anyMatch(body::contains));
+    } finally {
+      mgmt("DELETE", "/api/queues/%2F/" + refusing);
+    }
+  }
+
   // =========================================================================================
   // bridge context
   // =========================================================================================
 
   private static ConfigurableApplicationContext startBridge(Map<String, String> extraEnv) {
+    return startBridge(extraEnv, null);
+  }
+
+  /** With a connection-name prefix, the bridge's connections can be told apart on the broker. */
+  private static ConfigurableApplicationContext startBridge(
+      Map<String, String> extraEnv, String connectionPrefix) {
     Map<String, Object> props = new HashMap<>();
     props.put("BRIDGE_AMQP_HOST", rabbit.getHost());
     props.put("BRIDGE_AMQP_PORT", rabbit.getAmqpPort());
@@ -458,7 +538,14 @@ class BridgeIntegrationTest {
     props.put("server.port", "0");
     props.put("spring.main.banner-mode", "off");
     extraEnv.forEach(props::put);
-    return new SpringApplicationBuilder(BridgeApplication.class).properties(props).run();
+    SpringApplicationBuilder builder =
+        new SpringApplicationBuilder(BridgeApplication.class).properties(props);
+    if (connectionPrefix != null) {
+      ConnectionNameStrategy names = connectionFactory -> connectionPrefix;
+      builder.initializers(
+          context -> context.getBeanFactory().registerSingleton("connectionNameStrategy", names));
+    }
+    return builder.run();
   }
 
   // =========================================================================================
@@ -641,6 +728,60 @@ class BridgeIntegrationTest {
     int unack =
         body.has("messages_unacknowledged") ? body.get("messages_unacknowledged").asInt() : 0;
     return ready + unack;
+  }
+
+  /**
+   * Open channels on the connections whose client-provided name starts with the prefix. Counted
+   * from the channel list, which tracks creation, rather than a connection's sampled statistics.
+   */
+  private static int openChannels(String connectionPrefix) throws Exception {
+    Set<String> connections = new HashSet<>();
+    for (JsonNode connection : mgmtJson("/api/connections?columns=name,user_provided_name")) {
+      if (connection.path("user_provided_name").asText("").startsWith(connectionPrefix)) {
+        connections.add(connection.path("name").asText());
+      }
+    }
+    int count = 0;
+    for (JsonNode channel : mgmtJson("/api/channels?columns=name,connection_details")) {
+      if (connections.contains(channel.path("connection_details").path("name").asText())) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private static JsonNode mgmtJson(String path) throws Exception {
+    HttpResponse<String> response = mgmt("GET", path);
+    assertThat(response.statusCode()).isEqualTo(200);
+    return MAPPER.readTree(response.body());
+  }
+
+  /** Bodies on a queue, read without consuming them (requeued). */
+  private static List<String> deadLettered(String queue) throws Exception {
+    HttpRequest request =
+        HttpRequest.newBuilder()
+            .uri(
+                URI.create(
+                    "http://"
+                        + rabbit.getHost()
+                        + ":"
+                        + rabbit.getManagementPort()
+                        + "/api/queues/%2F/"
+                        + queue
+                        + "/get"))
+            .header("Authorization", authHeader)
+            .header("Content-Type", "application/json")
+            .POST(
+                HttpRequest.BodyPublishers.ofString(
+                    "{\"count\":10000,\"ackmode\":\"ack_requeue_true\",\"encoding\":\"auto\"}"))
+            .build();
+    HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+    assertThat(response.statusCode()).isEqualTo(200);
+    List<String> bodies = new ArrayList<>();
+    for (JsonNode message : MAPPER.readTree(response.body())) {
+      bodies.add(message.path("payload").asText());
+    }
+    return bodies;
   }
 
   private static HttpResponse<String> mgmt(String method, String path) throws Exception {

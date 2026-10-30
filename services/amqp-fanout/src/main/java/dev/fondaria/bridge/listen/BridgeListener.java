@@ -9,6 +9,7 @@ import dev.fondaria.bridge.publish.DlqEnvelope;
 import dev.fondaria.bridge.publish.LedgerEventPublisher;
 import dev.fondaria.bridge.publish.LedgerTopics;
 import dev.fondaria.bridge.publish.ProducerConfirmException;
+import dev.fondaria.bridge.publish.RabbitMetrics;
 import dev.fondaria.bridge.transform.LedgerEventTransform;
 import dev.fondaria.bridge.transform.LedgerRecord;
 import java.io.IOException;
@@ -38,12 +39,22 @@ import org.springframework.stereotype.Component;
  *       {@code ledger.entries.dlq} in the same publish, and it is acknowledged with the rest.
  *       Redelivering the same bytes would fail forever; they are preserved for a human and the CDC
  *       lag alert fires on the gap. One poison message never holds back the events around it.
- *   <li><b>RabbitMQ does not confirm something</b> ({@link ProducerConfirmException}) → pause
- *       briefly, then {@code basicNack(lastTag, multiple, requeue)}. Nothing in the batch is
- *       acknowledged and RabbitMQ redelivers all of it. Records already confirmed are published
- *       again, as they would be after a crash before the ack; every consumer is idempotent on
- *       {@code transfer_id}.
+ *   <li><b>RabbitMQ does not confirm something</b> ({@link ProducerConfirmException}) → the
+ *       consumer <b>halts on the batch</b>: it keeps it unacknowledged and publishes it again, with
+ *       a backoff doubling from {@code BRIDGE_PRODUCER_RETRY_BACKOFF} up to {@value
+ *       #MAX_RETRY_BACKOFF_MILLIS} ms, until RabbitMQ confirms all of it. Its prefetch stays full,
+ *       so it consumes nothing else meanwhile. Records already confirmed are published again; every
+ *       consumer is idempotent on {@code transfer_id}.
  * </ul>
+ *
+ * <p><b>Why halt rather than nack</b> (ADR-0041). A nack with requeue spends one of {@code
+ * bridge.ledger}'s five deliveries ({@code x-delivery-limit}), so a broker that stayed unable to
+ * confirm for five backoffs dead-lettered every event: 64,832 on load run 8. A publish failure is a
+ * fault of the path out, not of the message, and never-skip (docs/ENGINEERING-RULES.md §4) says
+ * halt. The retry ends only when the batch is confirmed, or when the consumer's own channel has
+ * closed — the broker has then already taken the batch back, exactly as after a crash — or the
+ * thread is interrupted for shutdown. {@code bridge_publish_halted} counts consumers holding a
+ * batch they cannot publish.
  *
  * <p>Why a batch. Per event the broker used to handle one consume, one ack and three publishes, and
  * each consumer waited a full confirm round trip (~10 ms) per event: on the 300k-participant load
@@ -68,12 +79,16 @@ public class BridgeListener {
    */
   public static final String QUEUE = "bridge.ledger";
 
+  /** The longest pause between attempts to publish a held batch. */
+  static final long MAX_RETRY_BACKOFF_MILLIS = 30_000L;
+
   private static final Logger LOGGER = LoggerFactory.getLogger(BridgeListener.class);
 
   private final CdcMessageParser parser;
   private final LedgerEventTransform transform;
   private final LedgerEventPublisher publisher;
   private final Clock clock;
+  private final RabbitMetrics metrics;
   private final long retryBackoffMillis;
 
   public BridgeListener(
@@ -81,11 +96,13 @@ public class BridgeListener {
       LedgerEventTransform transform,
       LedgerEventPublisher publisher,
       Clock clock,
+      RabbitMetrics metrics,
       BridgeProperties properties) {
     this.parser = parser;
     this.transform = transform;
     this.publisher = publisher;
     this.clock = clock;
+    this.metrics = metrics;
     this.retryBackoffMillis = properties.producerRetryBackoff().toMillis();
   }
 
@@ -110,17 +127,55 @@ public class BridgeListener {
         deadLetters.add(envelope(message, body, poison));
       }
     }
+    publishUntilConfirmed(records, deadLetters, batch.size(), channel);
+    channel.basicAck(lastTag, true);
+  }
+
+  private void publishUntilConfirmed(
+      List<LedgerRecord> records, List<DlqEnvelope> deadLetters, int batchSize, Channel channel) {
+    long backoff = retryBackoffMillis;
+    boolean halted = false;
     try {
-      publisher.publishBatch(records, deadLetters);
-      channel.basicAck(lastTag, true);
-    } catch (ProducerConfirmException transientFailure) {
-      LOGGER.warn(
-          "RabbitMQ did not confirm a published message; leaving a batch of {} unacknowledged for"
-              + " redelivery: {}",
-          batch.size(),
-          transientFailure.getMessage());
-      backOff();
-      channel.basicNack(lastTag, true, true);
+      for (int attempt = 1; ; attempt++) {
+        try {
+          publisher.publishBatch(records, deadLetters);
+          if (halted) {
+            LOGGER.info(
+                "RabbitMQ confirmed a held batch of {} after {} attempts; resuming",
+                batchSize,
+                attempt);
+          }
+          return;
+        } catch (ProducerConfirmException transientFailure) {
+          if (!halted) {
+            halted = true;
+            metrics.publishHalted();
+          }
+          if (!channel.isOpen()) {
+            // RabbitMQ took the batch back when the channel closed; acknowledging is impossible.
+            LOGGER.warn(
+                "Consumer channel closed while holding an unconfirmed batch of {}; RabbitMQ"
+                    + " redelivers it",
+                batchSize);
+            throw transientFailure;
+          }
+          LOGGER.warn(
+              "RabbitMQ did not confirm a published message; holding a batch of {} unacknowledged"
+                  + " and publishing it again in {} ms (attempt {}): {}",
+              batchSize,
+              backoff,
+              attempt,
+              transientFailure.getMessage());
+          if (!sleep(backoff)) {
+            throw transientFailure;
+          }
+          backoff = Math.min(MAX_RETRY_BACKOFF_MILLIS, Math.max(1L, backoff * 2));
+        }
+      }
+    } finally {
+      if (halted) {
+        metrics.publishResumed();
+      }
     }
   }
 
@@ -135,14 +190,17 @@ public class BridgeListener {
         new String(body, StandardCharsets.UTF_8));
   }
 
-  private void backOff() {
-    if (retryBackoffMillis <= 0) {
-      return;
+  /** False if interrupted: the container is stopping, and the batch goes back with the channel. */
+  private static boolean sleep(long millis) {
+    if (millis <= 0) {
+      return true;
     }
     try {
-      TimeUnit.MILLISECONDS.sleep(retryBackoffMillis);
+      TimeUnit.MILLISECONDS.sleep(millis);
+      return true;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      return false;
     }
   }
 }

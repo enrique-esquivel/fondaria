@@ -43,14 +43,18 @@ TigerBeetle ──(tigerbeetle amqp)──▶ RabbitMQ  bridge.ledger
 |---|---|
 | Redpanda confirms | `basicAck`. Done. |
 | Message will not parse (bad JSON, missing field, fractional amount, unknown `type`) | Write it **verbatim** to `ledger.entries.dlq` with a reason envelope, then `basicAck`. Redelivering the same bytes would fail forever; the CDC lag alert fires on the gap. |
-| Redpanda does not confirm within `BRIDGE_PRODUCER_CONFIRM_TIMEOUT` | Pause `BRIDGE_PRODUCER_RETRY_BACKOFF`, then `basicNack(requeue=true)`. The message is **not** acknowledged; RabbitMQ redelivers it. |
+| RabbitMQ does not confirm the batch within `BRIDGE_PRODUCER_CONFIRM_TIMEOUT` (timeout, nack, no channel) | **Halt on the batch** (ADR-0041): close the publish channel, keep the batch unacknowledged and publish it again, with a backoff doubling from `BRIDGE_PRODUCER_RETRY_BACKOFF` up to 30 s, until every record is confirmed. Never nacked, so it never spends `bridge.ledger`'s delivery limit. `bridge_publish_halted` counts consumers holding a batch. |
 
-A message redelivered past `bridge.ledger`'s `x-delivery-limit` (Task 4.1,
-default 5) is dead-lettered by RabbitMQ itself to `bridge.ledger.dlq` — a
-different DLQ from the Redpanda one, on the RabbitMQ side. A sustained Redpanda
-outage therefore parks events there after ~5 redeliveries; they are recovered by
-replaying the ledger (`tigerbeetle amqp --timestamp-last=0`, Task 4.2), which is
-why the Redpanda topics keep only 30 days.
+The bridge never nacks. A message reaches `bridge.ledger.dlq` only if it is
+redelivered past `bridge.ledger`'s `x-delivery-limit` (5) without being
+acknowledged, which now takes five consumer crashes or channel losses while
+holding it. Before ADR-0041 every unconfirmed batch was nacked for redelivery,
+and on load run 8 a broker that stayed unable to confirm dead-lettered 64,832
+events that way.
+
+Each consumer publishes its batch on one channel of a separate publisher
+connection, held to `BRIDGE_AMQP_CONCURRENCY` channels (ADR-0041). Load run 8,
+before that bound, reached RabbitMQ's 2047-channel limit on one connection.
 
 ## Topics
 
@@ -96,8 +100,8 @@ Boot jar.
 | `BRIDGE_AMQP_HOST` / `_PORT` / `_USERNAME` / `_PASSWORD` / `_VHOST` | RabbitMQ connection. Host and Redpanda bootstrap are **required** — absence is a named startup failure. |
 | `BRIDGE_REDPANDA_BOOTSTRAP_SERVERS` | Redpanda bootstrap servers. |
 | `BRIDGE_AMQP_PREFETCH` | Unacknowledged `bridge.ledger` messages held at once (default 64). |
-| `BRIDGE_PRODUCER_CONFIRM_TIMEOUT` | Wait for Redpanda to confirm all three records (default 30s). |
-| `BRIDGE_PRODUCER_RETRY_BACKOFF` | Pause after a producer failure before nacking (default 1s). |
+| `BRIDGE_PRODUCER_CONFIRM_TIMEOUT` | Wait for RabbitMQ to confirm a whole batch (default 30s). |
+| `BRIDGE_PRODUCER_RETRY_BACKOFF` | First pause before publishing a held batch again; doubles up to 30 s (default 1s). |
 | `BRIDGE_TOPIC_REPLICATION_FACTOR` | RF for topics the bridge creates (default 1; prod sets 3). |
 
 ## Kubernetes deployment shape
