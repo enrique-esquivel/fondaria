@@ -108,8 +108,9 @@ patches:
       spec:
         storage:
           size: 20Gi
+        # >= 1.5x base's max_wal_size (8GB), which is a soft limit.
         walStorage:
-          size: 5Gi
+          size: 12Gi
         postgresql:
           parameters:
             shared_buffers: "512MB"

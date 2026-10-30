@@ -69,6 +69,15 @@ spec:
       shared_buffers: "1GB"
       max_connections: "200"
       synchronous_commit: "on"
+      # Load run 5 (300k participants): a checkpoint forced every ~2.5 min by the
+      # 1GB default max_wal_size, and full-page images 84% of all WAL. Spacing
+      # checkpoints out writes each hot page's full image once per 15 min instead
+      # of once per 2.5, and lz4 compresses the images that remain. Run 6: forced
+      # checkpoints went to zero. walStorage must hold max_wal_size with headroom
+      # (it is a soft limit), so every overlay keeps its WAL volume >= 1.5x this.
+      max_wal_size: "8GB"
+      checkpoint_timeout: "15min"
+      wal_compression: "lz4"
 
   # Dedicated NVMe storage for data and WAL
   storage:
