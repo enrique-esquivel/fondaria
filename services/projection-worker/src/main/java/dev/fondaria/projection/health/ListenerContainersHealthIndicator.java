@@ -3,7 +3,6 @@ package dev.fondaria.projection.health;
 import java.util.Collection;
 import java.util.function.Supplier;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
-import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 
@@ -17,7 +16,8 @@ import org.springframework.boot.actuate.health.HealthIndicator;
  * pod stays Ready while it consumes nothing; that is how amqp-fanout failed on the first GKE run
  * (ADR-0036, ADR-0037). An entries container on a standby pod, whose exclusive consume the broker
  * refuses because another pod owns the queue, is still running: its consumer retries every recovery
- * interval, so the standby stays {@code UP}.
+ * interval, so the standby stays {@code UP}. One the rebalance has parked (ADR-0042) is not
+ * counted.
  *
  * <p>Wired into the {@code readiness} group only ({@code application.yaml}), never liveness, for
  * the reason {@link ProjectionHaltHealthIndicator} gives. {@code show-details: never} is set
@@ -27,11 +27,13 @@ public class ListenerContainersHealthIndicator implements HealthIndicator {
 
   private final Supplier<Collection<MessageListenerContainer>> containers;
 
-  public ListenerContainersHealthIndicator(RabbitListenerEndpointRegistry registry) {
-    this(registry::getListenerContainers);
-  }
-
-  ListenerContainersHealthIndicator(Supplier<Collection<MessageListenerContainer>> containers) {
+  /**
+   * @param containers the containers expected to run: {@code ListenerContainers.expectedRunning},
+   *     which leaves out an entries queue's container while the rebalance has stopped it on purpose
+   *     (ADR-0042)
+   */
+  public ListenerContainersHealthIndicator(
+      Supplier<Collection<MessageListenerContainer>> containers) {
     this.containers = containers;
   }
 

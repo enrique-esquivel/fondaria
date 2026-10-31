@@ -146,6 +146,11 @@ fondaria:
     # owned entries queues, CDC lag, and each queue's ready depth read from the broker.
     activity:
       log-interval: ${PROJECTION_ACTIVITY_LOG_INTERVAL:1m}
+    # ADR-0042: this often, a replica at its share of the entries queues, ceil(queues / live pods),
+    # stops its standbys competing, one over it also gives the excess back, and one under it
+    # stands by again. 0 disables.
+    rebalance:
+      interval: ${PROJECTION_REBALANCE_INTERVAL:30s}
 
   trace-redis:
     # Task 11.2. Optional -- absent disables CDC-boundary trace links entirely, never startup.

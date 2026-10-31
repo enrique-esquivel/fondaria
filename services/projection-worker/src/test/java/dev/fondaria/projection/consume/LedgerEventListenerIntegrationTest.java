@@ -14,6 +14,7 @@ import com.rabbitmq.client.MessageProperties;
 import dev.fondaria.ledger.LedgerEntryEvent;
 import dev.fondaria.ledger.LedgerTransferEvent;
 import dev.fondaria.projection.ProjectionWorkerApplication;
+import dev.fondaria.projection.health.ListenerContainersHealthIndicator;
 import dev.fondaria.projection.health.ProjectionHaltHealthIndicator;
 import dev.fondaria.testing.PostgresFixture;
 import dev.fondaria.testing.RabbitMqFixture;
@@ -82,6 +83,7 @@ class LedgerEventListenerIntegrationTest {
   private String entriesQueuePrefix;
   private ConfigurableApplicationContext context;
   private ConfigurableApplicationContext otherReplica;
+  private ConfigurableApplicationContext thirdReplica;
   // Unique per test: the halt flag is a row in the reused database, and a halt one test leaves
   // active under a shared name would stop every later run's worker (ADR-0032 §2).
   private String haltName;
@@ -142,6 +144,10 @@ class LedgerEventListenerIntegrationTest {
     if (otherReplica != null) {
       otherReplica.close();
       otherReplica = null;
+    }
+    if (thirdReplica != null) {
+      thirdReplica.close();
+      thirdReplica = null;
     }
     try (java.sql.Connection c = postgresConnection();
         java.sql.PreparedStatement clear =
@@ -630,6 +636,78 @@ class LedgerEventListenerIntegrationTest {
             });
   }
 
+  /**
+   * ADR-0042, with the three replicas kind runs: the first takes every entries queue, then two more
+   * start while entries are published. Every replica settles at most at its share, ceil(4 / 3) = 2,
+   * and stays there: the first releases exactly its excess once and nobody passes queues back and
+   * forth, which a first build did on kind. Readiness stays UP with containers parked, every entry
+   * is projected, and when a replica stops, the survivors stand by again and take its queues.
+   */
+  @Test
+  void entriesQueuesSpreadAcrossThreeReplicasStayPutAndFailOver() throws Exception {
+    Map<String, Object> rebalance = Map.of("PROJECTION_REBALANCE_INTERVAL", "1s");
+    context = start("replica-a", rebalance);
+    await().atMost(Duration.ofSeconds(20)).until(() -> ownedQueues(context) == 4);
+    otherReplica = start("replica-b", rebalance);
+    thirdReplica = start("replica-c", rebalance);
+
+    List<String> accounts = new ArrayList<>();
+    for (int i = 0; i < 200; i++) {
+      String account = freshId();
+      accounts.add(account);
+      produceEntry(entriesExchange, account, entryJson(account));
+      if (i % 20 == 0) {
+        Thread.sleep(100);
+      }
+    }
+
+    List<ConfigurableApplicationContext> replicas = List.of(context, otherReplica, thirdReplica);
+    await()
+        .atMost(Duration.ofSeconds(40))
+        .until(() -> spreadAtMostTwoEach(replicas) && totalOwned(replicas) == 4);
+    await()
+        .during(Duration.ofSeconds(8))
+        .atMost(Duration.ofSeconds(12))
+        .until(() -> spreadAtMostTwoEach(replicas) && totalOwned(replicas) == 4);
+    assertThat(releases(context)).as("the first replica gave back its excess once").isEqualTo(2.0);
+    assertThat(releases(otherReplica) + releases(thirdReplica)).isZero();
+    for (ConfigurableApplicationContext replica : replicas) {
+      assertThat(replica.getBean(ListenerContainersHealthIndicator.class).health().getStatus())
+          .as("a parked container does not take the pod out of rotation")
+          .isEqualTo(Status.UP);
+    }
+
+    await()
+        .atMost(Duration.ofSeconds(30))
+        .untilAsserted(() -> assertThat(ACCOUNTS_SEEN).containsAll(accounts));
+
+    context.close();
+    context = null;
+    List<ConfigurableApplicationContext> survivors = List.of(otherReplica, thirdReplica);
+    await().atMost(Duration.ofSeconds(30)).until(() -> totalOwned(survivors) == 4);
+    String account = freshId();
+    produceEntry(entriesExchange, account, entryJson(account));
+    await()
+        .atMost(Duration.ofSeconds(20))
+        .untilAsserted(() -> assertThat(ACCOUNTS_SEEN).contains(account));
+  }
+
+  private boolean spreadAtMostTwoEach(List<ConfigurableApplicationContext> replicas) {
+    return replicas.stream().allMatch(replica -> ownedQueues(replica) <= 2);
+  }
+
+  private int totalOwned(List<ConfigurableApplicationContext> replicas) {
+    return replicas.stream().mapToInt(this::ownedQueues).sum();
+  }
+
+  private static double releases(ConfigurableApplicationContext replica) {
+    return replica
+        .getBean(MeterRegistry.class)
+        .get(EntriesQueueRebalancer.RELEASES_COUNTER)
+        .counter()
+        .count();
+  }
+
   private static int occurrences(String text, String needle) {
     int count = 0;
     for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
@@ -728,6 +806,8 @@ class LedgerEventListenerIntegrationTest {
     props.put("PROJECTION_INSTANCE_ID", instanceId);
     props.put("PROJECTION_HALT_POLL_INTERVAL", "200ms");
     props.put("fondaria.projection.halt.projection-name", haltName);
+    // Off unless a test turns it on: the ownership tests above pin who owns what (ADR-0042).
+    props.put("PROJECTION_REBALANCE_INTERVAL", "0");
     props.put("server.port", "0");
     props.put("spring.main.banner-mode", "off");
     props.putAll(overrides);

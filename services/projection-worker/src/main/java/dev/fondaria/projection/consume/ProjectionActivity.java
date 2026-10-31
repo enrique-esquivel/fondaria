@@ -233,6 +233,14 @@ public class ProjectionActivity implements SmartLifecycle {
     return owned.values().stream().filter(AtomicBoolean::get).count();
   }
 
+  /** The entries queues this pod holds the exclusive consume on, in configured order. */
+  public List<String> ownedEntriesQueues() {
+    return owned.entrySet().stream()
+        .filter(e -> e.getValue().get())
+        .map(Map.Entry::getKey)
+        .toList();
+  }
+
   /** Configured queues first, in order, then any other queue a batch arrived from. */
   private List<String> orderedQueues() {
     List<String> ordered = new ArrayList<>(allQueues);
