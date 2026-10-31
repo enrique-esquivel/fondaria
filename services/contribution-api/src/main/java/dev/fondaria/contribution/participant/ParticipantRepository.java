@@ -1,6 +1,7 @@
 package dev.fondaria.contribution.participant;
 
 import dev.fondaria.common.OrganizationId;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -25,7 +26,23 @@ public interface ParticipantRepository {
    *
    * @return {@code true} if this call created the row, {@code false} if it already existed
    */
-  boolean insertIfAbsent(Participant participant);
+  default boolean insertIfAbsent(Participant participant) {
+    return insertAllIfAbsent(List.of(participant)) == 1;
+  }
+
+  /**
+   * {@link #insertIfAbsent} for many participants at once, with the same per-row idempotency: each
+   * participant already present is matched, never re-created or updated.
+   *
+   * <p>Exists because enrolment is a round trip per participant otherwise, and on a cluster whose
+   * PostgreSQL acknowledges a commit only after standbys in other zones do, a round trip and a
+   * commit per row is what bounds a 300,000-row file (GKE load run, 2026-10-30: ~120 rows/s on an
+   * idle cluster). Atomic per call only as far as the implementation says: the JDBC one commits
+   * each statement on its own when no transaction is open.
+   *
+   * @return how many participants this call created
+   */
+  int insertAllIfAbsent(List<Participant> participants);
 
   Optional<Participant> find(OrganizationId organizationId, String internalRef);
 }

@@ -59,20 +59,20 @@ class ParticipantEnrolmentServiceTest {
   }
 
   @Test
-  void a_row_failing_mid_file_still_counts_the_rows_already_committed() {
-    // Row 26k review: each insert commits on its own, and a retry re-finds those rows (no new
+  void a_chunk_failing_mid_file_still_counts_the_chunks_already_committed() {
+    // Row 26k review: each chunk commits on its own, and a retry re-finds those rows (no new
     // insert), so a count taken only at the end would lose them for good.
     SimpleMeterRegistry failingMeters = new SimpleMeterRegistry();
-    ParticipantRepository failsOnSecond =
+    ParticipantRepository failsOnSecondChunk =
         new ParticipantRepository() {
           private int calls;
 
           @Override
-          public boolean insertIfAbsent(Participant participant) {
+          public int insertAllIfAbsent(List<Participant> participants) {
             if (++calls == 2) {
               throw new IllegalStateException("payroll ref already claimed");
             }
-            return repository.insertIfAbsent(participant);
+            return repository.insertAllIfAbsent(participants);
           }
 
           @Override
@@ -82,18 +82,51 @@ class ParticipantEnrolmentServiceTest {
         };
     ParticipantEnrolmentService failing =
         new ParticipantEnrolmentService(
-            failsOnSecond, Clock.fixed(NOW, ZoneOffset.UTC), failingMeters);
-    ContributionFile file =
-        fileOf(
-            row("P-001", "ACME-EMP-0142", LocalDate.of(2019, 3, 1), LocalDate.of(2026, 1, 15)),
-            row("P-002", "ACME-EMP-0891", LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 1)));
+            failsOnSecondChunk, Clock.fixed(NOW, ZoneOffset.UTC), failingMeters);
+    ContributionFile file = fileOfSize(ParticipantEnrolmentService.ROWS_PER_COMMIT + 1);
 
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () -> failing.enrol(organization, PLAN_ID, file))
         .isInstanceOf(IllegalStateException.class);
 
     assertThat(failingMeters.get("fondaria_participants_enrolled").counter().count())
-        .isEqualTo(1.0);
+        .isEqualTo(ParticipantEnrolmentService.ROWS_PER_COMMIT);
+  }
+
+  @Test
+  void a_large_file_is_enrolled_one_chunk_per_call_not_one_row() {
+    // GKE load run 2026-10-30: one commit per participant held enrolment to ~120 rows/s.
+    List<Integer> chunkSizes = new java.util.ArrayList<>();
+    ParticipantRepository recording =
+        new ParticipantRepository() {
+          @Override
+          public int insertAllIfAbsent(List<Participant> participants) {
+            chunkSizes.add(participants.size());
+            return repository.insertAllIfAbsent(participants);
+          }
+
+          @Override
+          public java.util.Optional<Participant> find(OrganizationId org, String internalRef) {
+            return repository.find(org, internalRef);
+          }
+        };
+    ParticipantEnrolmentService chunked =
+        new ParticipantEnrolmentService(recording, Clock.fixed(NOW, ZoneOffset.UTC), meters);
+    int size = 2 * ParticipantEnrolmentService.ROWS_PER_COMMIT + 500;
+
+    chunked.enrol(organization, PLAN_ID, fileOfSize(size));
+    chunked.enrol(organization, PLAN_ID, fileOfSize(size));
+
+    assertThat(chunkSizes)
+        .containsExactly(
+            ParticipantEnrolmentService.ROWS_PER_COMMIT,
+            ParticipantEnrolmentService.ROWS_PER_COMMIT,
+            500,
+            ParticipantEnrolmentService.ROWS_PER_COMMIT,
+            ParticipantEnrolmentService.ROWS_PER_COMMIT,
+            500);
+    assertThat(repository.size()).isEqualTo(size);
+    assertThat(meters.get("fondaria_participants_enrolled").counter().count()).isEqualTo(size);
   }
 
   @Test
@@ -168,6 +201,19 @@ class ParticipantEnrolmentServiceTest {
 
   private static ContributionFile fileOf(ContributionFile.ParticipantRow... rows) {
     return new ContributionFile(List.of(rows));
+  }
+
+  private static ContributionFile fileOfSize(int size) {
+    return new ContributionFile(
+        java.util.stream.IntStream.range(0, size)
+            .mapToObj(
+                i ->
+                    row(
+                        String.format("P-%06d", i),
+                        String.format("E-%06d", i),
+                        LocalDate.of(2020, 1, 1),
+                        LocalDate.of(2020, 1, 1)))
+            .toList());
   }
 
   private static ContributionFile.ParticipantRow row(

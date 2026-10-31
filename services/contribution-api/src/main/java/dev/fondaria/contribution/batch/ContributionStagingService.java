@@ -3,6 +3,7 @@ package dev.fondaria.contribution.batch;
 import dev.fondaria.contribution.config.BatchValidationProperties;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -153,8 +154,9 @@ public class ContributionStagingService {
             partOf(batch, partBatchId, rows, now), batch.batchId(), partNumber);
       }
 
+      List<StagedRow> staged = new ArrayList<>(rows.size());
       for (ContributionFile.ParticipantRow row : rows) {
-        repository.insertIfAbsent(
+        staged.add(
             new StagedRow(
                 batch.organizationId(),
                 partBatchId,
@@ -166,6 +168,7 @@ public class ContributionStagingService {
                 row.amounts(),
                 now));
       }
+      repository.insertAllIfAbsent(staged);
     }
   }
 

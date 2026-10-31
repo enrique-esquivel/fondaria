@@ -6,6 +6,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -34,6 +36,14 @@ public class ParticipantEnrolmentService {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ParticipantEnrolmentService.class);
 
+  /**
+   * Participants per call to {@link ParticipantRepository#insertAllIfAbsent}, and so per commit: no
+   * transaction is open here. One commit per participant waited ~4 ms each for cross-zone standby
+   * acknowledgements on GKE, ~120 participants/s on an idle cluster (load run 2026-10-30);
+   * enrolment runs for every row of every file, already-enrolled participants included.
+   */
+  static final int ROWS_PER_COMMIT = 1_000;
+
   private final ParticipantRepository repository;
   private final Clock clock;
   private final Counter enrolled;
@@ -60,26 +70,30 @@ public class ParticipantEnrolmentService {
   public void enrol(OrganizationId organizationId, String planId, ContributionFile file) {
     Instant now = clock.instant();
     int created = 0;
-    for (ContributionFile.ParticipantRow row : file.rows()) {
-      Participant participant =
-          new Participant(
-              organizationId,
-              row.participantInternalRef(),
-              planId,
-              row.participantPayrollRef(),
-              ParticipantStatus.ACTIVE,
-              EmploymentStatus.ACTIVE,
-              row.employmentStartDate(),
-              row.enrolmentDate(),
-              java.util.Optional.empty(),
-              now,
-              now);
-      if (repository.insertIfAbsent(participant)) {
-        // Per insert, not once at the end: each insert commits on its own, so a row failing
-        // mid-file must not leave the ones before it uncounted forever (a retry re-finds them).
-        enrolled.increment();
-        created++;
+    List<ContributionFile.ParticipantRow> rows = file.rows();
+    for (int from = 0; from < rows.size(); from += ROWS_PER_COMMIT) {
+      List<Participant> chunk = new ArrayList<>(ROWS_PER_COMMIT);
+      for (ContributionFile.ParticipantRow row :
+          rows.subList(from, Math.min(rows.size(), from + ROWS_PER_COMMIT))) {
+        chunk.add(
+            new Participant(
+                organizationId,
+                row.participantInternalRef(),
+                planId,
+                row.participantPayrollRef(),
+                ParticipantStatus.ACTIVE,
+                EmploymentStatus.ACTIVE,
+                row.employmentStartDate(),
+                row.enrolmentDate(),
+                java.util.Optional.empty(),
+                now,
+                now));
       }
+      int inserted = repository.insertAllIfAbsent(chunk);
+      // Per chunk, not once at the end: each chunk commits on its own, so a chunk failing
+      // mid-file must not leave the ones before it uncounted forever (a retry re-finds them).
+      enrolled.increment(inserted);
+      created += inserted;
     }
     // Counts only. Neither an internal ref nor a payroll ref reaches a log
     // (docs/ENGINEERING-RULES.md §7) —

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +59,26 @@ class JdbcStagedRowRepositoryIntegrationTest extends ServiceIntegrationTest {
     assertThat(stagedRows.insertIfAbsent(row)).isFalse();
 
     assertThat(stagedRows.findByBatch(organizationId, batchId)).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("insertAllIfAbsent spans several statements and counts only the rows it recorded")
+  void insertAllIsConditionalPerRowAcrossStatements() {
+    OrganizationId organizationId = registerOrganization();
+    UUID batchId = givenBatch(organizationId, "multi-row.csv");
+    int size = JdbcStagedRowRepository.ROWS_PER_STATEMENT * 2 + 7;
+    List<StagedRow> rows =
+        IntStream.range(0, size)
+            .mapToObj(i -> givenRow(organizationId, batchId, String.format("P-%06d", i)))
+            .toList();
+
+    assertThat(stagedRows.insertAllIfAbsent(rows.subList(0, 10))).isEqualTo(10);
+    assertThat(stagedRows.insertAllIfAbsent(rows)).isEqualTo(size - 10);
+    assertThat(stagedRows.insertAllIfAbsent(rows)).isZero();
+
+    List<StagedRow> found = stagedRows.findByBatch(organizationId, batchId);
+    assertThat(found).hasSize(size);
+    assertThat(found.get(size - 1).amountOf(ContributionSource.EMPLOYER)).isEqualTo(150_000L);
   }
 
   @Test

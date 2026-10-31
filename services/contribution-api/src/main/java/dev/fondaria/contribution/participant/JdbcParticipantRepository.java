@@ -7,8 +7,11 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -27,6 +30,12 @@ public class JdbcParticipantRepository implements ParticipantRepository {
         FROM master.participant
       """;
 
+  /**
+   * Rows per {@code INSERT}. Eleven bind parameters a row keeps a statement at 11,000 parameters,
+   * far under the driver's bind limit (32,767 in older pgjdbc, 65,535 in PostgreSQL).
+   */
+  static final int ROWS_PER_STATEMENT = 1_000;
+
   private final JdbcClient jdbc;
 
   public JdbcParticipantRepository(JdbcClient jdbc) {
@@ -43,34 +52,61 @@ public class JdbcParticipantRepository implements ParticipantRepository {
    * are claiming the same payroll reference within one organization, which is an employer data
    * problem this call must not paper over by silently doing nothing. Naming the primary key as the
    * only suppressed conflict lets that second case raise.
+   *
+   * <p>One multi-row {@code INSERT} per {@link #ROWS_PER_STATEMENT} participants, the pattern
+   * {@code JdbcAllotmentRepository.recordAll} uses. Each row's {@code ON CONFLICT} still applies on
+   * its own, and the row count PostgreSQL reports is exactly the rows inserted. A payroll-ref
+   * conflict fails the whole statement it is in, so none of that statement's rows land.
    */
   @Override
-  public boolean insertIfAbsent(Participant participant) {
-    int inserted =
-        jdbc.sql(
-                """
-                INSERT INTO master.participant (
-                    organization_id, participant_internal_ref, plan_id, participant_payroll_ref,
-                    participant_status, employment_status, employment_start_date, enrolment_date,
-                    employment_end_date, created_at, updated_at)
-                VALUES (:organizationId, :internalRef, :planId, :payrollRef,
-                        :status, :employmentStatus, :employmentStartDate, :enrolmentDate,
-                        :employmentEndDate, :createdAt, :updatedAt)
-                ON CONFLICT (organization_id, participant_internal_ref) DO NOTHING
-                """)
-            .param("organizationId", participant.organizationId().value())
-            .param("internalRef", participant.internalRef())
-            .param("planId", participant.planId())
-            .param("payrollRef", participant.payrollRef())
-            .param("status", participant.status().name())
-            .param("employmentStatus", participant.employmentStatus().name())
-            .param("employmentStartDate", participant.employmentStartDate())
-            .param("enrolmentDate", participant.enrolmentDate())
-            .param("employmentEndDate", participant.employmentEndDate().orElse(null), Types.DATE)
-            .param("createdAt", Timestamp.from(participant.createdAt()))
-            .param("updatedAt", Timestamp.from(participant.updatedAt()))
-            .update();
-    return inserted > 0;
+  public int insertAllIfAbsent(List<Participant> participants) {
+    int inserted = 0;
+    for (int from = 0; from < participants.size(); from += ROWS_PER_STATEMENT) {
+      inserted +=
+          insertChunk(
+              participants.subList(from, Math.min(participants.size(), from + ROWS_PER_STATEMENT)));
+    }
+    return inserted;
+  }
+
+  private int insertChunk(List<Participant> chunk) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
+            INSERT INTO master.participant (
+                organization_id, participant_internal_ref, plan_id, participant_payroll_ref,
+                participant_status, employment_status, employment_start_date, enrolment_date,
+                employment_end_date, created_at, updated_at)
+            VALUES
+            """);
+    MapSqlParameterSource params = new MapSqlParameterSource();
+    for (int i = 0; i < chunk.size(); i++) {
+      Participant participant = chunk.get(i);
+      if (i > 0) {
+        sql.append(",\n");
+      }
+      sql.append(
+          String.format(
+              Locale.ROOT,
+              "(:organizationId%1$d, :internalRef%1$d, :planId%1$d, :payrollRef%1$d,"
+                  + " :status%1$d, :employmentStatus%1$d, :employmentStartDate%1$d,"
+                  + " :enrolmentDate%1$d, :employmentEndDate%1$d, :createdAt%1$d, :updatedAt%1$d)",
+              i));
+      params.addValue("organizationId" + i, participant.organizationId().value());
+      params.addValue("internalRef" + i, participant.internalRef());
+      params.addValue("planId" + i, participant.planId());
+      params.addValue("payrollRef" + i, participant.payrollRef());
+      params.addValue("status" + i, participant.status().name());
+      params.addValue("employmentStatus" + i, participant.employmentStatus().name());
+      params.addValue("employmentStartDate" + i, participant.employmentStartDate());
+      params.addValue("enrolmentDate" + i, participant.enrolmentDate());
+      params.addValue(
+          "employmentEndDate" + i, participant.employmentEndDate().orElse(null), Types.DATE);
+      params.addValue("createdAt" + i, Timestamp.from(participant.createdAt()));
+      params.addValue("updatedAt" + i, Timestamp.from(participant.updatedAt()));
+    }
+    sql.append("\nON CONFLICT (organization_id, participant_internal_ref) DO NOTHING");
+    return jdbc.sql(sql.toString()).paramSource(params).update();
   }
 
   @Override
