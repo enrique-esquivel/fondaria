@@ -33,7 +33,7 @@ spring:
         # Ready, so every ledger event piles up unread and the projection silently stops.
         # Found on the first GKE run (ADR-0036), where a 3-node RabbitMQ forms slower than kind's.
         missing-queues-fatal: false
-    observation-enabled: true
+    observation-enabled: false
 
 server:
   tomcat:
