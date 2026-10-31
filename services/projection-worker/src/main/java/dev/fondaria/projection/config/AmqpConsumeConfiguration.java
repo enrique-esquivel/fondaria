@@ -58,7 +58,8 @@ import org.springframework.core.task.SimpleAsyncTaskExecutor;
   ProjectionConsumerProperties.class,
   CheckpointProperties.class,
   HaltProperties.class,
-  ActivityProperties.class
+  ActivityProperties.class,
+  RebalanceProperties.class
 })
 public class AmqpConsumeConfiguration {
 

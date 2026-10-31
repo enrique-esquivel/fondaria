@@ -5,10 +5,12 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.AmqpAdmin;
@@ -16,16 +18,16 @@ import org.springframework.amqp.core.QueueInformation;
 import org.springframework.stereotype.Component;
 
 /**
- * {@link QueueDepths} through a passive {@code queue.declare} per queue, which answers with the
- * queue's ready-message count and changes nothing.
+ * {@link QueueDepths} and {@link QueueConsumers} through a passive {@code queue.declare} per queue,
+ * which answers with the queue's ready-message and consumer counts and changes nothing.
  *
  * <p>The client's own RPC timeout is ten minutes, so the reads run on a virtual thread and are
  * abandoned after {@code fondaria.projection.activity.depth-timeout} (docs/ENGINEERING-RULES.md §4:
  * every external call has an explicit timeout). An abandoned read is interrupted; the summary is
- * logged without depths.
+ * logged without depths, and the rebalance skips its pass.
  */
 @Component
-public class AmqpQueueDepths implements QueueDepths {
+public class AmqpQueueDepths implements QueueDepths, QueueConsumers {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpQueueDepths.class);
 
@@ -39,14 +41,29 @@ public class AmqpQueueDepths implements QueueDepths {
 
   @Override
   public Map<String, Long> ready(List<String> queues) {
-    CompletableFuture<Map<String, Long>> reads = new CompletableFuture<>();
+    return read("queue depths", () -> readAll(queues), Map.of());
+  }
+
+  @Override
+  public OptionalInt count(String queue) {
+    return read(
+        "queue consumer count",
+        () -> {
+          QueueInformation info = admin.getQueueInfo(queue);
+          return info == null ? OptionalInt.empty() : OptionalInt.of(info.getConsumerCount());
+        },
+        OptionalInt.empty());
+  }
+
+  private <T> T read(String what, Supplier<T> query, T unavailable) {
+    CompletableFuture<T> reads = new CompletableFuture<>();
     Thread reader =
         Thread.ofVirtual()
-            .name("projection-queue-depth")
+            .name("projection-queue-info")
             .start(
                 () -> {
                   try {
-                    reads.complete(readAll(queues));
+                    reads.complete(query.get());
                   } catch (RuntimeException e) {
                     reads.completeExceptionally(e);
                   }
@@ -55,15 +72,15 @@ public class AmqpQueueDepths implements QueueDepths {
       return reads.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
       reader.interrupt();
-      LOGGER.warn("queue depths not read within {}", timeout);
+      LOGGER.warn("{} not read within {}", what, timeout);
     } catch (ExecutionException e) {
       // A broker message can carry a hostname (docs/ENGINEERING-RULES.md §7): log the type only.
-      LOGGER.warn("queue depths not read: {}", e.getCause().getClass().getSimpleName());
+      LOGGER.warn("{} not read: {}", what, e.getCause().getClass().getSimpleName());
     } catch (InterruptedException e) {
       reader.interrupt();
       Thread.currentThread().interrupt();
     }
-    return Map.of();
+    return unavailable;
   }
 
   private Map<String, Long> readAll(List<String> queues) {

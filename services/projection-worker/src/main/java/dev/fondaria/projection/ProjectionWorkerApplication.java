@@ -2,11 +2,11 @@ package dev.fondaria.projection;
 
 import dev.fondaria.common.StorableClock;
 import dev.fondaria.projection.consume.ClusterHalt;
+import dev.fondaria.projection.consume.ListenerContainers;
 import dev.fondaria.projection.consume.ProjectionHalt;
 import dev.fondaria.projection.health.ListenerContainersHealthIndicator;
 import dev.fondaria.projection.health.ProjectionHaltHealthIndicator;
 import java.time.Clock;
-import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -65,7 +65,7 @@ public class ProjectionWorkerApplication {
   /** Registers as {@code listenerContainers}, the name the readiness group includes. */
   @Bean
   public ListenerContainersHealthIndicator listenerContainersHealthIndicator(
-      RabbitListenerEndpointRegistry registry) {
-    return new ListenerContainersHealthIndicator(registry);
+      ListenerContainers containers) {
+    return new ListenerContainersHealthIndicator(containers::expectedRunning);
   }
 }
