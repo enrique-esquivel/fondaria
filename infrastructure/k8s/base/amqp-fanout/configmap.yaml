@@ -13,9 +13,9 @@ data:
   BRIDGE_AMQP_HOST: "rabbitmq"
   BRIDGE_AMQP_PORT: "5672"
   BRIDGE_AMQP_VHOST: "/"
-  BRIDGE_AMQP_PREFETCH: "64"
+  BRIDGE_AMQP_PREFETCH: "512"
   BRIDGE_AMQP_CONCURRENCY: "4"
   # Consumer-side batching: one multiple-ack and one confirm wait per batch.
-  BRIDGE_AMQP_BATCH_SIZE: "32"
+  BRIDGE_AMQP_BATCH_SIZE: "256"
   BRIDGE_AMQP_BATCH_WAIT: "10ms"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"

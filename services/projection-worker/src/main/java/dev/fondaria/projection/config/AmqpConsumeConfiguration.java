@@ -166,7 +166,9 @@ public class AmqpConsumeConfiguration {
     factory.setConsumerBatchEnabled(true);
     factory.setBatchListener(true);
     factory.setBatchSize(properties.batchSize());
-    factory.setBatchReceiveTimeout(properties.batchTimeout().toMillis());
+    long batchTimeoutMs = properties.batchTimeout().toMillis();
+    factory.setBatchReceiveTimeout(batchTimeoutMs);
+    factory.setReceiveTimeout(Math.min(250L, batchTimeoutMs));
     // A consumer cannot fill a batch larger than what the broker lets it hold unacknowledged.
     // Global QoS makes the limit per channel, so one batch stuck on a persistent failure pins one
     // batch's worth of messages, not this many per queue.
