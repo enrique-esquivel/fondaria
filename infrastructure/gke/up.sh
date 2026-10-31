@@ -3,6 +3,11 @@
 # Google Cloud project, then installs the operators the platform's manifests
 # assume. Deploy the platform afterwards with `make gke-deploy`.
 #
+# The images build while the cluster is created: build.sh starts in the
+# background the moment the Artifact Registry exists (log in .build.log), and
+# this script waits for it before it reports ready, so gke-deploy reuses the
+# pushed images instead of building them with the cluster idle.
+#
 # Security posture, in the order it is built:
 #   1. A new project per run, or one you created and keep (GKE_PROJECT). Only
 #      the APIs below are enabled -- no Vertex AI, no Gemini/Generative
@@ -46,7 +51,7 @@ die() { echo "gke-up: $*" >&2; exit 1; }
 # shellcheck disable=SC1091
 . "${here}/lib.sh"
 
-for tool in gcloud kubectl linkerd openssl python3 curl; do
+for tool in gcloud kubectl linkerd skaffold openssl python3 curl; do
   command -v "${tool}" >/dev/null 2>&1 || die "${tool} is not installed (see infrastructure/gke/README.md)"
 done
 command -v gke-gcloud-auth-plugin >/dev/null 2>&1 \
@@ -360,6 +365,14 @@ fi
 retry gcloud artifacts repositories add-iam-policy-binding fondaria --project="${P}" --location="${GKE_REGION}" \
   --member="serviceAccount:${nodes_sa}" --role=roles/artifactregistry.reader
 
+# Pushing needs only the registry, so the ~10-20 min build overlaps the
+# cluster's creation. If this script fails before it waits, the build carries
+# on by itself; its stamp still lets the next gke-up or gke-deploy reuse it.
+build_log="${here}/.build.log"
+log "building images in the background (log: infrastructure/gke/${build_log##*/})"
+"${here}/build.sh" > "${build_log}" 2>&1 &
+build_pid=$!
+
 # ---------------------------------------------------------------- cluster ---
 admin_ip="${GKE_ADMIN_IP:-$(curl -4 -fsS --max-time 10 https://api.ipify.org)}"
 [ -n "${admin_ip}" ] || die "could not detect this machine's public IPv4; set GKE_ADMIN_IP"
@@ -456,11 +469,18 @@ ${K} -n linkerd rollout status deployment/linkerd-proxy-injector --timeout=300s
 ${K} get namespace fondaria >/dev/null 2>&1 || ${K} create namespace fondaria
 kubectl config set-context "${CONTEXT}" --namespace=fondaria >/dev/null
 
+log "waiting for the image build"
+if ! wait "${build_pid}"; then
+  tail -n 30 "${build_log}" >&2
+  die "the image build failed (full log: ${build_log}); fix it and re-run make gke-up, or make gke-deploy builds again"
+fi
+tail -n 1 "${build_log}"
+
 log "ready. Project ${P}, context ${CONTEXT}."
 log "running now: ${stateless_nodes} x ${GKE_STATELESS_MACHINE} (${stateless_nodes} x ${GKE_STATELESS_VCPUS} vCPU)."
 log "the dead man's switch ${deadman_does_log} at ${GKE_EXPIRES_AT} even if you do nothing (every gke-up re-arms it)."
 if [ "${stateful_nodes}" -gt 0 ]; then
-  log "next: make gke-deploy -- it pushes the images, THEN creates the ${stateful_nodes} x ${GKE_STATEFUL_MACHINE} stateful pool"
+  log "next: make gke-deploy -- the images are pushed, so it creates the ${stateful_nodes} x ${GKE_STATEFUL_MACHINE} stateful pool at once"
   log "and re-arms the switch to ${GKE_STATEFUL_TTL_MINUTES} min from then. Run make gke-down the moment the load finishes."
 else
   log "next: make gke-deploy"

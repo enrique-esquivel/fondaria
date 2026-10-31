@@ -68,6 +68,8 @@ infrastructure/k8s/overlays/local/generated/
 infrastructure/k8s/overlays/gke/generated/
 infrastructure/gke/.state
 infrastructure/gke/.build-artifacts.json
+infrastructure/gke/.build-artifacts.stamp
+infrastructure/gke/.build.log
 
 # =========================================================================
 # 3. JAVA & BUILD TOOLS (Maven / Gradle) & DOMAIN SPECIFIC

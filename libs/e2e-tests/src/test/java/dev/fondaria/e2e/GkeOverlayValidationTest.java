@@ -84,11 +84,35 @@ class GkeOverlayValidationTest {
     assertThat(up).as("gke-up builds only the stateless pool").doesNotContain("node-pools create");
     assertThat(up).contains("arm_deadman \"${GKE_TTL_MINUTES}\"");
 
+    int registry = up.indexOf("artifacts repositories create");
+    int background = up.indexOf("\"${here}/build.sh\" > \"${build_log}\" 2>&1 &");
+    int cluster = up.indexOf("container clusters create");
+    assertThat(background)
+        .as("gke-up builds the images in the background once the registry exists")
+        .isGreaterThan(registry)
+        .isLessThan(cluster);
+    assertThat(up.indexOf("wait \"${build_pid}\""))
+        .as("and waits for that build before it reports ready")
+        .isGreaterThan(cluster)
+        .isLessThan(up.indexOf("log \"ready."));
+
+    String buildScript =
+        Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/build.sh")));
+    assertThat(buildScript)
+        .contains("skaffold build")
+        .contains("--platform=linux/amd64")
+        .as("a build is reused only for the exact working tree it was built from")
+        .contains("git write-tree");
+    assertThat(buildScript.indexOf("rm -f \"${stamp_file}\""))
+        .as("a build that dies half-way is never reused")
+        .isNotNegative()
+        .isLessThan(buildScript.indexOf("skaffold build"));
+
     String deploy = Files.readString(Path.of(RepositoryRoot.path("infrastructure/gke/deploy.sh")));
-    int build = deploy.indexOf("skaffold build");
+    int build = deploy.indexOf("\"${here}/build.sh\"");
     int pool = deploy.indexOf("stateful-pool.sh\"");
     int apply = deploy.indexOf("skaffold deploy");
-    assertThat(build).as("images are built and pushed").isNotNegative();
+    assertThat(build).as("images are built and pushed, or reused if unchanged").isNotNegative();
     assertThat(pool).as("before the stateful pool exists").isGreaterThan(build);
     assertThat(apply).as("which exists before the platform is deployed").isGreaterThan(pool);
 
