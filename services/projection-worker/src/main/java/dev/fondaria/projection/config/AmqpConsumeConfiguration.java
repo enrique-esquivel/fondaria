@@ -170,10 +170,11 @@ public class AmqpConsumeConfiguration {
     factory.setBatchReceiveTimeout(batchTimeoutMs);
     factory.setReceiveTimeout(Math.min(250L, batchTimeoutMs));
     // A consumer cannot fill a batch larger than what the broker lets it hold unacknowledged.
-    // Global QoS makes the limit per channel, so one batch stuck on a persistent failure pins one
-    // batch's worth of messages, not this many per queue.
+    // Per-consumer QoS (globalQos=false, the default) lets rabbit_amqqueue_process track credit
+    // locally in memory; globalQos=true activates rabbit_limiter, which forces a synchronous
+    // cross-node gen_server2:call per message delivered when the channel and queue live on
+    // different RabbitMQ nodes.
     factory.setPrefetchCount(Math.max(properties.prefetch(), properties.batchSize()));
-    factory.setGlobalQos(true);
     factory.setTaskExecutor(consumerExecutor());
     return factory;
   }

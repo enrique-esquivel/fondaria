@@ -299,3 +299,36 @@ patches:
       - op: replace
         path: /data/DEMO_CLOCK_ENABLED
         value: "true"
+
+  # Three projection-worker replicas (one per zone on the 3 stateless nodes)
+  # with a 3-CPU limit so balanced 6/6/4 queue consumers are not CFS-throttled
+  # during the close burst.
+  - target:
+      kind: Deployment
+      name: projection-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 3000m
+
+  # Loki and Tempo hold throwaway logs/traces during the load test and are not
+  # on the close path; keeping them on pd-standard brings the full profile's
+  # SSD claim from 516 GB to 479 GB so regions with a 500 GB SSD quota
+  # (us-east1, us-east4) qualify alongside us-central1.
+  - target:
+      kind: StatefulSet
+      name: loki
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard
+  - target:
+      kind: StatefulSet
+      name: tempo
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard
