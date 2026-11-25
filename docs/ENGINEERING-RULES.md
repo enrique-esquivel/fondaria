@@ -150,6 +150,7 @@ libs/platform-common/ Money, Units, Nav, error model, tracing
 libs/rules-engine/    effective-dated rule evaluation, dry-run, diff
 services/<name>/      one service per directory
 infrastructure/       compose/, k8s/
+.agents/              agent lanes: project/ (adapter for the harness), campaigns/ (AGENTS.md)
 ```
 
 Never create a directory outside this structure.
