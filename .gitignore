@@ -9,6 +9,10 @@
 # Claude Code: per-machine settings and agent worktrees (.claude/settings.json stays tracked)
 .claude/settings.local.json
 .claude/worktrees/
+# Lane harness (AGENTS.md): per-worktree state and generated subagents
+.harness/
+.claude/agents/fondaria-*.md
+.agents/agents/
 *AI-instructions.md
 
 # Python Virtual Environments (if using Python scripts for data/training)

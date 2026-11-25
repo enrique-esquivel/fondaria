@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Read", "Edit(./**)", "Write(./**)", "Glob", "Grep", "Agent", "Task",
+      "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git show *)",
+      "Bash(git add *)", "Bash(git commit *)", "Bash(git merge origin/main)", "Bash(git fetch *)",
+      "Bash(mvn *)", "Bash(make verify*)", "Bash(make fmt)", "Bash(make lint)",
+      "Bash(docker ps *)", "Bash(docker logs *)",
+      "Bash(gh issue view *)", "Bash(gh pr view *)", "Bash(gh pr diff *)", "Bash(gh run view *)",
+      "Bash(/ABSOLUTE/PATH/TO/agent-harness/bin/harness *)",
+      "Bash(ls *)", "Bash(cat *)", "Bash(grep *)", "Bash(sed -n *)", "Bash(head *)", "Bash(tail *)", "Bash(wc *)"
+    ],
+    "deny": [
+      "Bash(git push *)", "Bash(gh pr merge *)", "Bash(gh api *)", "Bash(gh secret *)", "Bash(gh auth *)",
+      "Bash(gcloud *)", "Bash(kubectl *)", "Bash(make gke-*)", "Bash(make clean*)",
+      "Read(~/.ssh/**)", "Read(~/.config/gcloud/**)", "Read(**/generated/**)"
+    ]
+  }
+}

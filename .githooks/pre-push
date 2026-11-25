@@ -12,6 +12,12 @@
 
 set -euo pipefail
 
+# Lane workers never push (AGENTS.md §2); checked before SKIP_VERIFY so nothing lifts it.
+if [ "${HARNESS_ROLE:-}" = worker ]; then
+  echo "pre-push: workers may not push. Report back to your lead." >&2
+  exit 1
+fi
+
 if [ "${SKIP_VERIFY:-}" = "1" ]; then
   echo "pre-push: SKIP_VERIFY=1 set, skipping make verify."
   exit 0

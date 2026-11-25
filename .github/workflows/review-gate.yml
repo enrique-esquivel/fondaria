@@ -1,0 +1,26 @@
+name: review-gate
+
+# A push to a lane PR after approval clears the approval (AGENTS.md §3). The harness checks the labels itself before
+# a PR is offered for merge; this only keeps them honest. Runs no code from the PR.
+on:
+  pull_request:
+    types: [synchronize]
+    branches: [main]
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+jobs:
+  clear-approvals:
+    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+      LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+    steps:
+      - run: |
+          for l in approved:claude approved:gemini ready-to-merge; do
+            case ",$LABELS," in *",$l,"*) gh pr edit "$PR" -R "$REPO" --remove-label "$l" ;; esac
+          done
